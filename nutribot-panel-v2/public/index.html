@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NutriBot Panel</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-height:100vh}
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#2a5738,#3d7a4f)}
+.login-box{background:#fff;border-radius:20px;padding:40px;width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.login-box h1{font-size:28px;color:#2a5738;margin-bottom:6px}
+.login-box p{color:#7a9a7a;font-size:14px;margin-bottom:28px}
+.login-box input{width:100%;padding:12px 16px;border:2px solid #e0e8e0;border-radius:10px;font-size:15px;margin-bottom:14px;outline:none}
+.login-box input:focus{border-color:#3d7a4f}
+.btn-primary{width:100%;padding:13px;border:none;border-radius:10px;background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.err{color:#c94040;font-size:13px;margin-top:8px;display:none}
+#app{display:none}
+.topbar{background:#2a5738;color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+.topbar h1{font-size:18px;font-weight:800}
+.logout-btn{background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:13px}
+.tabs{display:flex;background:#fff;border-bottom:2px solid #e0ece0;padding:0 24px}
+.tab{padding:14px 20px;cursor:pointer;font-weight:700;font-size:14px;color:#7a9a7a;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tab.active{color:#2a5738;border-bottom-color:#3d7a4f}
+.content{max-width:960px;margin:0 auto;padding:24px 16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat-card{background:#fff;border-radius:14px;padding:18px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid #e0ece0}
+.stat-card .num{font-size:28px;font-weight:800;color:#3d7a4f}
+.stat-card .lbl{font-size:12px;color:#7a9a7a;margin-top:4px}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.section-header h2{font-size:17px;font-weight:800;color:#2a5738}
+.btn-add{background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;border:none;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer}
+.card{background:#fff;border-radius:16px;padding:20px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);border:1px solid #e0ece0}
+.client-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.avatar{width:44px;height:44px;border-radius:22px;background:linear-gradient(135deg,#3d7a4f,#2a5738);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800;flex-shrink:0}
+.ci h3{font-size:15px;font-weight:800}
+.ci p{font-size:12px;color:#7a9a7a;margin-top:2px}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;margin-left:6px}
+.bp{background:#e8f5e9;color:#2a5738}
+.bs{background:#e3f2fd;color:#1565c0}
+.actions{margin-left:auto;display:flex;gap:6px}
+.btn-i{border:none;background:transparent;cursor:pointer;font-size:17px;padding:4px 8px;border-radius:8px;transition:background .15s}
+.btn-i:hover{background:#f0f4f0}
+.metas-section{border-top:1px solid #e8f0e8;padding-top:14px}
+.mt{font-size:13px;font-weight:700;color:#5a8a5a;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.meta-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fcf8;border-radius:10px;margin-bottom:6px;border:1px solid #e0ece0}
+.me{font-size:20px;flex-shrink:0}
+.mi{flex:1}
+.mi strong{font-size:13px;display:block}
+.mi span{font-size:11px;color:#7a9a7a}
+.md{border:none;background:transparent;cursor:pointer;color:#c94040;font-size:16px;padding:2px 6px;border-radius:6px}
+.btn-am{background:transparent;border:1px dashed #3d7a4f;color:#3d7a4f;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer}
+.btn-hist{background:#f0f8ff;border:1px solid #3d7a4f;color:#2a5738;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;margin-top:10px;width:100%}
+/* HISTORIAL */
+.hist-panel{display:none;border-top:1px solid #e8f0e8;padding-top:14px;margin-top:14px}
+.hist-panel.open{display:block}
+.hresumen{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.rc{background:#f8fcf8;border-radius:10px;padding:10px;text-align:center;border:1px solid #e0ece0}
+.rc .rn{font-size:20px;font-weight:800;color:#3d7a4f}
+.rc .rl{font-size:11px;color:#7a9a7a;margin-top:2px}
+.hlista{max-height:350px;overflow-y:auto}
+.entry{padding:12px;border-radius:10px;margin-bottom:8px;border:1px solid #e0ece0}
+.ec{background:#f0fff4;border-color:#a8d5b5}
+.en{background:#fff5f5;border-color:#f5a0a0}
+.ee{background:#f8f8ff;border-color:#d0d0f0}
+.eh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.et{font-size:12px;font-weight:700}
+.ef{font-size:11px;color:#7a9a7a}
+.ed{font-size:12px;color:#4a6a4a}
+.ecom{font-size:12px;color:#5a5a8a;font-style:italic;margin-top:4px;background:rgba(0,0,0,.04);padding:6px 8px;border-radius:6px}
+.tag{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;margin-right:4px;margin-top:4px}
+.tg{background:#e8f5e9;color:#2a5738}
+.tb{background:#e3f2fd;color:#1565c0}
+.empty-h{text-align:center;padding:24px;color:#7a9a7a;font-size:13px}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:20px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal h2{font-size:18px;font-weight:800;color:#2a5738;margin-bottom:20px}
+.fg{margin-bottom:16px}
+.fg label{display:block;font-size:13px;font-weight:700;color:#5a6a5a;margin-bottom:6px}
+.fg input,.fg textarea,.fg select{width:100%;padding:10px 14px;border:2px solid #e0e8e0;border-radius:10px;font-size:14px;font-family:inherit;outline:none;resize:vertical}
+.fg input:focus,.fg textarea:focus,.fg select:focus{border-color:#3d7a4f}
+.tgg{display:flex;gap:8px}
+.to{flex:1;padding:8px;border:2px solid #e0e8e0;border-radius:8px;text-align:center;cursor:pointer;font-size:13px;font-weight:700;color:#7a9a7a;transition:all .2s}
+.to.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.dg{display:flex;gap:6px;flex-wrap:wrap}
+.db{padding:6px 10px;border:2px solid #e0e8e0;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;color:#7a9a7a;background:#fff;transition:all .2s}
+.db.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.ma{display:flex;gap:10px;margin-top:24px}
+.bc{flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:10px;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#7a9a7a}
+.bs2{flex:2;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+.toast{position:fixed;bottom:24px;right:24px;background:#2a5738;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.2);display:none;z-index:2000}
+.empty{text-align:center;padding:48px 24px;color:#7a9a7a}
+.empty div{font-size:48px;margin-bottom:12px}
+#tab-h{display:none}
+@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.hresumen{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="login-screen">
+  <div class="login-box">
+    <h1>🥗 NutriBot</h1><p>Panel de Administración</p>
+    <input type="password" id="pw" placeholder="Contraseña"/>
+    <button class="btn-primary" onclick="login()">Entrar</button>
+    <div class="err" id="lerr">Contraseña incorrecta</div>
+  </div>
+</div>
+<div id="app">
+  <div class="topbar"><h1>🥗 NutriBot Admin</h1><button class="logout-btn" onclick="logout()">Salir</button></div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('p')">👥 Pacientes</div>
+    <div class="tab" onclick="showTab('h')">📋 Historial</div>
+  </div>
+  <div id="tab-p">
+    <div class="content">
+      <div class="stats">
+        <div class="stat-card"><div class="num" id="sc">0</div><div class="lbl">Pacientes</div></div>
+        <div class="stat-card"><div class="num" id="sm">0</div><div class="lbl">Metas activas</div></div>
+        <div class="stat-card"><div class="num" id="sp">0</div><div class="lbl">Parejas</div></div>
+        <div class="stat-card"><div class="num" id="st">0</div><div class="lbl">Total registros</div></div>
+      </div>
+      <div class="section-header"><h2>👥 Pacientes</h2><button class="btn-add" onclick="openCM()">+ Agregar paciente</button></div>
+      <div id="clist"></div>
+    </div>
+  </div>
+  <div id="tab-h">
+    <div class="content">
+      <div class="section-header">
+        <h2>📋 Historial completo</h2>
+        <select id="fcli" onchange="loadGlobal()" style="padding:8px 12px;border:2px solid #e0e8e0;border-radius:10px;font-size:13px;font-weight:700;outline:none"></select>
+      </div>
+      <div id="hglobal"></div>
+    </div>
+  </div>
+</div>
+<!-- Modal Cliente -->
+<div class="modal-overlay" id="cm">
+  <div class="modal">
+    <h2>➕ Nuevo paciente</h2>
+    <div class="fg"><label>¿Individual o pareja?</label>
+      <div class="tgg"><div class="to active" id="ts" onclick="setMode('s')">👤 Individual</div><div class="to" id="tp" onclick="setMode('p')">👫 Pareja</div></div>
+    </div>
+    <div class="fg"><label id="nl1">Nombre del paciente</label><input id="n1" placeholder="Ej: Camila Torres"/></div>
+    <div class="fg"><label>WhatsApp (con código de país, sin +)</label><input id="p1" placeholder="Ej: 56912345678"/></div>
+    <div id="pf" style="display:none">
+      <div class="fg"><label>Nombre pareja</label><input id="n2" placeholder="Ej: Rodrigo Torres"/></div>
+      <div class="fg"><label>WhatsApp pareja</label><input id="p2" placeholder="Ej: 56987654321"/></div>
+    </div>
+    <div class="fg"><label>Zona horaria</label>
+      <select id="tz"><option value="America/Santiago">Chile (Santiago)</option><option value="America/Argentina/Buenos_Aires">Argentina</option><option value="America/Bogota">Colombia</option><option value="America/Lima">Perú</option><option value="America/Mexico_City">México</option></select>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeM('cm')">Cancelar</button><button class="bs2" onclick="saveClient()">Guardar</button></div>
+  </div>
+</div>
+<!-- Modal Meta -->
+<div class="modal-overlay" id="mm">
+  <div class="modal">
+    <h2>🎯 Nueva meta</h2>
+    <input type="hidden" id="mcid"/>
+    <div class="fg"><label>Emoji</label><input id="me" placeholder="🥦" maxlength="4" style="width:80px"/></div>
+    <div class="fg"><label>Título</label><input id="mt" placeholder="Ej: Tomar 2 litros de agua"/></div>
+    <div class="fg"><label>Descripción</label><textarea id="md" rows="3" placeholder="Describe qué debe hacer..."></textarea></div>
+    <div class="fg"><label>Hora</label><input type="time" id="mh" value="09:00"/></div>
+    <div class="fg"><label>Días</label>
+      <div class="dg">
+        <button class="db active" data-day="1">Lun</button><button class="db active" data-day="2">Mar</button>
+        <button class="db active" data-day="3">Mié</button><button class="db active" data-day="4">Jue</button>
+        <button class="db active" data-day="5">Vie</button><button class="db" data-day="6">Sáb</button>
+        <button class="db" data-day="7">Dom</button>
+      </div>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeM('mm')">Cancelar</button><button class="bs2" onclick="saveMeta()">Guardar meta</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+let TOKEN="",clients=[],mode="s";
+const I=id=>document.getElementById(id);
+const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
+
+async function login(){
+  const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:I("pw").value})});
+  if(r.ok){TOKEN=I("pw").value;I("login-screen").style.display="none";I("app").style.display="block";loadClients();}
+  else I("lerr").style.display="block";
+}
+I("pw").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+function logout(){TOKEN="";I("login-screen").style.display="flex";I("app").style.display="none"}
+
+function showTab(t){
+  document.querySelectorAll(".tab").forEach((el,i)=>el.classList.toggle("active",i===(t==="p"?0:1)));
+  I("tab-p").style.display=t==="p"?"block":"none";
+  I("tab-h").style.display=t==="h"?"block":"none";
+  if(t==="h")loadGlobal();
+}
+
+async function loadClients(){
+  clients=await api("GET","/clients");
+  renderClients();
+  I("sc").textContent=clients.length;
+  I("sm").textContent=clients.reduce((a,c)=>a+(c.goals?.length||0),0);
+  I("sp").textContent=clients.filter(c=>c.phones?.length>1).length;
+  I("fcli").innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${c.id}">${c.nombres?.join(" & ")}</option>`).join("");
+}
+
+function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];return d.map(x=>n[x]).join(", ")}
+
+function renderClients(){
+  const el=I("clist");
+  if(!clients.length){el.innerHTML=`<div class="empty"><div>👥</div><p>No hay pacientes aún.</p></div>`;return}
+  el.innerHTML=clients.map(c=>{
+    const solo=c.phones?.length===1;
+    const ini=(c.nombres?.[0]||"?")[0].toUpperCase();
+    const metas=(c.goals||[]).map(m=>`
+      <div class="meta-item">
+        <span class="me">${m.emoji||"🎯"}</span>
+        <div class="mi"><strong>${m.titulo}</strong><span>${m.hora} · ${diasL(m.dias)}</span></div>
+        <button class="md" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>
+      </div>`).join("");
+    return`<div class="card">
+      <div class="client-header">
+        <div class="avatar">${ini}</div>
+        <div class="ci"><h3>${c.nombres?.join(" & ")} <span class="badge ${solo?"bs":"bp"}">${solo?"Individual":"Pareja"}</span></h3><p>📱 ${c.phones?.join(", ")}</p></div>
+        <div class="actions">
+          <button class="btn-i" onclick="sendNow('${c.id}')" title="Enviar meta">📤</button>
+          <button class="btn-i" onclick="delClient('${c.id}')" title="Eliminar">🗑️</button>
+        </div>
+      </div>
+      <div class="metas-section">
+        <div class="mt"><span>🎯 Metas (${c.goals?.length||0})</span><button class="btn-am" onclick="openMM('${c.id}')">+ Meta</button></div>
+        ${metas||'<p style="font-size:13px;color:#7a9a7a;padding:8px">Sin metas aún.</p>'}
+        <button class="btn-hist" onclick="toggleH('${c.id}')">📋 Ver historial de ${c.nombres?.[0]||"paciente"}</button>
+        <div class="hist-panel" id="h-${c.id}">
+          <div style="font-size:13px;font-weight:800;color:#2a5738;margin-bottom:12px">📋 Historial</div>
+          <div class="hresumen" id="hr-${c.id}"></div>
+          <div class="hlista" id="hl-${c.id}"><div class="empty-h">Cargando...</div></div>
+        </div>
+      </div>
+    </div>`}).join("");
+}
+
+async function toggleH(id){
+  const p=I(`h-${id}`);
+  if(p.classList.contains("open")){p.classList.remove("open");return}
+  p.classList.add("open");
+  const[h,r]=await Promise.all([api("GET",`/clients/${id}/history`),api("GET",`/clients/${id}/resumen`)]);
+  I(`hr-${id}`).innerHTML=`
+    <div class="rc"><div class="rn">${r.completadas||0}</div><div class="rl">✅ Completadas</div></div>
+    <div class="rc"><div class="rn">${r.noCompletadas||0}</div><div class="rl">❌ No completadas</div></div>
+    <div class="rc"><div class="rn">${r.total||0}</div><div class="rl">📊 Total</div></div>
+    <div class="rc"><div class="rn">${r.promEstrellas||"—"}</div><div class="rl">⭐ Promedio</div></div>`;
+  I("st").textContent=parseInt(I("st").textContent||"0")+(r.total||0);
+  renderEntries(`hl-${id}`,h);
+}
+
+function renderEntries(elId,entries,showClient=false){
+  const el=I(elId);
+  if(!entries?.length){el.innerHTML=`<div class="empty-h">Sin registros aún.</div>`;return}
+  const ico={completada:"✅",no_completada:"❌",meta_enviada:"📤"};
+  const lbl={completada:"Completada",no_completada:"No completó",meta_enviada:"Meta enviada"};
+  const cls={completada:"ec",no_completada:"en",meta_enviada:"ee"};
+  el.innerHTML=entries.map(e=>{
+    const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+    let d=`<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
+    if(e.estrellas)d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
+    if(e.dificultad)d+=`<span class="tag tg">${e.dificultad}</span>`;
+    if(e.puntos)d+=`<span class="tag tg">+10 pts</span>`;
+    const cliente=showClient&&e.clientNombre?` <span style="color:#7a9a7a;font-weight:400">(${e.clientNombre})</span>`:"";
+    return`<div class="entry ${cls[e.tipo]||""}">
+      <div class="eh"><span class="et">${ico[e.tipo]||"💬"} ${lbl[e.tipo]||e.tipo} — <strong>${e.nombre}</strong>${cliente}</span><span class="ef">${f}</span></div>
+      <div class="ed">${d}</div>
+      ${e.comentario?`<div class="ecom">💬 "${e.comentario}"</div>`:""}
+    </div>`}).join("");
+}
+
+async function loadGlobal(){
+  const filtro=I("fcli").value;
+  I("hglobal").innerHTML=`<div class="empty-h">Cargando...</div>`;
+  const lista=filtro?clients.filter(c=>c.id===filtro):clients;
+  let todo=[];
+  for(const c of lista){const h=await api("GET",`/clients/${c.id}/history`);todo=todo.concat(h.map(e=>({...e,clientNombre:c.nombres?.join(" & ")})));}
+  todo.sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+  renderEntries("hglobal",todo,true);
+}
+
+function openCM(){setMode("s");["n1","p1","n2","p2"].forEach(id=>I(id).value="");I("cm").classList.add("open")}
+function setMode(m){mode=m;I("ts").classList.toggle("active",m==="s");I("tp").classList.toggle("active",m==="p");I("pf").style.display=m==="p"?"block":"none";I("nl1").textContent=m==="s"?"Nombre del paciente":"Nombre (integrante 1)"}
+async function saveClient(){
+  const nombres=[I("n1").value.trim()],phones=[I("p1").value.trim()];
+  if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
+  if(!nombres[0]||!phones[0]){showToast("⚠️ Completa nombre y teléfono");return}
+  await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[]});
+  closeM("cm");showToast("✅ Paciente guardado");loadClients();
+}
+async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadClients()}
+
+function openMM(id){I("mcid").value=id;I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));I("mm").classList.add("open")}
+document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.classList.toggle("active")));
+async function saveMeta(){
+  const id=I("mcid").value,titulo=I("mt").value.trim();
+  if(!titulo){showToast("⚠️ Escribe el título");return}
+  const dias=[...document.querySelectorAll(".db.active")].map(b=>+b.dataset.day);
+  await api("POST",`/clients/${id}/goals`,{titulo,descripcion:I("md").value.trim()||titulo,emoji:I("me").value||"🎯",hora:I("mh").value,dias});
+  closeM("mm");showToast("✅ Meta guardada");loadClients();
+}
+async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadClients()}
+
+async function sendNow(id){
+  const c=clients.find(x=>x.id===id);
+  if(!c?.goals?.length){showToast("⚠️ Sin metas");return}
+  if(!confirm(`¿Enviar "${c.goals[0].titulo}" a ${c.nombres.join(" & ")} ahora?`))return;
+  const r=await api("POST",`/clients/${id}/send`,{});
+  showToast(r.ok?`📤 Enviado a ${c.nombres.join(" & ")}`:"❌ Error al enviar");
+}
+
+function closeM(id){I(id).classList.remove("open")}
+function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}
+</script>
+</body>
+</html>

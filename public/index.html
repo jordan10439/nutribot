@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>NutriGO — Panel Admin</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-height:100vh}
+#ls{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#2a5738,#3d7a4f)}
+.lb{background:#fff;border-radius:20px;padding:40px;width:340px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.lb h1{font-size:26px;color:#2a5738;margin-bottom:4px}.lb p{color:#7a9a7a;font-size:13px;margin-bottom:24px}
+.lb input{width:100%;padding:11px 14px;border:2px solid #e0e8e0;border-radius:10px;font-size:14px;margin-bottom:12px;outline:none}
+.lb input:focus{border-color:#3d7a4f}
+.bp{width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+.err{color:#c94040;font-size:12px;margin-top:6px;display:none}
+#app{display:none;min-height:100vh;flex-direction:column}
+.topbar{background:#2a5738;color:#fff;padding:12px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,.2)}
+.topbar h1{font-size:17px;font-weight:800}.logout{background:rgba(255,255,255,.15);border:none;color:#fff;padding:5px 12px;border-radius:16px;cursor:pointer;font-size:12px}
+.tabs{display:flex;background:#fff;border-bottom:2px solid #e0ece0;padding:0 20px;overflow-x:auto}
+.tab{padding:12px 18px;cursor:pointer;font-weight:700;font-size:13px;color:#7a9a7a;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:all .2s}
+.tab.active{color:#2a5738;border-bottom-color:#3d7a4f}
+.content{max-width:980px;margin:0 auto;padding:20px 16px;flex:1}
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.sc{background:#fff;border-radius:12px;padding:16px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.06);border:1px solid #e0ece0}
+.sc .n{font-size:26px;font-weight:800;color:#3d7a4f}.sc .l{font-size:11px;color:#7a9a7a;margin-top:2px}
+/* CARDS */
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sh h2{font-size:16px;font-weight:800;color:#2a5738}
+.ba{background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer}
+.card{background:#fff;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.06);border:1px solid #e0ece0}
+.ch{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.av{width:42px;height:42px;border-radius:21px;background:linear-gradient(135deg,#3d7a4f,#2a5738);display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:800;flex-shrink:0}
+.ci h3{font-size:14px;font-weight:800}.ci p{font-size:11px;color:#7a9a7a;margin-top:1px}
+.badge{display:inline-block;padding:2px 7px;border-radius:16px;font-size:10px;font-weight:700;margin-left:4px}
+.bp2{background:#e8f5e9;color:#2a5738}.bs2{background:#e3f2fd;color:#1565c0}
+.cac{margin-left:auto;display:flex;gap:5px}
+.bi{border:none;background:transparent;cursor:pointer;font-size:16px;padding:3px 6px;border-radius:6px;transition:background .15s}
+.bi:hover{background:#f0f4f0}
+.ms{border-top:1px solid #e8f0e8;padding-top:12px}
+.mt2{font-size:12px;font-weight:700;color:#5a8a5a;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
+.mi2{display:flex;align-items:center;gap:8px;padding:7px 10px;background:#f8fcf8;border-radius:8px;margin-bottom:5px;border:1px solid #e0ece0}
+.me2{font-size:18px;flex-shrink:0}.mif{flex:1}.mif strong{font-size:12px;display:block}.mif span{font-size:10px;color:#7a9a7a}
+.md2{border:none;background:transparent;cursor:pointer;color:#c94040;font-size:14px;padding:2px 5px;border-radius:5px}
+.bam{background:transparent;border:1px dashed #3d7a4f;color:#3d7a4f;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer}
+.bhist{background:#f0f4ff;border:1px solid #3d7a4f;color:#2a5738;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;margin-top:8px;width:100%}
+.bwelcome{background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:5px 10px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;margin-top:4px;width:100%}
+/* HISTORIAL */
+.hp{display:none;border-top:1px solid #e8f0e8;padding-top:12px;margin-top:12px}
+.hp.open{display:block}
+.hres{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.rc{background:#f8fcf8;border-radius:8px;padding:8px;text-align:center;border:1px solid #e0ece0}
+.rc .rn{font-size:18px;font-weight:800;color:#3d7a4f}.rc .rl{font-size:10px;color:#7a9a7a;margin-top:1px}
+.hl{max-height:320px;overflow-y:auto}
+.entry{padding:10px;border-radius:8px;margin-bottom:6px;border:1px solid #e0ece0}
+.ec{background:#f0fff4;border-color:#a8d5b5}.en{background:#fff5f5;border-color:#f5a0a0}
+.ee{background:#f8f8ff;border-color:#d0d0f0}.er{background:#f0f8ff;border-color:#b0d0f0}
+.eh2{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.et2{font-size:11px;font-weight:700}.ef2{font-size:10px;color:#7a9a7a}
+.ed2{font-size:11px;color:#4a6a4a}
+.ecom{font-size:11px;color:#5a5a8a;font-style:italic;margin-top:3px;background:rgba(0,0,0,.04);padding:4px 6px;border-radius:5px}
+.tag{display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-right:3px;margin-top:2px}
+.tg{background:#e8f5e9;color:#2a5738}.tb{background:#e3f2fd;color:#1565c0}.tr{background:#fff3cd;color:#856404}
+.empty-h{text-align:center;padding:20px;color:#7a9a7a;font-size:12px}
+/* MENSAJES CONFIG */
+.msg-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:10px;border:1px solid #e0ece0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.msg-label{font-size:12px;font-weight:700;color:#5a6a5a;margin-bottom:6px}
+.msg-hint{font-size:10px;color:#7a9a7a;margin-bottom:8px}
+.msg-ta{width:100%;padding:10px;border:2px solid #e0e8e0;border-radius:8px;font-size:12px;font-family:inherit;outline:none;resize:vertical;min-height:80px;line-height:1.5}
+.msg-ta:focus{border-color:#3d7a4f}
+.msg-actions{display:flex;gap:6px;margin-top:8px}
+.bsave{padding:7px 14px;border:none;border-radius:7px;background:#3d7a4f;color:#fff;font-size:12px;font-weight:700;cursor:pointer}
+.breset{padding:7px 14px;border:1px solid #e0e0e0;border-radius:7px;background:#fff;font-size:12px;font-weight:700;cursor:pointer;color:#7a9a7a}
+/* MODAL */
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.mo.open{display:flex}
+.modal{background:#fff;border-radius:18px;padding:24px;width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal h2{font-size:16px;font-weight:800;color:#2a5738;margin-bottom:18px}
+.fg{margin-bottom:14px}.fg label{display:block;font-size:12px;font-weight:700;color:#5a6a5a;margin-bottom:5px}
+.fg input,.fg textarea,.fg select{width:100%;padding:9px 12px;border:2px solid #e0e8e0;border-radius:9px;font-size:13px;font-family:inherit;outline:none;resize:vertical}
+.fg input:focus,.fg textarea:focus,.fg select:focus{border-color:#3d7a4f}
+.tgg{display:flex;gap:6px}.to{flex:1;padding:7px;border:2px solid #e0e8e0;border-radius:7px;text-align:center;cursor:pointer;font-size:12px;font-weight:700;color:#7a9a7a;transition:all .2s}
+.to.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.dg{display:flex;gap:5px;flex-wrap:wrap}
+.db{padding:5px 9px;border:2px solid #e0e8e0;border-radius:7px;cursor:pointer;font-size:11px;font-weight:700;color:#7a9a7a;background:#fff;transition:all .2s}
+.db.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.ma{display:flex;gap:8px;margin-top:20px}
+.bc{flex:1;padding:11px;border:2px solid #e0e0e0;border-radius:9px;background:#fff;font-size:13px;font-weight:700;cursor:pointer;color:#7a9a7a}
+.bsv{flex:2;padding:11px;border:none;border-radius:9px;background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;font-size:13px;font-weight:700;cursor:pointer}
+.toast{position:fixed;bottom:20px;right:20px;background:#2a5738;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:2000}
+.empty{text-align:center;padding:40px 20px;color:#7a9a7a}.empty div{font-size:44px;margin-bottom:10px}
+/* CHAT VIEW */
+.chat-header{background:#fff;border-bottom:2px solid #e0ece0;padding:10px 16px;display:flex;align-items:center;gap:10px}
+.chat-sel{flex:1;padding:8px 12px;border:2px solid #e0e8e0;border-radius:9px;font-size:13px;font-weight:700;outline:none}
+.chat-sel:focus{border-color:#3d7a4f}
+.chat-area{max-height:calc(100vh - 200px);overflow-y:auto;padding:16px}
+.msg-out{display:flex;justify-content:flex-end;margin-bottom:8px}
+.msg-in{display:flex;justify-content:flex-start;margin-bottom:8px}
+.bubble-out{background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:75%;font-size:13px;line-height:1.5}
+.bubble-in{background:#fff;color:#1a2e1a;border-radius:16px 16px 16px 4px;padding:10px 14px;max-width:75%;font-size:13px;line-height:1.5;border:1px solid #e0ece0;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.msg-time{font-size:10px;color:rgba(255,255,255,.7);margin-top:4px;text-align:right}
+.msg-time-in{font-size:10px;color:#7a9a7a;margin-top:4px}
+.msg-name{font-size:10px;color:#7a9a7a;margin-bottom:2px;font-weight:700}
+@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.hres{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="ls">
+  <div class="lb">
+    <h1>🌱 NutriGO</h1><p>Panel de Administración</p>
+    <input type="password" id="pw" placeholder="Contraseña"/>
+    <button class="bp" onclick="login()">Entrar</button>
+    <div class="err" id="lerr">Contraseña incorrecta</div>
+  </div>
+</div>
+
+<div id="app" style="display:none;flex-direction:column">
+  <div class="topbar"><h1>🌱 NutriGO Admin</h1><button class="logout" onclick="logout()">Salir</button></div>
+  <div class="tabs">
+    <div class="tab active" onclick="showTab('p')">👥 Pacientes</div>
+    <div class="tab" onclick="showTab('c')">💬 Conversaciones</div>
+    <div class="tab" onclick="showTab('h')">📋 Historial</div>
+    <div class="tab" onclick="showTab('m')">⚙️ Mensajes</div>
+  </div>
+
+  <!-- PACIENTES -->
+  <div id="tp" style="flex:1">
+    <div class="content">
+      <div class="stats">
+        <div class="sc"><div class="n" id="s1">0</div><div class="l">Pacientes</div></div>
+        <div class="sc"><div class="n" id="s2">0</div><div class="l">Metas activas</div></div>
+        <div class="sc"><div class="n" id="s3">0</div><div class="l">Parejas</div></div>
+        <div class="sc"><div class="n" id="s4">0</div><div class="l">Mensajes hoy</div></div>
+      </div>
+      <div class="sh"><h2>👥 Pacientes</h2><button class="ba" onclick="openCM()">+ Agregar</button></div>
+      <div id="clist"></div>
+    </div>
+  </div>
+
+  <!-- CONVERSACIONES (chat view) -->
+  <div id="tc" style="display:none;flex:1;flex-direction:column">
+    <div class="chat-header">
+      <span style="font-size:13px;font-weight:700;color:#2a5738">💬 Conversación de:</span>
+      <select class="chat-sel" id="chat-sel" onchange="loadChat()">
+        <option value="">Selecciona un paciente...</option>
+      </select>
+    </div>
+    <div class="chat-area" id="chat-area">
+      <div class="empty"><div>💬</div><p>Selecciona un paciente para ver su conversación</p></div>
+    </div>
+  </div>
+
+  <!-- HISTORIAL GLOBAL -->
+  <div id="th" style="display:none">
+    <div class="content">
+      <div class="sh">
+        <h2>📋 Historial completo</h2>
+        <select id="fcli" onchange="loadGlobal()" style="padding:7px 11px;border:2px solid #e0e8e0;border-radius:9px;font-size:12px;font-weight:700;outline:none">
+          <option value="">Todos los pacientes</option>
+        </select>
+      </div>
+      <div id="hglobal"></div>
+    </div>
+  </div>
+
+  <!-- MENSAJES CONFIG -->
+  <div id="tm" style="display:none">
+    <div class="content">
+      <div class="sh"><h2>⚙️ Configurar mensajes del bot</h2></div>
+      <p style="font-size:12px;color:#7a9a7a;margin-bottom:16px">Edita los mensajes que envía el bot. Los cambios se aplican de inmediato sin tocar código.</p>
+      <div id="msg-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Paciente -->
+<div class="mo" id="cm">
+  <div class="modal">
+    <h2>➕ Nuevo paciente</h2>
+    <div class="fg"><label>¿Individual o pareja?</label>
+      <div class="tgg"><div class="to active" id="ts" onclick="setMode('s')">👤 Individual</div><div class="to" id="tpr" onclick="setMode('p')">👫 Pareja</div></div>
+    </div>
+    <div class="fg"><label id="nl1">Nombre del paciente</label><input id="n1" placeholder="Ej: Camila Torres"/></div>
+    <div class="fg"><label>WhatsApp (con código de país, sin +)</label><input id="p1" placeholder="Ej: 56912345678"/></div>
+    <div id="pf" style="display:none">
+      <div class="fg"><label>Nombre de la pareja</label><input id="n2" placeholder="Ej: Rodrigo Torres"/></div>
+      <div class="fg"><label>WhatsApp de la pareja</label><input id="p2" placeholder="Ej: 56987654321"/></div>
+    </div>
+    <div class="fg"><label>Zona horaria</label>
+      <select id="tz"><option value="America/Santiago">Chile (Santiago)</option><option value="America/Argentina/Buenos_Aires">Argentina</option><option value="America/Bogota">Colombia</option><option value="America/Lima">Perú</option><option value="America/Mexico_City">México</option></select>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeM('cm')">Cancelar</button><button class="bsv" onclick="saveClient()">Guardar y enviar bienvenida</button></div>
+  </div>
+</div>
+
+<!-- Modal Meta -->
+<div class="mo" id="mm">
+  <div class="modal">
+    <h2>🎯 Nueva meta</h2>
+    <input type="hidden" id="mcid"/>
+    <div class="fg"><label>Emoji</label><input id="me" placeholder="🥦" maxlength="4" style="width:80px"/></div>
+    <div class="fg"><label>Título de la meta</label><input id="mt" placeholder="Ej: Tomar 2 litros de agua"/></div>
+    <div class="fg"><label>Descripción</label><textarea id="md" rows="3" placeholder="Describe qué debe hacer..."></textarea></div>
+    <div class="fg"><label>Hora del recordatorio</label><input type="time" id="mh" value="09:00"/></div>
+    <div class="fg"><label>Días</label>
+      <div class="dg">
+        <button class="db active" data-day="1">Lun</button><button class="db active" data-day="2">Mar</button>
+        <button class="db active" data-day="3">Mié</button><button class="db active" data-day="4">Jue</button>
+        <button class="db active" data-day="5">Vie</button><button class="db" data-day="6">Sáb</button>
+        <button class="db" data-day="7">Dom</button>
+      </div>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeM('mm')">Cancelar</button><button class="bsv" onclick="saveMeta()">Guardar meta</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let TOKEN="",clients=[],mode="s",msgLabels={};
+const I=id=>document.getElementById(id);
+const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
+
+async function login(){
+  const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:I("pw").value})});
+  if(r.ok){TOKEN=I("pw").value;I("ls").style.display="none";I("app").style.display="flex";loadAll();}
+  else I("lerr").style.display="block";
+}
+I("pw").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
+function logout(){TOKEN="";I("ls").style.display="flex";I("app").style.display="none"}
+
+function showTab(t){
+  document.querySelectorAll(".tab").forEach((el,i)=>el.classList.toggle("active",["p","c","h","m"][i]===t));
+  ["tp","tc","th","tm"].forEach(id=>I(id).style.display="none");
+  I("t"+t).style.display=t==="c"?"flex":"block";
+  if(t==="h")loadGlobal();
+  if(t==="m")loadMessages();
+  if(t==="c")updateChatSel();
+}
+
+async function loadAll(){
+  clients=await api("GET","/clients");
+  renderClients();
+  I("s1").textContent=clients.length;
+  I("s2").textContent=clients.reduce((a,c)=>a+(c.goals?.length||0),0);
+  I("s3").textContent=clients.filter(c=>c.phones?.length>1).length;
+  I("fcli").innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${c.id}">${c.nombres?.join(" & ")}</option>`).join("");
+  updateChatSel();
+}
+
+function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];return d.map(x=>n[x]).join(", ")}
+
+function renderClients(){
+  const el=I("clist");
+  if(!clients.length){el.innerHTML=`<div class="empty"><div>👥</div><p>No hay pacientes aún.</p></div>`;return}
+  el.innerHTML=clients.map(c=>{
+    const solo=c.phones?.length===1;
+    const ini=(c.nombres?.[0]||"?")[0].toUpperCase();
+    const metas=(c.goals||[]).map(m=>`
+      <div class="mi2">
+        <span class="me2">${m.emoji||"🎯"}</span>
+        <div class="mif"><strong>${m.titulo}</strong><span>${m.hora} · ${diasL(m.dias)}</span></div>
+        <button class="bi" onclick="sendMeta('${c.id}','${m.id}')" title="Enviar ahora">📤</button>
+        <button class="md2" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>
+      </div>`).join("");
+    return`<div class="card">
+      <div class="ch">
+        <div class="av">${ini}</div>
+        <div class="ci"><h3>${c.nombres?.join(" & ")} <span class="badge ${solo?"bs2":"bp2"}">${solo?"Individual":"Pareja"}</span></h3><p>📱 ${c.phones?.join(" · ")}</p></div>
+        <div class="cac">
+          <button class="bi" onclick="delClient('${c.id}')" title="Eliminar">🗑️</button>
+        </div>
+      </div>
+      <div class="ms">
+        <div class="mt2"><span>🎯 Metas (${c.goals?.length||0})</span><button class="bam" onclick="openMM('${c.id}')">+ Meta</button></div>
+        ${metas||'<p style="font-size:11px;color:#7a9a7a;padding:6px">Sin metas aún.</p>'}
+        <button class="bwelcome" onclick="sendWelcome('${c.id}')">👋 Reenviar mensaje de bienvenida</button>
+        <button class="bhist" onclick="toggleH('${c.id}')">📋 Ver historial</button>
+        <div class="hp" id="h-${c.id}">
+          <div style="font-size:12px;font-weight:800;color:#2a5738;margin-bottom:10px">📋 Historial</div>
+          <div class="hres" id="hr-${c.id}"></div>
+          <div class="hl" id="hl-${c.id}"><div class="empty-h">Cargando...</div></div>
+        </div>
+      </div>
+    </div>`}).join("");
+}
+
+async function toggleH(id){
+  const p=I(`h-${id}`);
+  if(p.classList.contains("open")){p.classList.remove("open");return}
+  p.classList.add("open");
+  await loadHistorial(id);
+}
+
+async function loadHistorial(id){
+  const[h,r]=await Promise.all([api("GET",`/clients/${id}/history`),api("GET",`/clients/${id}/resumen`)]);
+  I(`hr-${id}`).innerHTML=`
+    <div class="rc"><div class="rn">${r.completadas||0}</div><div class="rl">✅ Completadas</div></div>
+    <div class="rc"><div class="rn">${r.noCompletadas||0}</div><div class="rl">❌ No completó</div></div>
+    <div class="rc"><div class="rn">${r.total||0}</div><div class="rl">📊 Total</div></div>
+    <div class="rc"><div class="rn">${r.promEstrellas||"—"}</div><div class="rl">⭐ Promedio</div></div>`;
+  renderEntries(`hl-${id}`,h);
+}
+
+function renderEntries(elId,entries,showClient=false){
+  const el=I(elId);
+  if(!entries?.length){el.innerHTML=`<div class="empty-h">Sin registros aún.</div>`;return}
+  const ico={completada:"✅",no_completada:"❌",meta_enviada:"📤",bienvenida_enviada:"👋",mensaje_recibido:"📩"};
+  const lbl={completada:"Completada",no_completada:"No completó",meta_enviada:"Meta enviada",bienvenida_enviada:"Bienvenida",mensaje_recibido:"Mensaje recibido"};
+  const cls={completada:"ec",no_completada:"en",meta_enviada:"ee",bienvenida_enviada:"er",mensaje_recibido:"er"};
+  el.innerHTML=entries.map(e=>{
+    const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    let d=`<span class="tag tb">${e.metaEmoji||"💬"} ${e.meta||""}</span>`;
+    if(e.estrellas)d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
+    if(e.dificultad)d+=`<span class="tag tg">${e.dificultad}</span>`;
+    if(e.puntos)d+=`<span class="tag tg">+10 pts</span>`;
+    const cn=showClient&&e.clientNombre?` <span style="color:#7a9a7a;font-weight:400">(${e.clientNombre})</span>`:"";
+    return`<div class="entry ${cls[e.tipo]||""}">
+      <div class="eh2"><span class="et2">${ico[e.tipo]||"💬"} ${lbl[e.tipo]||e.tipo} — <strong>${e.nombre}</strong>${cn}</span><span class="ef2">${f}</span></div>
+      <div class="ed2">${d}</div>
+      ${e.comentario&&e.tipo==="mensaje_recibido"?`<div class="ecom">💬 "${e.comentario}"</div>`:""}
+      ${e.comentario&&e.tipo==="completada"?`<div class="ecom">💬 "${e.comentario}"</div>`:""}
+    </div>`}).join("");
+}
+
+async function loadGlobal(){
+  const filtro=I("fcli").value;
+  I("hglobal").innerHTML=`<div class="empty-h">Cargando...</div>`;
+  let todo;
+  if(filtro){
+    const h=await api("GET",`/clients/${filtro}/history`);
+    const c=clients.find(x=>x.id===filtro);
+    todo=h.map(e=>({...e,clientNombre:c?.nombres?.join(" & ")}));
+  } else {
+    todo=await api("GET","/history/all");
+  }
+  I("s4").textContent=todo.filter(e=>new Date(e.fecha).toDateString()===new Date().toDateString()).length;
+  renderEntries("hglobal",todo,!filtro);
+}
+
+// ── CHAT VIEW ────────────────────────────────────────────────────────────────
+function updateChatSel(){
+  const sel=I("chat-sel");
+  const cur=sel.value;
+  sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+clients.map(c=>`<option value="${c.id}">${c.nombres?.join(" & ")}</option>`).join("");
+  sel.value=cur;
+}
+
+async function loadChat(){
+  const id=I("chat-sel").value;
+  const el=I("chat-area");
+  if(!id){el.innerHTML=`<div class="empty"><div>💬</div><p>Selecciona un paciente</p></div>`;return}
+  const h=await api("GET",`/clients/${id}/history`);
+  if(!h.length){el.innerHTML=`<div class="empty"><div>💬</div><p>Sin mensajes aún</p></div>`;return}
+
+  // Ordenar por fecha ascendente para el chat
+  const sorted=[...h].reverse();
+  el.innerHTML=sorted.map(e=>{
+    const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    const esEntrante=e.direccion==="entrante"||e.tipo==="mensaje_recibido";
+    if(esEntrante){
+      return`<div class="msg-in">
+        <div>
+          <div class="msg-name">${e.nombre}</div>
+          <div class="bubble-in">${e.comentario||e.meta||"—"}<div class="msg-time-in">${f}</div></div>
+        </div>
+      </div>`;
+    } else {
+      const ico={meta_enviada:"📤 Meta enviada",bienvenida_enviada:"👋 Bienvenida",completada:"✅ Completada"};
+      return`<div class="msg-out">
+        <div>
+          <div class="bubble-out">${ico[e.tipo]||"🤖"}: ${e.meta||"—"}<div class="msg-time">${f}</div></div>
+        </div>
+      </div>`;
+    }
+  }).join("");
+  el.scrollTop=el.scrollHeight;
+}
+
+// ── MENSAJES CONFIG ──────────────────────────────────────────────────────────
+async function loadMessages(){
+  if(!Object.keys(msgLabels).length){
+    const r=await api("GET","/messages/labels");
+    msgLabels=r;
+  }
+  const msgs=await api("GET","/messages");
+  const el=I("msg-list");
+  el.innerHTML=Object.entries(msgLabels).map(([key,label])=>`
+    <div class="msg-card">
+      <div class="msg-label">${label}</div>
+      ${key==="meta_completada"?'<div class="msg-hint">Puedes usar {ia} para el mensaje de IA y {resumen} para los puntos</div>':''}
+      <textarea class="msg-ta" id="msg-${key}" rows="4">${msgs[key]||""}</textarea>
+      <div class="msg-actions">
+        <button class="bsave" onclick="saveMsg('${key}')">💾 Guardar</button>
+        <button class="breset" onclick="resetMsg('${key}')">↺ Restaurar original</button>
+      </div>
+    </div>`).join("");
+}
+
+async function saveMsg(key){
+  const value=I(`msg-${key}`).value;
+  await api("PUT",`/messages/${key}`,{value});
+  showToast("✅ Mensaje guardado");
+}
+
+async function resetMsg(key){
+  if(!confirm("¿Restaurar el mensaje original?"))return;
+  await api("POST",`/messages/${key}/reset`);
+  await loadMessages();
+  showToast("↺ Mensaje restaurado");
+}
+
+// ── CLIENTES ─────────────────────────────────────────────────────────────────
+function openCM(){setMode("s");["n1","p1","n2","p2"].forEach(id=>I(id).value="");I("cm").classList.add("open")}
+function setMode(m){mode=m;I("ts").classList.toggle("active",m==="s");I("tpr").classList.toggle("active",m==="p");I("pf").style.display=m==="p"?"block":"none";I("nl1").textContent=m==="s"?"Nombre del paciente":"Nombre (integrante 1)"}
+async function saveClient(){
+  const nombres=[I("n1").value.trim()],phones=[I("p1").value.trim()];
+  if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
+  if(!nombres[0]||!phones[0]){showToast("⚠️ Completa nombre y teléfono");return}
+  showToast("⏳ Guardando y enviando bienvenida...");
+  await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[]});
+  closeM("cm");showToast("✅ Paciente guardado — bienvenida enviada");loadAll();
+}
+async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadAll()}
+async function sendWelcome(id){
+  const c=clients.find(x=>x.id===id);
+  if(!confirm(`¿Enviar mensaje de bienvenida a ${c?.nombres?.join(" & ")}?`))return;
+  await api("POST",`/clients/${id}/welcome`);
+  showToast("👋 Bienvenida enviada");
+}
+
+// ── METAS ────────────────────────────────────────────────────────────────────
+function openMM(id){I("mcid").value=id;I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));I("mm").classList.add("open")}
+document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.classList.toggle("active")));
+async function saveMeta(){
+  const id=I("mcid").value,titulo=I("mt").value.trim();
+  if(!titulo){showToast("⚠️ Escribe el título");return}
+  const dias=[...document.querySelectorAll(".db.active")].map(b=>+b.dataset.day);
+  await api("POST",`/clients/${id}/goals`,{titulo,descripcion:I("md").value.trim()||titulo,emoji:I("me").value||"🎯",hora:I("mh").value,dias});
+  closeM("mm");showToast("✅ Meta guardada");loadAll();
+}
+async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadAll()}
+async function sendMeta(cid,gid){
+  const c=clients.find(x=>x.id===cid);
+  const m=c?.goals?.find(g=>g.id===gid);
+  if(!confirm(`¿Enviar meta "${m?.titulo}" a ${c?.nombres?.join(" & ")} ahora?`))return;
+  await api("POST",`/clients/${cid}/send`,{goalId:gid});
+  showToast(`📤 Meta enviada a ${c?.nombres?.join(" & ")}`);
+}
+
+function closeM(id){I(id).classList.remove("open")}
+function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}
+</script>
+</body>
+</html>
