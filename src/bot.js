@@ -369,36 +369,4 @@ async function procesarMensaje(m) {
   );
 }
 
-async function enviarResumenPuntos(clientId) {
-  const client = db.getById(clientId);
-  if (!client) return;
-
-  const pts = points.get(clientId);
-  const puntosActuales = Number(pts.puntos || 0);
-
-  const historial = history.getHistorial(client.id);
-  const ahora = new Date();
-  const year = ahora.getFullYear();
-  const month = ahora.getMonth();
-
-  let metasEnviadas = 0;
-  let metasCompletadas = 0;
-
-  for (const entry of historial) {
-    const fecha = new Date(entry.fecha);
-    if (fecha.getFullYear() !== year || fecha.getMonth() !== month) continue;
-    if (entry.tipo === 'meta_enviada') metasEnviadas++;
-    if (entry.tipo === 'completada') metasCompletadas++;
-  }
-
-  const puntosPosibles = metasEnviadas * 10;
-  const texto = `Tu resumen de esta semana 📊: llevas ${puntosActuales}/${puntosPosibles} pts • ${metasCompletadas}/${metasEnviadas} metas completadas este mes ¡Sigue así!`;
-
-  for (const phone of client.phones) {
-    await enviar(phone, texto);
-  }
-
-  return { puntosActuales, puntosPosibles, metasCompletadas, metasEnviadas };
-}
-
-module.exports = { enviarMeta, enviarBienvenida, procesarMensaje, enviarResumenPuntos };
+module.exports = { enviarMeta, enviarBienvenida, procesarMensaje };
