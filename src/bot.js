@@ -134,7 +134,12 @@ async function procesarMensaje(phone, texto, tieneMedia) {
   if (s.flow === state.FLOW.ESPERANDO_FOTO) {
     if (tieneMedia) {
       state.set(phone, { flow: state.FLOW.ESPERANDO_ESTRELLAS });
-      await enviar(phone, msg.get("pedir_estrellas"));
+      const botonesEst = [
+        { id: "estrellas_mal", title: "Mal" },
+        { id: "estrellas_normal", title: "Normal" },
+        { id: "estrellas_muybien", title: "Muy bien" },
+      ];
+      await enviarBotones(phone, msg.get("pedir_estrellas"), botonesEst);
     } else {
       await enviar(phone, `Envíame una foto como evidencia 📸`);
     }
@@ -143,8 +148,17 @@ async function procesarMensaje(phone, texto, tieneMedia) {
 
   // ── Esperando ESTRELLAS ──────────────────────────────────────────────────
   if (s.flow === state.FLOW.ESPERANDO_ESTRELLAS) {
-    const n = parseInt(txt);
-    if (n >= 1 && n <= 5) {
+    // Map three-button responses to a 1-5 scale for compatibility with points
+    let n = null;
+    if (txt.startsWith("estrellas_")) {
+      if (txt.includes("mal")) n = 1;
+      else if (txt.includes("normal")) n = 3;
+      else if (txt.includes("muybien") || txt.includes("muy bien")) n = 5;
+    } else if (/(^|\W)(mal|malo)(\W|$)/.test(txt)) n = 1;
+    else if (/(^|\W)(normal)(\W|$)/.test(txt)) n = 3;
+    else if (/(^|\W)(muy\s*bien|excelente|muybien)(\W|$)/.test(txt)) n = 5;
+
+    if (n) {
       state.set(phone, { flow: state.FLOW.ESPERANDO_DIFICULTAD, estrellasN: n });
       const botones = [
         { id: "dificultad_facil", title: "Fácil" },
@@ -153,7 +167,13 @@ async function procesarMensaje(phone, texto, tieneMedia) {
       ];
       await enviarBotones(phone, msg.get("pedir_dificultad"), botones);
     } else {
-      await enviar(phone, `Responde con un número del *1 al 5* ⭐`);
+      await enviar(phone, `Por favor selecciona cómo te sientes usando los botones.`);
+      const botonesEst = [
+        { id: "estrellas_mal", title: "Mal" },
+        { id: "estrellas_normal", title: "Normal" },
+        { id: "estrellas_muybien", title: "Muy bien" },
+      ];
+      await enviarBotones(phone, msg.get("pedir_estrellas"), botonesEst);
     }
     return;
   }
