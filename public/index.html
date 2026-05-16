@@ -385,7 +385,7 @@ function renderEntries(elId,entries,showClient=false){
               if(sentiment==='bad') motiv = `<div class="mot">¡Ánimo! No te desanimes — pequeños pasos constantes suman. Mañana será mejor.</div>`;
               else if(sentiment==='good') motiv = `<div class="mot">¡Excelente! ¡Gran trabajo hoy, sigue así! 🎉</div>`;
             }
-          return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}</div>`;
+          return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}${motiv}</div>`;
         }).join('');
         return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${metaKey}</div>${rows}</div>`;
       }).join('');
@@ -405,7 +405,7 @@ function renderEntries(elId,entries,showClient=false){
   const groups = Object.keys(grouped).map(k=>({ meta:k, items: grouped[k].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)) }));
   groups.sort((a,b)=>new Date(b.items[0].fecha)-new Date(a.items[0].fecha));
   const html = groups.map(g=>{
-    const rows = g.items.map(e=>{
+      const rows = g.items.map(e=>{
       const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
       const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
       let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
@@ -414,6 +414,29 @@ function renderEntries(elId,entries,showClient=false){
       if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
       const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
       const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+      // Add automatic motivational message for completed entries based on response (copied from global view)
+      let motiv = '';
+      if(e.tipo==='completada'){
+        let estrellasLabel = null; let estrellasCount = null;
+        if(e.estrellas){ estrellasCount = Number(e.estrellas); estrellasLabel = `${"⭐".repeat(estrellasCount)}`; }
+        else if(e.comentario && /^estrellas_\d+$/.test(e.comentario)){
+          const idx = Number(e.comentario.split('_')[1]);
+          const map = ['Mal','Normal','Muy bien'];
+          estrellasLabel = map[idx] || `(${e.comentario})`;
+        }
+        let dificultadLabel = e.dificultad || null;
+        if(!dificultadLabel && e.comentario && /^dificultad_\d+$/.test(e.comentario)){
+          const idx = Number(e.comentario.split('_')[1]);
+          const mapD = ['Fácil','Normal','Difícil'];
+          dificultadLabel = mapD[idx] || `(${e.comentario})`;
+        }
+        let sentiment = 'neutral';
+        if(estrellasCount !== null){ if(estrellasCount<=2) sentiment='bad'; else if(estrellasCount>=4) sentiment='good'; }
+        else if(estrellasLabel){ if(estrellasLabel.toString().toLowerCase().includes('mal')) sentiment='bad'; else if(estrellasLabel.toString().toLowerCase().includes('muy')) sentiment='good'; }
+        if(dificultadLabel && dificultadLabel.toLowerCase().includes('dif')) sentiment = 'bad';
+        if(sentiment==='bad') motiv = `<div class="mot">¡Ánimo! No te desanimes — pequeños pasos constantes suman. Mañana será mejor.</div>`;
+        else if(sentiment==='good') motiv = `<div class="mot">¡Excelente! ¡Gran trabajo hoy, sigue así! 🎉</div>`;
+      }
       return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}${motiv}</div>`;
     }).join('');
     return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${g.meta}</div>${rows}</div>`;
