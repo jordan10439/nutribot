@@ -60,6 +60,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .et2{font-size:11px;font-weight:700}.ef2{font-size:10px;color:#7a9a7a}
 .ed2{font-size:11px;color:#4a6a4a}
 .ecom{font-size:11px;color:#5a5a8a;font-style:italic;margin-top:3px;background:rgba(0,0,0,.04);padding:4px 6px;border-radius:5px}
+.mot{font-size:12px;color:#2a5738;margin-top:6px;padding:8px;background:#f0fff4;border-radius:8px;border:1px solid #e0f1df}
 .tag{display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-right:3px;margin-top:2px}
 .tg{background:#e8f5e9;color:#2a5738}.tb{background:#e3f2fd;color:#1565c0}.tr{background:#fff3cd;color:#856404}
 .empty-h{text-align:center;padding:20px;color:#7a9a7a;font-size:12px}
@@ -253,6 +254,29 @@ async function loadAll(){
   I("s3").textContent=clients.filter(c=>c.phones?.length>1).length;
   I("fcli").innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${c.id}">${c.nombres?.join(" & ")}</option>`).join("");
   updateChatSel();
+  updateClientSummaries();
+}
+
+async function updateClientSummaries(){
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  for(const c of clients){
+    try{
+      const h = await api("GET",`/clients/${c.id}/history`);
+      const monthEntries = (h||[]).filter(e=>{const d=new Date(e.fecha);return d.getFullYear()===year && d.getMonth()===month});
+      const sent = monthEntries.filter(e=>e.tipo==='meta_enviada').length;
+      const completedEntries = monthEntries.filter(e=>e.tipo==='completada');
+      const completed = completedEntries.length;
+      const points = completedEntries.reduce((s,e)=>(s+(Number(e.puntos)||0)),0);
+      const possible = sent * 10; // assume 10 pts per meta if not provided
+      const el = I(`summary-${c.id}`);
+      if(el) el.textContent = `${points}/${possible} pts • ${completed}/${sent} metas completadas este mes`;
+    }catch(e){
+      const el = I(`summary-${c.id}`);
+      if(el) el.textContent = `—`;
+    }
+  }
 }
 
 function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];return d.map(x=>n[x]).join(", ")}
@@ -279,6 +303,7 @@ function renderClients(){
           <button class="bi" onclick="delClient('${c.id}')" title="Eliminar">🗑️</button>
         </div>
       </div>
+      <div id="summary-${c.id}" style="margin-bottom:8px;font-size:12px;color:#4a6a4a">Cargando resumen...</div>
       <div class="ms">
         <div class="mt2"><span>🎯 Metas (${c.goals?.length||0})</span><button class="bam" onclick="openMM('${c.id}')">+ Meta</button></div>
         ${metas||'<p style="font-size:11px;color:#7a9a7a;padding:6px">Sin metas aún.</p>'}
@@ -328,13 +353,38 @@ function renderEntries(elId,entries,showClient=false){
         const items = byClient[clientName][metaKey].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
         const rows = items.map(e=>{
           const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-          const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
-          let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
-          if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
-          if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
-          if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
-          const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
-          const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+            const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
+            let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
+            // Resolve estrellas label: prefer explicit field, fall back to comentario pattern 'estrellas_<i>'
+            let estrellasLabel = null; let estrellasCount = null;
+            if(e.estrellas){ estrellasCount = Number(e.estrellas); estrellasLabel = `${"⭐".repeat(estrellasCount)}`; }
+            else if(e.comentario && /^estrellas_\d+$/.test(e.comentario)){
+              const idx = Number(e.comentario.split('_')[1]);
+              const map = ['Mal','Normal','Muy bien'];
+              estrellasLabel = map[idx] || `(${e.comentario})`;
+            }
+            if(estrellasLabel) d+=` <span style="color:#f0a030">${estrellasLabel}</span>`;
+            // Resolve dificultad label from field or comentario pattern
+            let dificultadLabel = e.dificultad || null;
+            if(!dificultadLabel && e.comentario && /^dificultad_\d+$/.test(e.comentario)){
+              const idx = Number(e.comentario.split('_')[1]);
+              const mapD = ['Fácil','Normal','Difícil'];
+              dificultadLabel = mapD[idx] || `(${e.comentario})`;
+            }
+            if(dificultadLabel) d+=` <span class="tag tg">${dificultadLabel}</span>`;
+            if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+            const comentario = (e.comentario && !/^estrellas_\d+$/.test(e.comentario) && !/^dificultad_\d+$/.test(e.comentario)) ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
+            const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+            // Add automatic motivational message for completed entries based on response
+            let motiv = '';
+            if(e.tipo==='completada'){
+              let sentiment = 'neutral';
+              if(estrellasCount !== null){ if(estrellasCount<=2) sentiment='bad'; else if(estrellasCount>=4) sentiment='good'; }
+              else if(estrellasLabel){ if(estrellasLabel.toString().toLowerCase().includes('mal')) sentiment='bad'; else if(estrellasLabel.toString().toLowerCase().includes('muy')) sentiment='good'; }
+              if(dificultadLabel && dificultadLabel.toLowerCase().includes('dif')) sentiment = 'bad';
+              if(sentiment==='bad') motiv = `<div class="mot">¡Ánimo! No te desanimes — pequeños pasos constantes suman. Mañana será mejor.</div>`;
+              else if(sentiment==='good') motiv = `<div class="mot">¡Excelente! ¡Gran trabajo hoy, sigue así! 🎉</div>`;
+            }
           return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}</div>`;
         }).join('');
         return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${metaKey}</div>${rows}</div>`;
@@ -364,7 +414,7 @@ function renderEntries(elId,entries,showClient=false){
       if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
       const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
       const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
-      return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}</div>`;
+      return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}${motiv}</div>`;
     }).join('');
     return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${g.meta}</div>${rows}</div>`;
   }).join('');
@@ -461,13 +511,13 @@ async function resetMsg(key){
 // ── CLIENTES ─────────────────────────────────────────────────────────────────
 function openCM(){setMode("s");["n1","p1","n2","p2"].forEach(id=>I(id).value="");I("cm").classList.add("open")}
 function setMode(m){mode=m;I("ts").classList.toggle("active",m==="s");I("tpr").classList.toggle("active",m==="p");I("pf").style.display=m==="p"?"block":"none";I("nl1").textContent=m==="s"?"Nombre del paciente":"Nombre (integrante 1)"}
-async function saveClient(){
+async function saveClient(sendWelcome=false){
   const nombres=[I("n1").value.trim()],phones=[I("p1").value.trim()];
   if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
   if(!nombres[0]||!phones[0]){showToast("⚠️ Completa nombre y teléfono");return}
-  showToast("⏳ Guardando y enviando bienvenida...");
-  await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[]});
-  closeM("cm");showToast("✅ Paciente guardado — bienvenida enviada");loadAll();
+  showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
+  await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!!sendWelcome});
+  closeM("cm");showToast(sendWelcome?"✅ Paciente guardado — bienvenida enviada":"✅ Paciente guardado");loadAll();
 }
 async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadAll()}
 async function sendWelcome(id){
