@@ -163,7 +163,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Zona horaria</label>
       <select id="tz"><option value="America/Santiago">Chile (Santiago)</option><option value="America/Argentina/Buenos_Aires">Argentina</option><option value="America/Bogota">Colombia</option><option value="America/Lima">Perú</option><option value="America/Mexico_City">México</option></select>
     </div>
-    <div class="ma"><button class="bc" onclick="closeM('cm')">Cancelar</button><button class="bs2" onclick="saveClient()">Guardar</button></div>
+    <div class="ma"><button class="bc" onclick="closeM('cm')">Cancelar</button><button class="bc" onclick="saveClient(false)">Guardar</button><button class="bs2" onclick="saveClient(true)">Guardar y enviar bienvenida</button></div>
   </div>
 </div>
 <!-- Modal Meta -->
@@ -280,22 +280,32 @@ async function toggleH(id){
 function renderEntries(elId,entries,showClient=false){
   const el=I(elId);
   if(!entries?.length){el.innerHTML=`<div class="empty-h">Sin registros aún.</div>`;return}
-  const ico={completada:"✅",no_completada:"❌",meta_enviada:"📤"};
-  const lbl={completada:"Completada",no_completada:"No completó",meta_enviada:"Meta enviada"};
-  const cls={completada:"ec",no_completada:"en",meta_enviada:"ee"};
-  el.innerHTML=entries.map(e=>{
-    const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
-    let d=`<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
-    if(e.estrellas)d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
-    if(e.dificultad)d+=`<span class="tag tg">${e.dificultad}</span>`;
-    if(e.puntos)d+=`<span class="tag tg">+10 pts</span>`;
-    const cliente=showClient&&e.clientNombre?` <span style="color:#7a9a7a;font-weight:400">(${e.clientNombre})</span>`:"";
-    return`<div class="entry ${cls[e.tipo]||""}">
-      <div class="eh"><span class="et">${ico[e.tipo]||"💬"} ${lbl[e.tipo]||e.tipo} — <strong>${e.nombre}</strong>${cliente}</span><span class="ef">${f}</span></div>
-      <div class="ed">${d}</div>
-      ${e.comentario?`<div class="ecom">💬 "${e.comentario}"</div>`:""}
-      ${e.media && e.media.id?`<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>`:""}
-    </div>`}).join("");
+  // Group entries by meta title
+  const grouped = {};
+  for(const e of entries){
+    const key = e.meta || 'Sin meta';
+    grouped[key] = grouped[key] || [];
+    grouped[key].push(e);
+  }
+  // Render groups ordered by most recent entry
+  const groups = Object.keys(grouped).map(k=>({ meta:k, items: grouped[k].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)) }));
+  groups.sort((a,b)=>new Date(b.items[0].fecha)-new Date(a.items[0].fecha));
+
+  const html = groups.map(g=>{
+    const rows = g.items.map(e=>{
+      const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+      const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : '💬';
+      let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
+      if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
+      if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
+      if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+      const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
+      const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+      return `<div class="entry"><div class="eh"><span class="et">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef">${f}</span></div><div class="ed">${d}</div>${comentario}${media}</div>`;
+    }).join('');
+    return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${g.meta}</div>${rows}</div>`;
+  }).join('');
+  el.innerHTML = html;
 }
 
 async function loadGlobal(){
@@ -361,18 +371,20 @@ async function saveMeta(sendNow=false){
     repetirSiNo: !!I("m_repetir_si_no").checked,
     repetirFreq: { unit: I("m_repetir_unit").value, value: Number(I("m_repetir_val").value) }
   };
+  let res;
   if(mid){
-    const res = await api("PUT",`/clients/${clientId}/goals/${mid}`, payload);
+    res = await api("PUT",`/clients/${clientId}/goals/${mid}`, payload);
     if(!res.ok){showToast('❌ Error al actualizar');return}
     showToast('✅ Meta actualizada');
   } else {
-    const res = await api("POST",`/clients/${clientId}/goals`, payload);
+    res = await api("POST",`/clients/${clientId}/goals`, payload);
     if(!res.ok){showToast('❌ Error al crear');return}
     showToast('✅ Meta creada');
   }
   if(sendNow){
     // send this specific goal immediately
-    await fetch(`/api/clients/${clientId}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify({goalId: mid || (res?.goal?.id)})});
+    const goalToSend = mid || (res && res.goal && res.goal.id) || null;
+    await fetch(`/api/clients/${clientId}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify({goalId: goalToSend})});
   }
   closeM("mm");loadClients();
 }
