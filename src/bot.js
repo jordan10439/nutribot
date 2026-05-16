@@ -134,11 +134,8 @@ async function procesarMensaje(phone, texto, tieneMedia) {
   if (s.flow === state.FLOW.ESPERANDO_FOTO) {
     if (tieneMedia) {
       state.set(phone, { flow: state.FLOW.ESPERANDO_ESTRELLAS });
-      const botonesEst = [
-        { id: "estrellas_mal", title: "Mal" },
-        { id: "estrellas_normal", title: "Normal" },
-        { id: "estrellas_muybien", title: "Muy bien" },
-      ];
+      const be = msg.get("botones_estrellas") || ["Mal","Normal","Muy bien"];
+      const botonesEst = be.map((t, i) => ({ id: `estrellas_${i}`, title: t }));
       await enviarBotones(phone, msg.get("pedir_estrellas"), botonesEst);
     } else {
       await enviar(phone, `Envíame una foto como evidencia 📸`);
@@ -160,11 +157,8 @@ async function procesarMensaje(phone, texto, tieneMedia) {
 
     if (n) {
       state.set(phone, { flow: state.FLOW.ESPERANDO_DIFICULTAD, estrellasN: n });
-      const botones = [
-        { id: "dificultad_facil", title: "Fácil" },
-        { id: "dificultad_normal", title: "Normal" },
-        { id: "dificultad_dificil", title: "Difícil" },
-      ];
+      const bd = msg.get("botones_dificultad") || ["Fácil","Normal","Difícil"];
+      const botones = bd.map((t, i) => ({ id: `dificultad_${i}`, title: t }));
       await enviarBotones(phone, msg.get("pedir_dificultad"), botones);
     } else {
       await enviar(phone, `Por favor selecciona cómo te sientes usando los botones.`);

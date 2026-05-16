@@ -111,6 +111,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   <div class="tabs">
     <div class="tab active" onclick="showTab('p')">👥 Pacientes</div>
     <div class="tab" onclick="showTab('h')">📋 Historial</div>
+    <div class="tab" onclick="showTab('m')">✉️ Mensajes</div>
   </div>
   <div id="tab-p">
     <div class="content">
@@ -131,6 +132,18 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
         <select id="fcli" onchange="loadGlobal()" style="padding:8px 12px;border:2px solid #e0e8e0;border-radius:10px;font-size:13px;font-weight:700;outline:none"></select>
       </div>
       <div id="hglobal"></div>
+    </div>
+  </div>
+  <div id="tab-m" style="display:none">
+    <div class="content">
+      <div class="section-header"><h2>✉️ Mensajes y botones</h2><button class="btn-add" onclick="loadMessages()">Cargar</button></div>
+      <div class="card">
+        <div class="fg"><label>Texto pedir estrellas</label><textarea id="m_pedir_estrellas" rows="3"></textarea></div>
+        <div class="fg"><label>Botones para estrellas (coma-separado)</label><input id="m_botones_estrellas" placeholder="Mal,Normal,Muy bien"/></div>
+        <div class="fg"><label>Texto pedir dificultad</label><textarea id="m_pedir_dificultad" rows="2"></textarea></div>
+        <div class="fg"><label>Botones para dificultad (coma-separado)</label><input id="m_botones_dificultad" placeholder="Fácil,Normal,Difícil"/></div>
+        <div class="ma"><button class="bc" onclick="loadMessages()">Cancelar</button><button class="bs2" onclick="saveMessages()">Guardar</button></div>
+      </div>
     </div>
   </div>
 </div>
@@ -188,10 +201,12 @@ I("pw").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
 function logout(){TOKEN="";I("login-screen").style.display="flex";I("app").style.display="none"}
 
 function showTab(t){
-  document.querySelectorAll(".tab").forEach((el,i)=>el.classList.toggle("active",i===(t==="p"?0:1)));
+  document.querySelectorAll(".tab").forEach((el,i)=>el.classList.toggle("active",(t==='p'&&i===0)||(t==='h'&&i===1)||(t==='m'&&i===2)));
   I("tab-p").style.display=t==="p"?"block":"none";
   I("tab-h").style.display=t==="h"?"block":"none";
+  I("tab-m").style.display=t==="m"?"block":"none";
   if(t==="h")loadGlobal();
+  if(t==="m")loadMessages();
 }
 
 async function loadClients(){
@@ -302,6 +317,34 @@ async function saveMeta(){
   const dias=[...document.querySelectorAll(".db.active")].map(b=>+b.dataset.day);
   await api("POST",`/clients/${id}/goals`,{titulo,descripcion:I("md").value.trim()||titulo,emoji:I("me").value||"🎯",hora:I("mh").value,dias});
   closeM("mm");showToast("✅ Meta guardada");loadClients();
+}
+// Mensajes
+async function loadMessages(){
+  try{
+    const r = await api("GET","/messages");
+    I("m_pedir_estrellas").value = r.pedir_estrellas || '';
+    I("m_botones_estrellas").value = (r.botones_estrellas||[]).join(",");
+    I("m_pedir_dificultad").value = r.pedir_dificultad || '';
+    I("m_botones_dificultad").value = (r.botones_dificultad||[]).join(",");
+    showToast('Mensajes cargados');
+  }catch(e){showToast('Error cargando mensajes')}
+}
+async function saveMessages(){
+  try{
+    // PUT each key via /api/messages/:key
+    const updates = {
+      pedir_estrellas: I("m_pedir_estrellas").value,
+      botones_estrellas: I("m_botones_estrellas").value.split(',').map(s=>s.trim()).filter(Boolean),
+      pedir_dificultad: I("m_pedir_dificultad").value,
+      botones_dificultad: I("m_botones_dificultad").value.split(',').map(s=>s.trim()).filter(Boolean),
+    };
+    for(const k of Object.keys(updates)){
+      const payload = { value: updates[k] };
+      const res = await fetch(`/api/messages/${k}`,{method:'PUT',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify(payload)});
+      if(!res.ok) throw new Error('Error saving '+k);
+    }
+    showToast('✅ Mensajes guardados');
+  }catch(e){console.error(e);showToast('❌ Error al guardar')}
 }
 async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadClients()}
 

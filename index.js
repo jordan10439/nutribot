@@ -141,8 +141,14 @@ app.post("/webhook", async (req, res) => {
         if (!messages2?.length) continue;
         for (const m of messages2) {
           const phone = m.from;
-          const texto = m.type === "text" ? m.text?.body ?? "" : "";
-          const tieneMedia = ["image","video","document"].includes(m.type);
+          let texto = "";
+          if (m.type === "text") texto = m.text?.body ?? "";
+          else if (m.type === "button") texto = m.button?.text || m.button?.payload || "";
+          else if (m.type === "interactive") {
+            if (m.interactive?.type === 'button_reply') texto = m.interactive.button_reply?.id || m.interactive.button_reply?.title || "";
+            else if (m.interactive?.type === 'list_reply') texto = m.interactive.list_reply?.id || m.interactive.list_reply?.title || "";
+          }
+          const tieneMedia = ["image","video","document"].includes(m.type) || !!(m.image||m.video||m.document);
           console.log(`📩 +${phone}: "${texto}"${tieneMedia ? " [📸]" : ""}`);
           procesarMensaje(phone, texto, tieneMedia).catch(console.error);
         }
