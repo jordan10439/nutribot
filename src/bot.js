@@ -54,10 +54,17 @@ async function enviarBienvenida(clientId, phone) {
       metaEmoji: "👋",
       direccion: "saliente",
     });
+    // Después de la bienvenida, enviar la primera meta si existe
+    if (client.goals && client.goals.length > 0) {
+      await enviarMeta(clientId, client.goals[0]);
+    }
   } catch (e) {
     console.error(`❌ Error bienvenida +${phone}:`, e.message);
     // Fallback a mensaje de texto si la plantilla falla
     await enviar(phone, msg.get("bienvenida"));
+    if (client.goals && client.goals.length > 0) {
+      await enviarMeta(clientId, client.goals[0]);
+    }
   }
 }
 
@@ -148,9 +155,13 @@ async function procesarMensaje(phone, texto, tieneMedia) {
     // Map three-button responses to a 1-5 scale for compatibility with points
     let n = null;
     if (txt.startsWith("estrellas_")) {
-      if (txt.includes("mal")) n = 1;
-      else if (txt.includes("normal")) n = 3;
-      else if (txt.includes("muybien") || txt.includes("muy bien")) n = 5;
+      const idx = parseInt(txt.split("_")[1] || "", 10);
+      const be = msg.get("botones_estrellas") || ["Mal","Normal","Muy bien"];
+      if (!isNaN(idx) && be[idx]) {
+        // map indexes 0,1,2 to 1,3,5
+        const map = [1, 3, 5];
+        n = map[idx] ?? null;
+      }
     } else if (/(^|\W)(mal|malo)(\W|$)/.test(txt)) n = 1;
     else if (/(^|\W)(normal)(\W|$)/.test(txt)) n = 3;
     else if (/(^|\W)(muy\s*bien|excelente|muybien)(\W|$)/.test(txt)) n = 5;
@@ -177,9 +188,9 @@ async function procesarMensaje(phone, texto, tieneMedia) {
     // Accept replies from buttons (ids or titles) or simple text
     let dif = null;
     if (txt.startsWith("dificultad_")) {
-      if (txt.includes("facil")) dif = "Fácil";
-      else if (txt.includes("normal")) dif = "Normal";
-      else if (txt.includes("dificil")) dif = "Difícil";
+      const idx = parseInt(txt.split("_")[1] || "", 10);
+      const bd = msg.get("botones_dificultad") || ["Fácil","Normal","Difícil"];
+      if (!isNaN(idx) && bd[idx]) dif = bd[idx];
     } else if (/(^|\W)(1|facil|fácil)(\W|$)/.test(txt)) dif = "Fácil";
     else if (/(^|\W)(2|normal)(\W|$)/.test(txt)) dif = "Normal";
     else if (/(^|\W)(3|dificil|difícil)(\W|$)/.test(txt)) dif = "Difícil";
