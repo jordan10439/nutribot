@@ -1,7 +1,7 @@
 // src/bot.js
 const db      = require("./db");
 const state   = require("./state");
-const { enviar } = require("./whatsapp");
+const { enviar, enviarBotones } = require("./whatsapp");
 const { respuestaIA } = require("./ai");
 const points  = require("./points");
 const history = require("./history");
@@ -146,7 +146,12 @@ async function procesarMensaje(phone, texto, tieneMedia) {
     const n = parseInt(txt);
     if (n >= 1 && n <= 5) {
       state.set(phone, { flow: state.FLOW.ESPERANDO_DIFICULTAD, estrellasN: n });
-      await enviar(phone, msg.get("pedir_dificultad"));
+      const botones = [
+        { id: "dificultad_facil", title: "Fácil" },
+        { id: "dificultad_normal", title: "Normal" },
+        { id: "dificultad_dificil", title: "Difícil" },
+      ];
+      await enviarBotones(phone, msg.get("pedir_dificultad"), botones);
     } else {
       await enviar(phone, `Responde con un número del *1 al 5* ⭐`);
     }
@@ -155,10 +160,19 @@ async function procesarMensaje(phone, texto, tieneMedia) {
 
   // ── Esperando DIFICULTAD ─────────────────────────────────────────────────
   if (s.flow === state.FLOW.ESPERANDO_DIFICULTAD) {
-    const n = parseInt(txt);
-    if (n >= 1 && n <= 5) {
-      const dificultades = ["Muy fácil","Fácil","Normal","Difícil","Muy difícil"];
-      const dif = dificultades[n - 1];
+    // Accept replies from buttons (ids or titles) or simple text
+    let dif = null;
+    if (txt.startsWith("dificultad_")) {
+      if (txt.includes("facil")) dif = "Fácil";
+      else if (txt.includes("normal")) dif = "Normal";
+      else if (txt.includes("dificil")) dif = "Difícil";
+    } else if (/(^|\W)(1|facil|fácil)(\W|$)/.test(txt)) dif = "Fácil";
+    else if (/(^|\W)(2|normal)(\W|$)/.test(txt)) dif = "Normal";
+    else if (/(^|\W)(3|dificil|difícil)(\W|$)/.test(txt)) dif = "Difícil";
+
+    if (dif) {
+      const resultado = points.sumar(client.id, phone, client.phones.length);
+      state.set(phone, { flow: state.FLOW.ESPERANDO_COMENTARIO });
       const resultado = points.sumar(client.id, phone, client.phones.length);
       state.set(phone, { flow: state.FLOW.ESPERANDO_COMENTARIO });
 
@@ -201,7 +215,13 @@ async function procesarMensaje(phone, texto, tieneMedia) {
       await enviar(phone, msgFinal);
       await enviar(phone, msg.get("pedir_comentario"));
     } else {
-      await enviar(phone, `Responde con un número del *1 al 5*`);
+      await enviar(phone, `Por favor selecciona una opción usando los botones.`);
+      const botones = [
+        { id: "dificultad_facil", title: "Fácil" },
+        { id: "dificultad_normal", title: "Normal" },
+        { id: "dificultad_dificil", title: "Difícil" },
+      ];
+      await enviarBotones(phone, msg.get("pedir_dificultad"), botones);
     }
     return;
   }
