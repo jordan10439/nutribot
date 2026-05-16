@@ -190,7 +190,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Zona horaria</label>
       <select id="tz"><option value="America/Santiago">Chile (Santiago)</option><option value="America/Argentina/Buenos_Aires">Argentina</option><option value="America/Bogota">Colombia</option><option value="America/Lima">Perú</option><option value="America/Mexico_City">México</option></select>
     </div>
-    <div class="ma"><button class="bc" onclick="closeM('cm')">Cancelar</button><button class="bsv" onclick="saveClient()">Guardar y enviar bienvenida</button></div>
+    <div class="ma"><button class="bc" onclick="closeM('cm')">Cancelar</button><button class="bc" onclick="saveClient(false)">Guardar</button><button class="bsv" onclick="saveClient(true)">Guardar y enviar bienvenida</button></div>
   </div>
 </div>
 
@@ -211,7 +211,13 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
         <button class="db" data-day="7">Dom</button>
       </div>
     </div>
-    <div class="ma"><button class="bc" onclick="closeM('mm')">Cancelar</button><button class="bsv" onclick="saveMeta()">Guardar meta</button></div>
+    <input type="hidden" id="mid" />
+    <div class="fg"><label><input type="checkbox" id="m_requiere_foto" /> Requiere foto</label></div>
+    <div class="fg"><label><input type="checkbox" id="m_repetir_si_no" /> Repetir si responde "No"</label></div>
+    <div class="fg"><label>Frecuencia de repetición</label>
+      <div style="display:flex;gap:8px"><input id="m_repetir_val" type="number" min="1" value="24" style="width:100px" /><select id="m_repetir_unit"><option value="hours">Horas</option><option value="days">Días</option></select></div>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeM('mm')">Cancelar</button><button class="bc" onclick="saveMeta(false)">Guardar</button><button class="bsv" onclick="saveMeta(true)">Guardar y enviar</button></div>
   </div>
 </div>
 
@@ -261,6 +267,7 @@ function renderClients(){
       <div class="mi2">
         <span class="me2">${m.emoji||"🎯"}</span>
         <div class="mif"><strong>${m.titulo}</strong><span>${m.hora} · ${diasL(m.dias)}</span></div>
+        <button class="bi" onclick="openMM('${c.id}','${m.id}')" title="Editar meta">✏️</button>
         <button class="bi" onclick="sendMeta('${c.id}','${m.id}')" title="Enviar ahora">📤</button>
         <button class="md2" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>
       </div>`).join("");
@@ -306,22 +313,62 @@ async function loadHistorial(id){
 function renderEntries(elId,entries,showClient=false){
   const el=I(elId);
   if(!entries?.length){el.innerHTML=`<div class="empty-h">Sin registros aún.</div>`;return}
-  const ico={completada:"✅",no_completada:"❌",meta_enviada:"📤",bienvenida_enviada:"👋",mensaje_recibido:"📩"};
-  const lbl={completada:"Completada",no_completada:"No completó",meta_enviada:"Meta enviada",bienvenida_enviada:"Bienvenida",mensaje_recibido:"Mensaje recibido"};
-  const cls={completada:"ec",no_completada:"en",meta_enviada:"ee",bienvenida_enviada:"er",mensaje_recibido:"er"};
-  el.innerHTML=entries.map(e=>{
-    const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-    let d=`<span class="tag tb">${e.metaEmoji||"💬"} ${e.meta||""}</span>`;
-    if(e.estrellas)d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
-    if(e.dificultad)d+=`<span class="tag tg">${e.dificultad}</span>`;
-    if(e.puntos)d+=`<span class="tag tg">+10 pts</span>`;
-    const cn=showClient&&e.clientNombre?` <span style="color:#7a9a7a;font-weight:400">(${e.clientNombre})</span>`:"";
-    return`<div class="entry ${cls[e.tipo]||""}">
-      <div class="eh2"><span class="et2">${ico[e.tipo]||"💬"} ${lbl[e.tipo]||e.tipo} — <strong>${e.nombre}</strong>${cn}</span><span class="ef2">${f}</span></div>
-      <div class="ed2">${d}</div>
-      ${e.comentario&&e.tipo==="mensaje_recibido"?`<div class="ecom">💬 "${e.comentario}"</div>`:""}
-      ${e.comentario&&e.tipo==="completada"?`<div class="ecom">💬 "${e.comentario}"</div>`:""}
-    </div>`}).join("");
+  // If global view (entries from multiple clients), group by client -> meta -> entries
+  if(showClient){
+    const byClient = {};
+    for(const e of entries){
+      const clientName = e.clientNombre || e.nombres || 'Sin paciente';
+      byClient[clientName] = byClient[clientName] || {};
+      const metaKey = e.meta || 'Sin meta';
+      byClient[clientName][metaKey] = byClient[clientName][metaKey] || [];
+      byClient[clientName][metaKey].push(e);
+    }
+    const clientsHtml = Object.keys(byClient).map(clientName => {
+      const metas = Object.keys(byClient[clientName]).map(metaKey => {
+        const items = byClient[clientName][metaKey].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+        const rows = items.map(e=>{
+          const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+          const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
+          let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
+          if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
+          if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
+          if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+          const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
+          const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+          return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}</div>`;
+        }).join('');
+        return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${metaKey}</div>${rows}</div>`;
+      }).join('');
+      return `<div style="margin-bottom:18px"><div style="font-weight:900;color:#2a5738;margin-bottom:8px">👤 ${clientName}</div>${metas}</div>`;
+    }).join('');
+    el.innerHTML = clientsHtml;
+    return;
+  }
+
+  // Single-client view: group by meta
+  const grouped = {};
+  for(const e of entries){
+    const key = e.meta || 'Sin meta';
+    grouped[key] = grouped[key] || [];
+    grouped[key].push(e);
+  }
+  const groups = Object.keys(grouped).map(k=>({ meta:k, items: grouped[k].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha)) }));
+  groups.sort((a,b)=>new Date(b.items[0].fecha)-new Date(a.items[0].fecha));
+  const html = groups.map(g=>{
+    const rows = g.items.map(e=>{
+      const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+      const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
+      let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
+      if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
+      if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
+      if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+      const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
+      const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+      return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}</div>`;
+    }).join('');
+    return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${g.meta}</div>${rows}</div>`;
+  }).join('');
+  el.innerHTML = html;
 }
 
 async function loadGlobal(){
@@ -431,14 +478,61 @@ async function sendWelcome(id){
 }
 
 // ── METAS ────────────────────────────────────────────────────────────────────
-function openMM(id){I("mcid").value=id;I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));I("mm").classList.add("open")}
+function openMM(clientId, goalId){
+  I("mcid").value=clientId;
+  I("mid").value = goalId || "";
+  I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";
+  document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));
+  // defaults for new meta
+  I("m_requiere_foto").checked = true;
+  I("m_repetir_si_no").checked = false;
+  I("m_repetir_val").value = 24;
+  I("m_repetir_unit").value = 'hours';
+  if(goalId){
+    const client = clients.find(c=>c.id===clientId);
+    const goal = client?.goals?.find(g=>g.id===goalId);
+    if(goal){
+      I("me").value = goal.emoji || "🎯";
+      I("mt").value = goal.titulo || "";
+      I("md").value = goal.descripcion || "";
+      I("mh").value = goal.hora || "09:00";
+      document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active", (goal.dias||[]).includes(+b.dataset.day)));
+      I("m_requiere_foto").checked = !!goal.requiereFoto;
+      I("m_repetir_si_no").checked = !!goal.repetirSiNo;
+      I("m_repetir_val").value = goal.repetirFreq?.value || 24;
+      I("m_repetir_unit").value = goal.repetirFreq?.unit || 'hours';
+    }
+  }
+  I("mm").classList.add("open")
+}
 document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.classList.toggle("active")));
-async function saveMeta(){
-  const id=I("mcid").value,titulo=I("mt").value.trim();
+async function saveMeta(sendNow=false){
+  const clientId=I("mcid").value, mid=I("mid").value, titulo=I("mt").value.trim();
   if(!titulo){showToast("⚠️ Escribe el título");return}
   const dias=[...document.querySelectorAll(".db.active")].map(b=>+b.dataset.day);
-  await api("POST",`/clients/${id}/goals`,{titulo,descripcion:I("md").value.trim()||titulo,emoji:I("me").value||"🎯",hora:I("mh").value,dias});
-  closeM("mm");showToast("✅ Meta guardada");loadAll();
+  const payload = {
+    titulo,
+    descripcion:I("md").value.trim()||titulo,
+    emoji:I("me").value||"🎯",
+    hora:I("mh").value,
+    dias,
+    requiereFoto: !!I("m_requiere_foto").checked,
+    repetirSiNo: !!I("m_repetir_si_no").checked,
+    repetirFreq: { unit: I("m_repetir_unit").value, value: Number(I("m_repetir_val").value) }
+  };
+  let res;
+  if(mid){
+    res = await api("PUT",`/clients/${clientId}/goals/${mid}`, payload);
+    showToast('✅ Meta actualizada');
+  } else {
+    res = await api("POST",`/clients/${clientId}/goals`, payload);
+    showToast('✅ Meta creada');
+  }
+  if(sendNow){
+    const goalToSend = mid || (res && res.goal && res.goal.id) || null;
+    await fetch(`/api/clients/${clientId}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify({goalId: goalToSend})});
+  }
+  closeM("mm");loadAll();
 }
 async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadAll()}
 async function sendMeta(cid,gid){
