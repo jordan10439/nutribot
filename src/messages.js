@@ -1,9 +1,9 @@
 // src/messages.js
-// Mensajes del bot editables desde el panel — se guardan en data/messages.json
+// Mensajes del bot editables desde el panel — se guardan en data/mensajes.json
 
 const fs   = require("fs");
 const path = require("path");
-const FILE = path.join(__dirname, "../data/messages.json");
+const FILE = path.join(__dirname, "../data/mensajes.json");
 
 const DEFAULTS = {
   bienvenida: "¡Hola, soy NutriGO! 👋🌱\n\nSoy tu herramienta de apoyo nutricional. Te enviaré recordatorios de tus metas para ayudarte a mantenerlas presentes, de forma simple y sin presiones. 💚",
