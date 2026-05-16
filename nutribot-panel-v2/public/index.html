@@ -280,7 +280,40 @@ async function toggleH(id){
 function renderEntries(elId,entries,showClient=false){
   const el=I(elId);
   if(!entries?.length){el.innerHTML=`<div class="empty-h">Sin registros aún.</div>`;return}
-  // Group entries by meta title
+  // If showing global view (entries from multiple clients), group first by client -> meta -> entries
+  if (showClient) {
+    const byClient = {};
+    for (const e of entries) {
+      const clientName = e.clientNombre || e.nombres || 'Sin paciente';
+      byClient[clientName] = byClient[clientName] || {};
+      const metaKey = e.meta || 'Sin meta';
+      byClient[clientName][metaKey] = byClient[clientName][metaKey] || [];
+      byClient[clientName][metaKey].push(e);
+    }
+    // Build HTML per client, metas ordered by most recent
+    const clientsHtml = Object.keys(byClient).map(clientName => {
+      const metas = Object.keys(byClient[clientName]).map(metaKey => {
+        const items = byClient[clientName][metaKey].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
+        const rows = items.map(e => {
+          const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+          const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : '💬';
+          let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
+          if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
+          if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
+          if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+          const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
+          const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+          return `<div class="entry"><div class="eh"><span class="et">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef">${f}</span></div><div class="ed">${d}</div>${comentario}${media}</div>`;
+        }).join('');
+        return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${metaKey}</div>${rows}</div>`;
+      }).join('');
+      return `<div style="margin-bottom:18px"><div style="font-weight:900;color:#2a5738;margin-bottom:8px">👤 ${clientName}</div>${metas}</div>`;
+    }).join('');
+    el.innerHTML = clientsHtml;
+    return;
+  }
+
+  // Default: group entries by meta title (single-client view)
   const grouped = {};
   for(const e of entries){
     const key = e.meta || 'Sin meta';
