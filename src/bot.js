@@ -173,8 +173,6 @@ async function procesarMensaje(phone, texto, tieneMedia) {
     if (dif) {
       const resultado = points.sumar(client.id, phone, client.phones.length);
       state.set(phone, { flow: state.FLOW.ESPERANDO_COMENTARIO });
-      const resultado = points.sumar(client.id, phone, client.phones.length);
-      state.set(phone, { flow: state.FLOW.ESPERANDO_COMENTARIO });
 
       const aiMsg = await respuestaIA(nombre,
         `${nombre} completó su meta "${s.meta?.titulo}". Se sintió ${estrellas(s.estrellasN ?? 3)} y fue ${dif}. Celébralo en 2 oraciones.`
