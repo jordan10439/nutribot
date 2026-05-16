@@ -308,6 +308,7 @@ function renderClients(){
         <div class="mt2"><span>🎯 Metas (${c.goals?.length||0})</span><button class="bam" onclick="openMM('${c.id}')">+ Meta</button></div>
         ${metas||'<p style="font-size:11px;color:#7a9a7a;padding:6px">Sin metas aún.</p>'}
         <button class="bwelcome" onclick="sendWelcome('${c.id}')">👋 Reenviar mensaje de bienvenida</button>
+        <button class="bwelcome" onclick="sendResumen('${c.id}')">📊 Enviar resumen</button>
         <button class="bhist" onclick="toggleH('${c.id}')">📋 Ver historial</button>
         <div class="hp" id="h-${c.id}">
           <div style="font-size:12px;font-weight:800;color:#2a5738;margin-bottom:10px">📋 Historial</div>
@@ -548,6 +549,14 @@ async function sendWelcome(id){
   if(!confirm(`¿Enviar mensaje de bienvenida a ${c?.nombres?.join(" & ")}?`))return;
   await api("POST",`/clients/${id}/welcome`);
   showToast("👋 Bienvenida enviada");
+}
+
+async function sendResumen(id){
+  const c=clients.find(x=>x.id===id);
+  if(!confirm(`¿Enviar resumen a ${c?.nombres?.join(" & ")}?`))return;
+  const res = await fetch(`/api/clients/${id}/resumen-puntos`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': TOKEN } });
+  if (res.ok) showToast('📊 Resumen enviado');
+  else showToast('❌ Error enviando resumen');
 }
 
 // ── METAS ────────────────────────────────────────────────────────────────────
