@@ -183,7 +183,13 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
         <button class="db" data-day="7">Dom</button>
       </div>
     </div>
-    <div class="ma"><button class="bc" onclick="closeM('mm')">Cancelar</button><button class="bs2" onclick="saveMeta()">Guardar meta</button></div>
+    <input type="hidden" id="mid" />
+    <div class="fg"><label><input type="checkbox" id="m_requiere_foto" /> Requiere foto</label></div>
+    <div class="fg"><label><input type="checkbox" id="m_repetir_si_no" /> Repetir si responde "No"</label></div>
+    <div class="fg"><label>Frecuencia de repetición</label>
+      <div style="display:flex;gap:8px"><input id="m_repetir_val" type="number" min="1" value="24" style="width:100px" /><select id="m_repetir_unit"><option value="hours">Horas</option><option value="days">Días</option></select></div>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeM('mm')">Cancelar</button><button class="bc" onclick="saveMeta(false)">Guardar</button><button class="bs2" onclick="saveMeta(true)">Guardar y enviar</button></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -230,7 +236,10 @@ function renderClients(){
       <div class="meta-item">
         <span class="me">${m.emoji||"🎯"}</span>
         <div class="mi"><strong>${m.titulo}</strong><span>${m.hora} · ${diasL(m.dias)}</span></div>
-        <button class="md" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>
+        <div style="display:flex;gap:6px">
+          <button class="md" onclick="openMM('${c.id}','${m.id}')">✏️</button>
+          <button class="md" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>
+        </div>
       </div>`).join("");
     return`<div class="card">
       <div class="client-header">
@@ -285,6 +294,7 @@ function renderEntries(elId,entries,showClient=false){
       <div class="eh"><span class="et">${ico[e.tipo]||"💬"} ${lbl[e.tipo]||e.tipo} — <strong>${e.nombre}</strong>${cliente}</span><span class="ef">${f}</span></div>
       <div class="ed">${d}</div>
       ${e.comentario?`<div class="ecom">💬 "${e.comentario}"</div>`:""}
+      ${e.media && e.media.id?`<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>`:""}
     </div>`}).join("");
 }
 
@@ -300,23 +310,71 @@ async function loadGlobal(){
 
 function openCM(){setMode("s");["n1","p1","n2","p2"].forEach(id=>I(id).value="");I("cm").classList.add("open")}
 function setMode(m){mode=m;I("ts").classList.toggle("active",m==="s");I("tp").classList.toggle("active",m==="p");I("pf").style.display=m==="p"?"block":"none";I("nl1").textContent=m==="s"?"Nombre del paciente":"Nombre (integrante 1)"}
-async function saveClient(){
+async function saveClient(sendWelcome=false){
   const nombres=[I("n1").value.trim()],phones=[I("p1").value.trim()];
   if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
   if(!nombres[0]||!phones[0]){showToast("⚠️ Completa nombre y teléfono");return}
-  await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[]});
+  await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!!sendWelcome});
   closeM("cm");showToast("✅ Paciente guardado");loadClients();
 }
 async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadClients()}
 
-function openMM(id){I("mcid").value=id;I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));I("mm").classList.add("open")}
+function openMM(clientId, goalId){
+  I("mcid").value=clientId;I("mid").value = goalId || "";I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";
+  document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));
+  // If editing an existing meta, prefill
+  if(goalId){
+    const client = clients.find(c=>c.id===clientId);
+    const goal = client?.goals?.find(g=>g.id===goalId);
+    if(goal){
+      I("me").value = goal.emoji || "🎯";
+      I("mt").value = goal.titulo || "";
+      I("md").value = goal.descripcion || "";
+      I("mh").value = goal.hora || "09:00";
+      document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active", (goal.dias||[]).includes(+b.dataset.day)));
+      I("m_requiere_foto").checked = !!goal.requiereFoto;
+      I("m_repetir_si_no").checked = !!goal.repetirSiNo;
+      I("m_repetir_val").value = goal.repetirFreq?.value || 24;
+      I("m_repetir_unit").value = goal.repetirFreq?.unit || 'hours';
+    }
+  } else {
+    // defaults
+    I("m_requiere_foto").checked = true;
+    I("m_repetir_si_no").checked = false;
+    I("m_repetir_val").value = 24;
+    I("m_repetir_unit").value = 'hours';
+  }
+  I("mm").classList.add("open");
+}
 document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.classList.toggle("active")));
-async function saveMeta(){
-  const id=I("mcid").value,titulo=I("mt").value.trim();
+async function saveMeta(sendNow=false){
+  const clientId=I("mcid").value, mid=I("mid").value, titulo=I("mt").value.trim();
   if(!titulo){showToast("⚠️ Escribe el título");return}
   const dias=[...document.querySelectorAll(".db.active")].map(b=>+b.dataset.day);
-  await api("POST",`/clients/${id}/goals`,{titulo,descripcion:I("md").value.trim()||titulo,emoji:I("me").value||"🎯",hora:I("mh").value,dias});
-  closeM("mm");showToast("✅ Meta guardada");loadClients();
+  const payload = {
+    titulo,
+    descripcion:I("md").value.trim()||titulo,
+    emoji:I("me").value||"🎯",
+    hora:I("mh").value,
+    dias,
+    requiereFoto: !!I("m_requiere_foto").checked,
+    repetirSiNo: !!I("m_repetir_si_no").checked,
+    repetirFreq: { unit: I("m_repetir_unit").value, value: Number(I("m_repetir_val").value) }
+  };
+  if(mid){
+    const res = await api("PUT",`/clients/${clientId}/goals/${mid}`, payload);
+    if(!res.ok){showToast('❌ Error al actualizar');return}
+    showToast('✅ Meta actualizada');
+  } else {
+    const res = await api("POST",`/clients/${clientId}/goals`, payload);
+    if(!res.ok){showToast('❌ Error al crear');return}
+    showToast('✅ Meta creada');
+  }
+  if(sendNow){
+    // send this specific goal immediately
+    await fetch(`/api/clients/${clientId}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify({goalId: mid || (res?.goal?.id)})});
+  }
+  closeM("mm");loadClients();
 }
 // Mensajes
 async function loadMessages(){

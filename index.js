@@ -39,9 +39,11 @@ app.post("/api/clients", auth, async (req, res) => {
   const client = { id: db.newId(nombres[0]), nombres, phones, timezone: timezone || "America/Santiago", goals: goals || [] };
   db.upsert(client);
   recargarTodos();
-  // Enviar bienvenida a cada integrante
-  for (const phone of phones) {
-    await enviarBienvenida(client.id, phone);
+  // Enviar bienvenida solo si el cliente lo solicita (body.sendWelcome === true)
+  if (req.body.sendWelcome) {
+    for (const phone of phones) {
+      await enviarBienvenida(client.id, phone);
+    }
   }
   res.json({ ok: true, client });
 });
@@ -56,10 +58,41 @@ app.delete("/api/clients/:id", auth, (req, res) => {
 app.post("/api/clients/:id/goals", auth, (req, res) => {
   const client = db.getById(req.params.id);
   if (!client) return res.status(404).json({ error: "No encontrado" });
-  const { titulo, descripcion, emoji, hora, dias } = req.body;
-  const goal = { id: Date.now().toString(), titulo, descripcion: descripcion || titulo, emoji: emoji || "🎯", hora: hora || "09:00", dias: dias || [1,2,3,4,5] };
+  // Accept additional per-goal settings: requiereFoto, repetirSiNo, repetirFreq
+  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq } = req.body;
+  const goal = {
+    id: Date.now().toString(),
+    titulo,
+    descripcion: descripcion || titulo,
+    emoji: emoji || "🎯",
+    hora: hora || "09:00",
+    dias: dias || [1,2,3,4,5],
+    requiereFoto: !!requiereFoto,
+    repetirSiNo: !!repetirSiNo,
+    repetirFreq: repetirFreq || { unit: "hours", value: 24 }
+  };
   client.goals = client.goals || [];
   client.goals.push(goal);
+  db.upsert(client);
+  recargarTodos();
+  res.json({ ok: true, goal });
+});
+
+// Editar meta existente
+app.put("/api/clients/:id/goals/:goalId", auth, (req, res) => {
+  const client = db.getById(req.params.id);
+  if (!client) return res.status(404).json({ error: "No encontrado" });
+  const goal = client.goals?.find(g => g.id === req.params.goalId);
+  if (!goal) return res.status(404).json({ error: "Meta no encontrada" });
+  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq } = req.body;
+  if (titulo) goal.titulo = titulo;
+  if (descripcion) goal.descripcion = descripcion;
+  if (emoji) goal.emoji = emoji;
+  if (hora) goal.hora = hora;
+  if (dias) goal.dias = dias;
+  if (typeof requiereFoto !== 'undefined') goal.requiereFoto = !!requiereFoto;
+  if (typeof repetirSiNo !== 'undefined') goal.repetirSiNo = !!repetirSiNo;
+  if (repetirFreq) goal.repetirFreq = repetirFreq;
   db.upsert(client);
   recargarTodos();
   res.json({ ok: true, goal });
@@ -105,6 +138,26 @@ app.get("/api/history/all", auth, (req, res) => {
   res.json(todo);
 });
 
+// Proxy para descargar medios desde WhatsApp Graph API (requiere token env META_TOKEN)
+app.get("/api/media/:id", auth, async (req, res) => {
+  const id = req.params.id;
+  try {
+    const metaRes = await fetch(`https://graph.facebook.com/v19.0/${id}`, { headers: { Authorization: `Bearer ${process.env.META_TOKEN}` } });
+    const meta = await metaRes.json();
+    const url = meta.url || meta.preview_url || meta.image?.url;
+    if (!url) return res.status(404).json({ error: "Media URL not found" });
+    const fileRes = await fetch(url, { headers: { Authorization: `Bearer ${process.env.META_TOKEN}` } });
+    if (!fileRes.ok) return res.status(502).json({ error: "Error fetching media" });
+    const contentType = fileRes.headers.get('content-type') || 'application/octet-stream';
+    res.set('Content-Type', contentType);
+    const buffer = await fileRes.arrayBuffer();
+    return res.send(Buffer.from(buffer));
+  } catch (e) {
+    console.error('Error proxy media:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Mensajes configurables ─────────────────────────────────────────────────────
 app.get("/api/messages", auth, (req, res) => res.json(messages.getAll()));
 app.put("/api/messages/:key", auth, (req, res) => {
@@ -140,17 +193,9 @@ app.post("/webhook", async (req, res) => {
         const messages2 = change.value?.messages;
         if (!messages2?.length) continue;
         for (const m of messages2) {
-          const phone = m.from;
-          let texto = "";
-          if (m.type === "text") texto = m.text?.body ?? "";
-          else if (m.type === "button") texto = m.button?.text || m.button?.payload || "";
-          else if (m.type === "interactive") {
-            if (m.interactive?.type === 'button_reply') texto = m.interactive.button_reply?.id || m.interactive.button_reply?.title || "";
-            else if (m.interactive?.type === 'list_reply') texto = m.interactive.list_reply?.id || m.interactive.list_reply?.title || "";
-          }
-          const tieneMedia = ["image","video","document"].includes(m.type) || !!(m.image||m.video||m.document);
-          console.log(`📩 +${phone}: "${texto}"${tieneMedia ? " [📸]" : ""}`);
-          procesarMensaje(phone, texto, tieneMedia).catch(console.error);
+          // Pass the full message object to the bot for centralized parsing
+          console.log(`📩 Raw message from ${m.from}: type=${m.type}`);
+          procesarMensaje(m).catch(console.error);
         }
       }
     }

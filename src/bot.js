@@ -84,7 +84,13 @@ async function enviarMeta(clientId, meta) {
       `📋 ${meta.descripcion}\n\n` +
       msg.get("pedir_listo");
 
+    // Enviar la pregunta con botones Sí / No
+    const botones = [
+      { id: `meta_si`, title: "Sí" },
+      { id: `meta_no`, title: "No" }
+    ];
     await enviar(phone, texto);
+    await enviarBotones(phone, msg.get("pedir_listo"), botones);
 
     history.registrar(clientId, phone, nombre, {
       tipo: "meta_enviada",
@@ -97,49 +103,117 @@ async function enviarMeta(clientId, meta) {
 }
 
 // ── Procesar mensajes entrantes ───────────────────────────────────────────────
-async function procesarMensaje(phone, texto, tieneMedia) {
+async function getIncomingText(m) {
+  // Extract text from various WhatsApp message shapes
+  const type = m.type;
+  let text = "";
+  if (type === 'text') text = m.text?.body || "";
+  else if (type === 'button') text = m.button?.text || m.button?.payload || "";
+  else if (type === 'interactive') {
+    if (m.interactive?.type === 'button_reply') text = m.interactive.button_reply?.id || m.interactive.button_reply?.title || "";
+    else if (m.interactive?.type === 'list_reply') text = m.interactive.list_reply?.id || m.interactive.list_reply?.title || "";
+  }
+  // sometimes media messages include captions
+  if (!text && (m.caption?.body)) text = m.caption.body;
+  const tieneMedia = ['image','video','document'].includes(type) || !!(m.image||m.video||m.document);
+  return { raw: text || '', norm: (text || '').toString().trim().toLowerCase(), type, tieneMedia };
+}
+
+async function procesarMensaje(m) {
+  const phone = m.from;
   const client = findClientByPhone(phone);
-  const s      = state.get(phone);
-  const txt    = texto.trim().toLowerCase();
+  const incoming = await getIncomingText(m);
+  const txt = incoming.norm;
+  const tipoMsg = incoming.type;
 
   // Registrar mensaje entrante
+  const s = state.get(phone);
   if (client) {
     const nombre = nombreDe(client, phone);
-    history.registrar(client.id, phone, nombre, {
+    const entry = {
       tipo: "mensaje_recibido",
       meta: s.meta?.titulo ?? "—",
       metaEmoji: s.meta?.emoji ?? "💬",
-      comentario: texto,
+      comentario: incoming.raw,
       direccion: "entrante",
-    });
+    };
+    // Si el mensaje contiene media, adjuntar metadata para mostrar en dashboard
+    if (m.image || m.video || m.document) {
+      entry.media = m.image || m.video || m.document;
+    }
+    history.registrar(client.id, phone, nombre, entry);
   }
 
   if (!client) {
+    console.log('[bot] No client for', phone);
     await enviar(phone, msg.get("sin_registro"));
     return;
   }
 
   const nombre = nombreDe(client, phone);
   const solo   = esIndividual(client);
+  console.log('[bot] Incoming:', { phone, tipoMsg, raw: incoming.raw, txt, state: s.flow });
 
   // ── Esperando LISTO ──────────────────────────────────────────────────────
   if (s.flow === state.FLOW.META_ENVIADA) {
-    if (["listo","si","sí","ok","dale","ya","empezar","done"].includes(txt)) {
+    // Accept button replies (meta_si / meta_no) or free-text yes/no
+    if (incoming.raw === 'meta_si' || /^(si|sí|s|yes|y)$/i.test(incoming.raw)) {
+      // User answered YES
       if (points.yaCompleto(client.id, phone)) {
         await enviar(phone, `¡Ya completaste esta meta! 🎉${solo ? "" : " Espera a tu compañer@. 💪"}`);
         return;
       }
-      state.set(phone, { flow: state.FLOW.ESPERANDO_FOTO });
-      await enviar(phone, `¡Genial ${nombre}! 👏\n\n${msg.get("pedir_foto")}`);
+      // If meta requires photo, ask for photo
+      if (s.meta?.requiereFoto) {
+        state.set(phone, { flow: state.FLOW.ESPERANDO_FOTO });
+        await enviar(phone, msg.get("pedir_foto"));
+      } else {
+        // skip directly to estrellas
+        state.set(phone, { flow: state.FLOW.ESPERANDO_ESTRELLAS, estrellasN: null });
+        const be = msg.get("botones_estrellas") || ["Mal","Normal","Muy bien"];
+        const botonesEst = be.map((t, i) => ({ id: `estrellas_${i}`, title: t }));
+        await enviarBotones(phone, msg.get("pedir_estrellas"), botonesEst);
+      }
+    } else if (incoming.raw === 'meta_no' || /^(no|n|nah|not)$/i.test(incoming.raw)) {
+      // User answered NO
+      const meta = s.meta;
+      // register as no_completada
+      history.registrar(client.id, phone, nombre, {
+        tipo: "no_completada",
+        meta: meta?.titulo,
+        metaEmoji: meta?.emoji,
+        direccion: "entrante",
+      });
+      // If repetition enabled, schedule one-off reminder
+      if (meta?.repetirSiNo && meta.repetirFreq && meta.repetirFreq.value > 0) {
+        const unit = meta.repetirFreq.unit || 'hours';
+        const value = Number(meta.repetirFreq.value) || 24;
+        const ms = unit === 'days' ? value * 24 * 3600 * 1000 : value * 3600 * 1000;
+        // Persist next reminder timestamp on the goal
+        const clientObj = db.getById(client.id);
+        const g = clientObj.goals.find(x => x.id === meta.id);
+        if (g) {
+          g.nextReminder = Date.now() + ms;
+          db.upsert(clientObj);
+        }
+        setTimeout(async () => {
+          console.log('[bot] Recordatorio por NO para meta', meta.titulo, '-> reenviando');
+          await enviarMeta(client.id, meta);
+        }, ms);
+        await enviar(phone, `Entendido. Te volveré a recordar en ${value} ${unit}.`);
+      } else {
+        await enviar(phone, `Entendido. No volveré a insistir por ahora. 💚`);
+      }
     } else {
-      await enviar(phone, msg.get("pedir_listo"));
+      // Re-send buttons
+      await enviarBotones(phone, msg.get("pedir_listo"), [{ id: 'meta_si', title: 'Sí' }, { id: 'meta_no', title: 'No' }]);
     }
     return;
   }
 
   // ── Esperando FOTO ───────────────────────────────────────────────────────
   if (s.flow === state.FLOW.ESPERANDO_FOTO) {
-    if (tieneMedia) {
+    if (incoming.tieneMedia) {
       state.set(phone, { flow: state.FLOW.ESPERANDO_ESTRELLAS });
       const be = msg.get("botones_estrellas") || ["Mal","Normal","Muy bien"];
       const botonesEst = be.map((t, i) => ({ id: `estrellas_${i}`, title: t }));
@@ -154,30 +228,38 @@ async function procesarMensaje(phone, texto, tieneMedia) {
   if (s.flow === state.FLOW.ESPERANDO_ESTRELLAS) {
     // Map three-button responses to a 1-5 scale for compatibility with points
     let n = null;
-    if (txt.startsWith("estrellas_")) {
-      const idx = parseInt(txt.split("_")[1] || "", 10);
-      const be = msg.get("botones_estrellas") || ["Mal","Normal","Muy bien"];
-      if (!isNaN(idx) && be[idx]) {
-        // map indexes 0,1,2 to 1,3,5
-        const map = [1, 3, 5];
-        n = map[idx] ?? null;
-      }
-    } else if (/(^|\W)(mal|malo)(\W|$)/.test(txt)) n = 1;
-    else if (/(^|\W)(normal)(\W|$)/.test(txt)) n = 3;
-    else if (/(^|\W)(muy\s*bien|excelente|muybien)(\W|$)/.test(txt)) n = 5;
+    const be = msg.get("botones_estrellas") || ["Mal","Normal","Muy bien"];
+    const beNorm = be.map(x=>x.toString().trim().toLowerCase());
+
+    // Check id pattern estrellas_<i>
+    if (incoming.raw && /^estrellas_\d+$/.test(incoming.raw)) {
+      const idx = parseInt(incoming.raw.split("_")[1],10);
+      const map = [1,3,5];
+      if (!isNaN(idx)) n = map[idx] ?? null;
+    }
+    // Check title matches any configured button title
+    if (n === null && beNorm.includes(txt)) {
+      const idx = beNorm.indexOf(txt);
+      const map = [1,3,5];
+      n = map[idx] ?? null;
+    }
+    // fallback common words
+    if (n === null) {
+      if (/(^|\W)(mal|malo)(\W|$)/.test(txt)) n = 1;
+      else if (/(^|\W)(normal)(\W|$)/.test(txt)) n = 3;
+      else if (/(^|\W)(muy\s*bien|excelente|muybien)(\W|$)/.test(txt)) n = 5;
+    }
 
     if (n) {
       state.set(phone, { flow: state.FLOW.ESPERANDO_DIFICULTAD, estrellasN: n });
+      console.log('[bot] Estrellas aceptadas:', n, 'state -> ESPERANDO_DIFICULTAD');
       const bd = msg.get("botones_dificultad") || ["Fácil","Normal","Difícil"];
       const botones = bd.map((t, i) => ({ id: `dificultad_${i}`, title: t }));
       await enviarBotones(phone, msg.get("pedir_dificultad"), botones);
     } else {
+      console.log('[bot] Estrellas NO reconocidas:', incoming.raw);
       await enviar(phone, `Por favor selecciona cómo te sientes usando los botones.`);
-      const botonesEst = [
-        { id: "estrellas_mal", title: "Mal" },
-        { id: "estrellas_normal", title: "Normal" },
-        { id: "estrellas_muybien", title: "Muy bien" },
-      ];
+      const botonesEst = be.map((t,i) => ({ id: `estrellas_${i}`, title: t }));
       await enviarBotones(phone, msg.get("pedir_estrellas"), botonesEst);
     }
     return;
@@ -187,13 +269,20 @@ async function procesarMensaje(phone, texto, tieneMedia) {
   if (s.flow === state.FLOW.ESPERANDO_DIFICULTAD) {
     // Accept replies from buttons (ids or titles) or simple text
     let dif = null;
-    if (txt.startsWith("dificultad_")) {
-      const idx = parseInt(txt.split("_")[1] || "", 10);
-      const bd = msg.get("botones_dificultad") || ["Fácil","Normal","Difícil"];
+    const bd = msg.get("botones_dificultad") || ["Fácil","Normal","Difícil"];
+    const bdNorm = bd.map(x=>x.toString().trim().toLowerCase());
+    if (incoming.raw && /^dificultad_\d+$/.test(incoming.raw)) {
+      const idx = parseInt(incoming.raw.split("_")[1],10);
       if (!isNaN(idx) && bd[idx]) dif = bd[idx];
-    } else if (/(^|\W)(1|facil|fácil)(\W|$)/.test(txt)) dif = "Fácil";
-    else if (/(^|\W)(2|normal)(\W|$)/.test(txt)) dif = "Normal";
-    else if (/(^|\W)(3|dificil|difícil)(\W|$)/.test(txt)) dif = "Difícil";
+    }
+    if (!dif && bdNorm.includes(txt)) {
+      dif = bd[bdNorm.indexOf(txt)];
+    }
+    if (!dif) {
+      if (/(^|\W)(1|facil|fácil)(\W|$)/.test(txt)) dif = "Fácil";
+      else if (/(^|\W)(2|normal)(\W|$)/.test(txt)) dif = "Normal";
+      else if (/(^|\W)(3|dificil|difícil)(\W|$)/.test(txt)) dif = "Difícil";
+    }
 
     if (dif) {
       const resultado = points.sumar(client.id, phone, client.phones.length);
