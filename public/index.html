@@ -205,11 +205,18 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Descripción</label><textarea id="md" rows="3" placeholder="Describe qué debe hacer..."></textarea></div>
     <div class="fg"><label>Hora del recordatorio</label><input type="time" id="mh" value="09:00"/></div>
     <div class="fg"><label>Días</label>
-      <div class="dg">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
+        <label style="font-weight:700"><input type="radio" name="m_schedule_mode" value="dias" id="m_mode_dias" checked/> Días de la semana</label>
+        <label style="font-weight:700"><input type="radio" name="m_schedule_mode" value="date" id="m_mode_date"/> Fecha específica</label>
+      </div>
+      <div class="dg" id="m_days_selector">
         <button class="db active" data-day="1">Lun</button><button class="db active" data-day="2">Mar</button>
         <button class="db active" data-day="3">Mié</button><button class="db active" data-day="4">Jue</button>
         <button class="db active" data-day="5">Vie</button><button class="db" data-day="6">Sáb</button>
         <button class="db" data-day="7">Dom</button>
+      </div>
+      <div style="display:none;margin-top:8px" id="m_date_selector">
+        <input type="date" id="m_specific_date" style="padding:8px;border:2px solid #e0e8e0;border-radius:6px" />
       </div>
     </div>
     <input type="hidden" id="mid" />
@@ -564,12 +571,18 @@ function openMM(clientId, goalId){
   I("mcid").value=clientId;
   I("mid").value = goalId || "";
   I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";
+  // reset day buttons
   document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));
   // defaults for new meta
   I("m_requiere_foto").checked = true;
   I("m_repetir_si_no").checked = false;
   I("m_repetir_val").value = 24;
   I("m_repetir_unit").value = 'hours';
+  // schedule defaults: show weekdays by default
+  I("m_mode_dias").checked = true; I("m_mode_date").checked = false;
+  I("m_days_selector").style.display = '';
+  I("m_date_selector").style.display = 'none';
+  I("m_specific_date").value = '';
   if(goalId){
     const client = clients.find(c=>c.id===clientId);
     const goal = client?.goals?.find(g=>g.id===goalId);
@@ -578,7 +591,18 @@ function openMM(clientId, goalId){
       I("mt").value = goal.titulo || "";
       I("md").value = goal.descripcion || "";
       I("mh").value = goal.hora || "09:00";
-      document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active", (goal.dias||[]).includes(+b.dataset.day)));
+      // If goal has a specificDate use date mode, else use dias
+      if(goal.specificDate){
+        I("m_mode_dias").checked = false; I("m_mode_date").checked = true;
+        I("m_days_selector").style.display = 'none';
+        I("m_date_selector").style.display = '';
+        I("m_specific_date").value = goal.specificDate;
+      } else {
+        I("m_mode_dias").checked = true; I("m_mode_date").checked = false;
+        I("m_days_selector").style.display = '';
+        I("m_date_selector").style.display = 'none';
+        document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active", (goal.dias||[]).includes(+b.dataset.day)));
+      }
       I("m_requiere_foto").checked = !!goal.requiereFoto;
       I("m_repetir_si_no").checked = !!goal.repetirSiNo;
       I("m_repetir_val").value = goal.repetirFreq?.value || 24;
@@ -591,17 +615,20 @@ document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.cla
 async function saveMeta(sendNow=false){
   const clientId=I("mcid").value, mid=I("mid").value, titulo=I("mt").value.trim();
   if(!titulo){showToast("⚠️ Escribe el título");return}
+  const scheduleMode = document.querySelector('input[name="m_schedule_mode"]:checked')?.value || 'dias';
   const dias=[...document.querySelectorAll(".db.active")].map(b=>+b.dataset.day);
+  const specificDate = I("m_specific_date").value || null;
   const payload = {
     titulo,
     descripcion:I("md").value.trim()||titulo,
     emoji:I("me").value||"🎯",
     hora:I("mh").value,
-    dias,
     requiereFoto: !!I("m_requiere_foto").checked,
     repetirSiNo: !!I("m_repetir_si_no").checked,
     repetirFreq: { unit: I("m_repetir_unit").value, value: Number(I("m_repetir_val").value) }
   };
+  if(scheduleMode === 'dias') payload.dias = dias;
+  else payload.specificDate = specificDate;
   let res;
   if(mid){
     res = await api("PUT",`/clients/${clientId}/goals/${mid}`, payload);
