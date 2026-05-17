@@ -599,12 +599,24 @@ function renderTipsGallery(){
     </div>`}).join('');
 }
 
-function openTipModal(){ I('tip_type').value='image'; I('tip_title').value=''; I('tip_desc').value=''; I('tip_file').value=''; I('tip_phrase').value=''; I('tip_upload_box').style.display=''; I('tip_phrase_box').style.display='none'; I('tipModal').classList.add('open'); }
-I('tip_type').addEventListener('change',()=>{
-  const v = I('tip_type').value;
-  I('tip_upload_box').style.display = (v==='image'||v==='pdf')? '' : 'none';
-  I('tip_phrase_box').style.display = (v==='phrase')? '': 'none';
-});
+function openTipModal(){
+  const elTipType = I('tip_type'); if(elTipType) elTipType.value='image';
+  I('tip_title').value=''; I('tip_desc').value='';
+  const f = I('tip_file'); if(f) f.value='';
+  const ph = I('tip_phrase'); if(ph) ph.value='';
+  const up = I('tip_upload_box'); if(up) up.style.display='';
+  const pb = I('tip_phrase_box'); if(pb) pb.style.display='none';
+  const mm = I('tipModal'); if(mm) mm.classList.add('open');
+}
+const _tip_type_el = I('tip_type');
+if(_tip_type_el){
+  _tip_type_el.addEventListener('change',()=>{
+    const v = _tip_type_el.value;
+    const up = I('tip_upload_box'); const pb = I('tip_phrase_box');
+    if(up) up.style.display = (v==='image'||v==='pdf')? '' : 'none';
+    if(pb) pb.style.display = (v==='phrase')? '' : 'none';
+  });
+}
 
 async function saveTip(){
   const type=I('tip_type').value, title=I('tip_title').value.trim();
