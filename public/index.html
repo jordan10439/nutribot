@@ -119,10 +119,11 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div id="app" style="display:none;flex-direction:column">
   <div class="topbar"><h1>🌱 NutriGO Admin</h1><button class="logout" onclick="logout()">Salir</button></div>
   <div class="tabs">
-    <div class="tab active" onclick="showTab('p')">👥 Pacientes</div>
-    <div class="tab" onclick="showTab('c')">💬 Conversaciones</div>
-    <div class="tab" onclick="showTab('h')">📋 Historial</div>
-    <div class="tab" onclick="showTab('m')">⚙️ Mensajes</div>
+    <div class="tab active" data-tab="p" onclick="showTab('p')">👥 Pacientes</div>
+    <div class="tab" data-tab="c" onclick="showTab('c')">💬 Conversaciones</div>
+    <div class="tab" data-tab="h" onclick="showTab('h')">📋 Historial</div>
+    <div class="tab" data-tab="m" onclick="showTab('m')">⚙️ Mensajes</div>
+    <div class="tab" data-tab="tips" onclick="showTab('tips')">💡 Tips</div>
   </div>
 
   <!-- PACIENTES -->
@@ -173,6 +174,15 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
       <div id="msg-list"></div>
     </div>
   </div>
+
+  <!-- TIPS -->
+  <div id="ttips" style="display:none">
+    <div class="content">
+      <div class="sh"><h2>💡 Tips</h2><button class="ba" onclick="openTipModal()">+ Agregar tip</button></div>
+      <p style="font-size:12px;color:#7a9a7a;margin-bottom:12px">Crea recursos rápidos (imágenes, PDFs o frases) y programa envíos a pacientes.</p>
+      <div id="tips-gallery"></div>
+    </div>
+  </div>
 </div>
 
 <!-- Modal Paciente -->
@@ -219,6 +229,41 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
         <input type="date" id="m_specific_date" style="padding:8px;border:2px solid #e0e8e0;border-radius:6px" />
       </div>
     </div>
+
+      <!-- Modal Tip (crear) -->
+      <div class="mo" id="tipModal">
+        <div class="modal">
+          <h2>➕ Nuevo tip</h2>
+          <div class="fg"><label>Tipo</label>
+            <select id="tip_type"><option value="image">Imagen</option><option value="pdf">PDF</option><option value="phrase">Frase</option></select>
+          </div>
+          <div class="fg"><label>Título</label><input id="tip_title" placeholder="Ej: Receta rápida"/></div>
+          <div class="fg"><label>Descripción / Pie de página</label><textarea id="tip_desc" rows="3" placeholder="Descripción corta..."></textarea></div>
+          <div class="fg" id="tip_upload_box">
+            <label>Archivo (imagen o PDF)</label>
+            <input type="file" id="tip_file" accept="image/*,.pdf" />
+          </div>
+          <div class="fg" id="tip_phrase_box" style="display:none">
+            <label>Frase</label>
+            <textarea id="tip_phrase" rows="3" placeholder="Escribe la frase aquí..."></textarea>
+          </div>
+          <div class="ma"><button class="bc" onclick="closeM('tipModal')">Cancelar</button><button class="bsv" onclick="saveTip()">Guardar tip</button></div>
+        </div>
+      </div>
+
+      <!-- Modal Enviar Tip -->
+      <div class="mo" id="tipSendModal">
+        <div class="modal">
+          <h2>📤 Enviar tip</h2>
+          <div class="fg"><label>Seleccionar pacientes</label>
+            <div id="tip_send_clients" style="max-height:220px;overflow:auto;padding:8px;border:1px solid #e0e8e0;border-radius:8px"></div>
+          </div>
+          <div class="fg"><label>Fecha</label><input type="date" id="tip_send_date" /></div>
+          <div class="fg"><label>Hora</label><input type="time" id="tip_send_time" value="09:00"/></div>
+          <input type="hidden" id="tip_send_id" />
+          <div class="ma"><button class="bc" onclick="closeM('tipSendModal')">Cancelar</button><button class="bsv" onclick="confirmSendTip()">Programar / Enviar</button></div>
+        </div>
+      </div>
     <input type="hidden" id="mid" />
     <div class="fg"><label><input type="checkbox" id="m_requiere_foto" /> Requiere foto</label></div>
     <div class="fg"><label><input type="checkbox" id="m_repetir_si_no" /> Repetir si responde "No"</label></div>
@@ -245,12 +290,15 @@ I("pw").addEventListener("keydown",e=>{if(e.key==="Enter")login()});
 function logout(){TOKEN="";I("ls").style.display="flex";I("app").style.display="none"}
 
 function showTab(t){
-  document.querySelectorAll(".tab").forEach((el,i)=>el.classList.toggle("active",["p","c","h","m"][i]===t));
-  ["tp","tc","th","tm"].forEach(id=>I(id).style.display="none");
-  I("t"+t).style.display=t==="c"?"flex":"block";
-  if(t==="h")loadGlobal();
-  if(t==="m")loadMessages();
-  if(t==="c")updateChatSel();
+  document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active', el.getAttribute('data-tab')===t));
+  const map = {p:'tp', c:'tc', h:'th', m:'tm', tips:'ttips'};
+  Object.values(map).forEach(id=>{ const el=I(id); if(el) el.style.display='none'; });
+  const target = map[t] || map.p;
+  if(target){ I(target).style.display = (t==='c') ? 'flex' : 'block'; }
+  if(t==='h') loadGlobal();
+  if(t==='m') loadMessages();
+  if(t==='c') updateChatSel();
+  if(t==='tips') loadTips();
 }
 
 async function loadAll(){
@@ -525,6 +573,92 @@ async function loadMessages(){
       </div>
     </div>`).join("");
 }
+
+// ── TIPS: local storage-backed simple manager ─────────────────────────────────
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
+function loadTips(){
+  const raw = localStorage.getItem('nutri_tips') || '[]';
+  try{ window._nutri_tips = JSON.parse(raw); }catch(e){ window._nutri_tips = []; }
+  renderTipsGallery();
+}
+function renderTipsGallery(){
+  const el = I('tips-gallery');
+  const tips = window._nutri_tips || [];
+  if(!tips.length){ el.innerHTML = `<div class="empty"><div>💡</div><p>No hay tips aún. Crea uno con + Agregar tip.</p></div>`; return }
+  el.innerHTML = tips.map(t=>{
+    const preview = t.type==='image' && t.data ? `<img src="${t.data}" style="max-width:160px;border-radius:8px;display:block;margin-bottom:8px"/>` : t.type==='pdf' ? `<div style="padding:12px;border-radius:8px;background:#f8f8ff;border:1px solid #e0e8e0;margin-bottom:8px">📄 ${t.filename||'PDF'}</div>` : `<div style="padding:12px;border-radius:8px;background:#fff8f0;border:1px solid #e0e0e0;margin-bottom:8px">“${(t.phrase||'').slice(0,120)}${(t.phrase||'').length>120?'…':''}”</div>`;
+    return `<div class="card" style="display:inline-block;width:220px;margin:8px;vertical-align:top">
+      <div style="font-weight:800;color:#2a5738;margin-bottom:6px">${t.title}</div>
+      <div style="font-size:12px;color:#6a7a6a;margin-bottom:8px">${t.type.toUpperCase()}</div>
+      ${preview}
+      <div style="font-size:12px;color:#4a6a4a;margin-bottom:8px">${t.desc||''}</div>
+      <div style="display:flex;gap:8px">
+        <button class="bam" onclick="openSendModal('${t.id}')">Enviar a pacientes</button>
+        <button class="md2" onclick="deleteTip('${t.id}')">🗑️</button>
+      </div>
+    </div>`}).join('');
+}
+
+function openTipModal(){ I('tip_type').value='image'; I('tip_title').value=''; I('tip_desc').value=''; I('tip_file').value=''; I('tip_phrase').value=''; I('tip_upload_box').style.display=''; I('tip_phrase_box').style.display='none'; I('tipModal').classList.add('open'); }
+I('tip_type').addEventListener('change',()=>{
+  const v = I('tip_type').value;
+  I('tip_upload_box').style.display = (v==='image'||v==='pdf')? '' : 'none';
+  I('tip_phrase_box').style.display = (v==='phrase')? '': 'none';
+});
+
+async function saveTip(){
+  const type=I('tip_type').value, title=I('tip_title').value.trim();
+  if(!title){ showToast('⚠️ Escribe un título'); return }
+  const desc=I('tip_desc').value.trim();
+  const tips = window._nutri_tips || [];
+  const id = uid();
+  const obj = { id, type, title, desc };
+  if(type==='phrase'){ obj.phrase = I('tip_phrase').value.trim(); }
+  else {
+    const f = I('tip_file').files[0];
+    if(!f){ showToast('⚠️ Selecciona un archivo'); return }
+    obj.filename = f.name;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      obj.data = reader.result;
+      tips.unshift(obj); localStorage.setItem('nutri_tips', JSON.stringify(tips)); window._nutri_tips = tips; renderTipsGallery(); closeM('tipModal'); showToast('✅ Tip guardado');
+    };
+    reader.readAsDataURL(f);
+    return;
+  }
+  tips.unshift(obj); localStorage.setItem('nutri_tips', JSON.stringify(tips)); window._nutri_tips = tips; renderTipsGallery(); closeM('tipModal'); showToast('✅ Tip guardado');
+}
+
+function deleteTip(id){ if(!confirm('¿Eliminar este tip?')) return; window._nutri_tips = (window._nutri_tips||[]).filter(t=>t.id!==id); localStorage.setItem('nutri_tips', JSON.stringify(window._nutri_tips)); renderTipsGallery(); showToast('🗑️ Tip eliminado'); }
+
+function openSendModal(tipId){
+  I('tip_send_id').value = tipId;
+  const box = I('tip_send_clients'); box.innerHTML = '';
+  (clients||[]).forEach(c=>{
+    const cb = document.createElement('div'); cb.style.marginBottom='6px';
+    cb.innerHTML = `<label style="font-size:13px"><input type="checkbox" value="${c.id}" /> ${c.nombres?.join(' & ')} · ${c.phones?.join(' · ')}</label>`;
+    box.appendChild(cb);
+  });
+  I('tip_send_date').value = new Date().toISOString().slice(0,10);
+  I('tip_send_time').value = '09:00';
+  I('tipSendModal').classList.add('open');
+}
+
+function confirmSendTip(){
+  const tipId = I('tip_send_id').value; if(!tipId){ showToast('⚠️ Tip inválido'); return }
+  const clientIds = [...I('tip_send_clients').querySelectorAll('input[type=checkbox]:checked')].map(i=>i.value);
+  if(!clientIds.length){ showToast('⚠️ Selecciona al menos un paciente'); return }
+  const date = I('tip_send_date').value; const time = I('tip_send_time').value;
+  const scheduledAt = date ? new Date(`${date}T${time||'09:00'}:00`).toISOString() : new Date().toISOString();
+  // Save scheduled send locally
+  const sched = JSON.parse(localStorage.getItem('nutri_scheduled_sends')||'[]');
+  sched.unshift({ id: uid(), tipId, clientIds, scheduledAt });
+  localStorage.setItem('nutri_scheduled_sends', JSON.stringify(sched));
+  closeM('tipSendModal'); showToast('📅 Envío programado');
+}
+
+// expose loadTips on initial load
+window.addEventListener('load',()=>{ if(document.querySelectorAll('.tab').length) loadTips(); });
 
 async function saveMsg(key){
   const value=I(`msg-${key}`).value;
