@@ -612,6 +612,16 @@ function openMM(clientId, goalId){
   I("mm").classList.add("open")
 }
 document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.classList.toggle("active")));
+// Toggle schedule mode UI (weekdays vs specific date)
+const _m_mode_dias = I("m_mode_dias"), _m_mode_date = I("m_mode_date");
+if(_m_mode_dias && _m_mode_date){
+  _m_mode_dias.addEventListener("change",()=>{
+    if(_m_mode_dias.checked){ I("m_days_selector").style.display = ''; I("m_date_selector").style.display = 'none'; }
+  });
+  _m_mode_date.addEventListener("change",()=>{
+    if(_m_mode_date.checked){ I("m_days_selector").style.display = 'none'; I("m_date_selector").style.display = ''; }
+  });
+}
 async function saveMeta(sendNow=false){
   const clientId=I("mcid").value, mid=I("mid").value, titulo=I("mt").value.trim();
   if(!titulo){showToast("⚠️ Escribe el título");return}
