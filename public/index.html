@@ -600,6 +600,7 @@ function renderTipsGallery(){
 }
 
 function openTipModal(){
+  console.log('openTipModal llamado');
   const elTipType = I('tip_type'); if(elTipType) elTipType.value='image';
   I('tip_title').value=''; I('tip_desc').value='';
   const f = I('tip_file'); if(f) f.value='';
