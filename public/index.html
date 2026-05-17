@@ -606,7 +606,7 @@ function openTipModal(){
   const ph = I('tip_phrase'); if(ph) ph.value='';
   const up = I('tip_upload_box'); if(up) up.style.display='';
   const pb = I('tip_phrase_box'); if(pb) pb.style.display='none';
-  const mm = I('tipModal'); if(mm) mm.classList.add('open');
+  const mm = I('tipModal'); if(mm) mm.style.display = 'flex';
 }
 const _tip_type_el = I('tip_type');
 if(_tip_type_el){
@@ -653,7 +653,7 @@ function openSendModal(tipId){
   });
   I('tip_send_date').value = new Date().toISOString().slice(0,10);
   I('tip_send_time').value = '09:00';
-  I('tipSendModal').classList.add('open');
+  const tsm = I('tipSendModal'); if(tsm) tsm.style.display = 'flex';
 }
 
 function confirmSendTip(){
@@ -808,7 +808,24 @@ async function sendMeta(cid,gid){
   showToast(`📤 Meta enviada a ${c?.nombres?.join(" & ")}`);
 }
 
-function closeM(id){I(id).classList.remove("open")}
+function closeM(id){
+  if(id==='tipModal'){
+    const mm = I(id); if(mm) mm.style.display = 'none';
+    const tt = I('tip_type'); if(tt) tt.value = 'image';
+    const ttit = I('tip_title'); if(ttit) ttit.value = '';
+    const tdesc = I('tip_desc'); if(tdesc) tdesc.value = '';
+    const tf = I('tip_file'); if(tf) tf.value = '';
+    const tphr = I('tip_phrase'); if(tphr) tphr.value = '';
+    const tup = I('tip_upload_box'); if(tup) tup.style.display = '';
+    const tpb = I('tip_phrase_box'); if(tpb) tpb.style.display = 'none';
+  } else if(id==='tipSendModal'){
+    const mm = I(id); if(mm) mm.style.display = 'none';
+    const box = I('tip_send_clients'); if(box) box.innerHTML = '';
+    const sd = I('tip_send_date'); if(sd) sd.value = '';
+    const st = I('tip_send_time'); if(st) st.value = '';
+    const sid = I('tip_send_id'); if(sid) sid.value = '';
+  } else { I(id).classList.remove("open") }
+}
 function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}
 </script>
 </body>
