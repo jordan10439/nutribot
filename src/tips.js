@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const FILE = path.join(__dirname, "../data/tips.json");
 const DEFAULT_FOLDER = { id: "general", name: "Sin carpeta", type: "all" };
@@ -28,8 +29,42 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+function dedupeTips(items) {
+  const seen = new Set();
+  return items.filter(item => {
+    const key = item?.requestId || item?.id;
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeScheduledAt(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) throw new Error(`Fecha programada inválida: ${value}`);
+  return date.toISOString();
+}
+
+function tipFingerprint(payload) {
+  return crypto.createHash("sha1").update(JSON.stringify({
+    type: payload.type || "",
+    title: String(payload.title || "").trim(),
+    desc: String(payload.desc || ""),
+    phrase: payload.type === "phrase" ? String(payload.phrase || "") : "",
+    filename: payload.filename || "",
+    data: payload.data || "",
+    folderId: payload.folderId || "general",
+  })).digest("hex");
+}
+
 function listTips() {
-  return load().tips;
+  const data = load();
+  const unique = dedupeTips(data.tips);
+  if (unique.length !== data.tips.length) {
+    data.tips = unique;
+    save(data);
+  }
+  return unique;
 }
 
 function listFolders() {
@@ -53,10 +88,24 @@ function createFolder(folder) {
 function upsertTip(payload, id) {
   const data = load();
   const now = new Date().toISOString();
+  const byRequest = !id && payload.requestId ? data.tips.find(t => t.requestId === payload.requestId) : null;
+  if (byRequest) return byRequest;
   const existing = id ? data.tips.find(t => t.id === id) : null;
+  const fingerprint = tipFingerprint({
+    ...(existing || {}),
+    ...payload,
+    data: payload.data || existing?.data || "",
+    filename: payload.filename || existing?.filename || "",
+  });
+  const byRecentDuplicate = !id ? data.tips.find(t => (
+    t.fingerprint === fingerprint &&
+    new Date(t.createdAt || 0).getTime() > Date.now() - 2 * 60 * 1000
+  )) : null;
+  if (byRecentDuplicate) return byRecentDuplicate;
   const tip = {
     ...(existing || {}),
     id: existing?.id || uid(),
+    requestId: existing?.requestId || payload.requestId || "",
     type: payload.type,
     title: String(payload.title || "").trim(),
     desc: String(payload.desc || ""),
@@ -64,13 +113,14 @@ function upsertTip(payload, id) {
     filename: payload.filename || existing?.filename || "",
     data: payload.data || existing?.data || "",
     folderId: payload.folderId || "general",
+    fingerprint,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   };
   if (!tip.title) throw new Error("Título requerido");
   if (tip.type === "phrase" && !tip.phrase) throw new Error("Frase requerida");
   if ((tip.type === "image" || tip.type === "pdf") && !tip.data) throw new Error("Archivo requerido");
-  data.tips = existing ? data.tips.map(t => t.id === tip.id ? tip : t) : [tip, ...data.tips];
+  data.tips = existing ? data.tips.map(t => t.id === tip.id ? tip : t) : [tip, ...dedupeTips(data.tips)];
   save(data);
   return tip;
 }
@@ -85,10 +135,14 @@ function listSends() {
   return load().sends.sort((a, b) => new Date(b.scheduledAt || b.createdAt) - new Date(a.scheduledAt || a.createdAt));
 }
 
+function pendingSends() {
+  return load().sends.filter(s => ["programado", "pendiente"].includes(s.status));
+}
+
 function createSends(tip, recipients, message, scheduledAt) {
   const data = load();
-  const when = scheduledAt || new Date().toISOString();
-  const status = new Date(when).getTime() > Date.now() + 60000 ? "programado" : "pendiente";
+  const when = normalizeScheduledAt(scheduledAt);
+  const status = new Date(when).getTime() > Date.now() ? "programado" : "pendiente";
   const sends = recipients.map(r => ({
     id: uid(),
     tipId: tip.id,
@@ -121,7 +175,10 @@ function updateSend(id, patch) {
 
 function dueSends() {
   const now = Date.now();
-  return load().sends.filter(s => ["programado", "pendiente"].includes(s.status) && new Date(s.scheduledAt).getTime() <= now);
+  return pendingSends().filter(s => {
+    const scheduledMs = new Date(s.scheduledAt).getTime();
+    return !Number.isNaN(scheduledMs) && scheduledMs <= now;
+  });
 }
 
 function getTip(id) {
@@ -138,6 +195,7 @@ module.exports = {
   listFolders,
   listSends,
   listTips,
+  pendingSends,
   updateSend,
   upsertTip,
 };

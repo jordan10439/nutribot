@@ -198,14 +198,21 @@ async function sendTipRecord(send) {
   const tip = tips.getTip(send.tipId);
   if (!tip) {
     const reason = "Tip no encontrado";
-    console.error("Error al enviar tip", reason);
+    console.error("Error real al enviar tip", reason);
     tips.updateSend(send.id, { status: "error", error: reason });
     return;
   }
   try {
     tips.updateSend(send.id, { status: "enviando", error: "" });
+    console.log("Tip listo para enviar", JSON.stringify({ id: send.id, tipo: tip.type }));
+    console.log("Fecha programada", send.scheduledAt);
+    console.log("Fecha actual", new Date().toISOString());
+    console.log(`Número destino +${send.phone}`);
+    if (tip.type === "phrase") console.log("Enviando tip tipo Frase");
+    console.log("Función de WhatsApp utilizada", "enviarTip -> enviar");
     console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
     const result = await enviarTip(send.phone, tip, send.message, send.patientName);
+    console.log("Respuesta de WhatsApp", JSON.stringify(result));
     tips.updateSend(send.id, {
       status: "enviado",
       sentAt: new Date().toISOString(),
@@ -221,7 +228,7 @@ async function sendTipRecord(send) {
     });
     console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, warning: result.warning || "" }));
   } catch (e) {
-    console.error("Error al enviar tip", JSON.stringify({ id: send.id, phone: send.phone, error: e.message }));
+    console.error("Error real al enviar tip", JSON.stringify({ id: send.id, phone: send.phone, error: e.message }));
     tips.updateSend(send.id, { status: "error", error: e.message });
   }
 }
@@ -232,7 +239,22 @@ async function revisarTipsProgramados() {
   checkingTips = true;
   console.log("Revisando tips programados");
   try {
+    const pending = tips.pendingSends();
+    const now = new Date();
+    console.log("Cantidad de tips pendientes", pending.length);
+    for (const send of pending) {
+      const scheduled = new Date(send.scheduledAt);
+      const scheduledMs = scheduled.getTime();
+      console.log("Fecha programada", JSON.stringify({ id: send.id, status: send.status, scheduledAt: send.scheduledAt }));
+      console.log("Fecha actual", now.toISOString());
+      if (Number.isNaN(scheduledMs)) {
+        const reason = `Fecha programada inválida: ${send.scheduledAt}`;
+        console.error("Error real al enviar tip", JSON.stringify({ id: send.id, error: reason }));
+        tips.updateSend(send.id, { status: "error", error: reason });
+      }
+    }
     const due = tips.dueSends();
+    console.log("Cantidad de tips listos para enviar", due.length);
     for (const send of due) await sendTipRecord(send);
   } catch (e) {
     console.error("Error revisando tips programados", e.message);
@@ -261,13 +283,18 @@ app.post("/api/tip-folders", auth, (req, res) => {
 });
 app.get("/api/tip-sends", auth, (req, res) => res.json(tips.listSends()));
 app.post("/api/tips/:id/send", auth, async (req, res) => {
-  const tip = tips.getTip(req.params.id);
-  if (!tip) return res.status(404).json({ error: "Tip no encontrado" });
-  const recipients = recipientsFromClientIds(req.body.clientIds || [], req.body.includePairs || {});
-  if (!recipients.length) return res.status(400).json({ error: "Selecciona al menos un paciente válido" });
-  const sends = tips.createSends(tip, recipients, req.body.message || "", req.body.scheduledAt);
-  await revisarTipsProgramados();
-  res.json({ ok: true, sends });
+  try {
+    const tip = tips.getTip(req.params.id);
+    if (!tip) return res.status(404).json({ error: "Tip no encontrado" });
+    const recipients = recipientsFromClientIds(req.body.clientIds || [], req.body.includePairs || {});
+    if (!recipients.length) return res.status(400).json({ error: "Selecciona al menos un paciente válido" });
+    const sends = tips.createSends(tip, recipients, req.body.message || "", req.body.scheduledAt);
+    await revisarTipsProgramados();
+    res.json({ ok: true, sends });
+  } catch (e) {
+    console.error("Error real al enviar tip", e.message);
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // ── Webhook Meta ───────────────────────────────────────────────────────────────

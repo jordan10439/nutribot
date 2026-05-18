@@ -89,6 +89,9 @@ async function uploadMedia(dataUrl, filename) {
 async function enviarTip(phone, tip, message, nombre = "") {
   const text = message || tip.phrase || tip.desc || tip.title || "";
   if (tip.type === "phrase") {
+    console.log("Enviando tip tipo Frase");
+    console.log(`Número destino +${phone}`);
+    console.log("Función de WhatsApp utilizada", "enviar");
     const result = await enviar(phone, text, nombre);
     if (!result.ok) throw new Error(result.error);
     return { ok: true, textSent: true, mediaSent: false };

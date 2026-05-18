@@ -629,10 +629,22 @@ function escapeHtml(v){return String(v||'').replace(/[&<>"']/g,ch=>({'&':'&amp;'
 function tipLabel(type){return type==='image'?'Imagen':type==='pdf'?'PDF':'Frase'}
 let tipFilter='all';
 let tipFolderFilter='all';
+let tipSaving=false;
+let tipSending=false;
 const defaultTipFolder={id:'general',name:'Sin carpeta',type:'all'};
 
+function uniqueTips(tips){
+  const seen=new Set();
+  return (Array.isArray(tips)?tips:[]).filter(t=>{
+    const key=t.requestId||t.id;
+    if(!key||seen.has(key))return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function loadTips(){
-  window._nutri_tips = await api('GET','/tips');
+  window._nutri_tips = uniqueTips(await api('GET','/tips'));
   window._nutri_tip_folders = await api('GET','/tip-folders');
   window._nutri_tip_history = await api('GET','/tip-sends');
   if(!Array.isArray(window._nutri_tips)) window._nutri_tips = [];
@@ -748,6 +760,7 @@ function openTipModal(id=''){
   const type=tip?.type||'image';
   I('tip_modal_title').textContent=tip?'✏️ Editar tip':'➕ Nuevo tip';
   I('tip_id').value=tip?.id||'';
+  I('tip_id').dataset.requestId=tip?'':uid();
   I('tip_type').value=type;
   fillTipFolderSelect(type);
   const preferredFolder=tip?.folderId||((tipFolderFilter!=='all'&&folderMatchesType(tipFolderFilter,type))?tipFolderFilter:'general');
@@ -760,29 +773,39 @@ function openTipModal(id=''){
   I('tipModal').classList.add('open');
 }
 async function saveTip(){
+  if(tipSaving)return;
   const type=I('tip_type').value, title=I('tip_title').value.trim(), id=I('tip_id').value;
   if(!title){showToast('⚠️ Escribe un título');return}
+  tipSaving=true;
+  const saveBtn=document.querySelector('#tipModal .bsv');
+  if(saveBtn)saveBtn.disabled=true;
   const tips=window._nutri_tips||[];
-  const existing=tips.find(t=>t.id===id);
-  const obj={...(existing||{}),id:id||uid(),type,title,folderId:I('tip_folder').value||'general',desc:I('tip_desc').value.trim(),updatedAt:new Date().toISOString(),createdAt:existing?.createdAt||new Date().toISOString()};
-  if(type==='phrase'){
-    obj.phrase=I('tip_phrase').value.trim();
-    if(!obj.phrase){showToast('⚠️ Escribe la frase');return}
-    delete obj.data; delete obj.filename;
-  }else{
-    const f=I('tip_file').files[0];
-    if(!f&&!existing?.data){showToast('⚠️ Selecciona un archivo');return}
-    if(f){
-      if(type==='pdf'&&f.type&&f.type!=='application/pdf'){showToast('⚠️ Selecciona un PDF');return}
-      obj.filename=f.name;
-      obj.data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(f)});
+  try{
+    const existing=tips.find(t=>t.id===id);
+    const requestId=existing?.requestId||I('tip_id').dataset.requestId||uid();
+    const obj={...(existing||{}),requestId,type,title,folderId:I('tip_folder').value||'general',desc:I('tip_desc').value.trim(),updatedAt:new Date().toISOString(),createdAt:existing?.createdAt||new Date().toISOString()};
+    if(type==='phrase'){
+      obj.phrase=I('tip_phrase').value.trim();
+      if(!obj.phrase){showToast('⚠️ Escribe la frase');return}
+      delete obj.data; delete obj.filename;
+    }else{
+      const f=I('tip_file').files[0];
+      if(!f&&!existing?.data){showToast('⚠️ Selecciona un archivo');return}
+      if(f){
+        if(type==='pdf'&&f.type&&f.type!=='application/pdf'){showToast('⚠️ Selecciona un PDF');return}
+        obj.filename=f.name;
+        obj.data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(f)});
+      }
+      delete obj.phrase;
     }
-    delete obj.phrase;
+    const res=await api(existing?'PUT':'POST',existing?`/tips/${existing.id}`:'/tips',obj);
+    if(res.error){showToast(`⚠️ ${res.error}`);return}
+    await loadTips();
+    closeM('tipModal'); showToast('✅ Tip guardado');
+  } finally {
+    tipSaving=false;
+    if(saveBtn)saveBtn.disabled=false;
   }
-  const res=await api(existing?'PUT':'POST',existing?`/tips/${obj.id}`:'/tips',obj);
-  if(res.error){showToast(`⚠️ ${res.error}`);return}
-  await loadTips();
-  closeM('tipModal'); showToast('✅ Tip guardado');
 }
 async function deleteTip(id){
   if(!confirm('¿Eliminar este tip?'))return;
@@ -834,6 +857,7 @@ function previewTipSend(){
   I('tip_preview').textContent=`Para: ${rec.length?rec.map(r=>r.name).join(', '):'Selecciona pacientes'}\nTipo: ${tipLabel(tip.type)}${file}\n\n${buildTipMessage(tip)||'Mensaje vacío'}`;
 }
 function confirmSendTip(){
+  if(tipSending)return;
   const tip=(window._nutri_tips||[]).find(t=>t.id===I('tip_send_id').value);
   if(!tip){showToast('⚠️ Tip inválido');return}
   const recipients=selectedTipRecipients();
@@ -847,11 +871,17 @@ function confirmSendTip(){
   [...I('tip_send_clients').querySelectorAll('input[data-client]:checked')].forEach(input=>{
     includePairs[input.dataset.client]=!!I(`tip_pair_${input.dataset.client}`)?.checked;
   });
+  tipSending=true;
+  const sendBtn=document.querySelector('#tipSendModal .bsv');
+  if(sendBtn)sendBtn.disabled=true;
   api('POST',`/tips/${tip.id}/send`,{clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString()}).then(async res=>{
     if(res.error){showToast(`⚠️ ${res.error}`);return}
     closeM('tipSendModal');
     await loadTips();
     showToast(when>new Date(Date.now()+60000)?'📅 Tip programado':'📤 Tip enviado por WhatsApp');
+  }).finally(()=>{
+    tipSending=false;
+    if(sendBtn)sendBtn.disabled=false;
   });
 }
 window.addEventListener('load',()=>{if(document.querySelectorAll('.tab').length)loadTips()});
