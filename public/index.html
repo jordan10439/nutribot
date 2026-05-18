@@ -78,6 +78,11 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .tip-tabs{display:flex;gap:6px;flex-wrap:wrap}
 .tip-tab{border:2px solid #e0e8e0;background:#fff;color:#5a8a5a;border-radius:9px;padding:7px 11px;font-size:12px;font-weight:800;cursor:pointer}
 .tip-tab.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.tip-folder-bar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.tip-folder-label{font-size:12px;font-weight:900;color:#2a5738;margin-right:2px}
+.tip-folder{border:1px solid #dbe9db;background:#fff;color:#4d744d;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:800;cursor:pointer}
+.tip-folder.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.tip-folder-add{border:1px dashed #3d7a4f;background:#f8fcf8;color:#2a5738;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:900;cursor:pointer}
 .tip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:18px}
 .tip-card{background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.06);border:1px solid #e0ece0;display:flex;flex-direction:column;gap:8px;min-height:230px}
 .tip-media{border:1px solid #e0ece0;background:#f8fcf8;border-radius:10px;min-height:96px;display:flex;align-items:center;justify-content:center;overflow:hidden;color:#5a8a5a;font-size:12px;font-weight:800;text-align:center}
@@ -86,6 +91,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .tip-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .tip-desc{font-size:12px;color:#4a6a4a;line-height:1.4;white-space:pre-wrap;word-break:break-word}
 .tip-actions{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap}
+.tip-actions .bam{flex:1;min-width:74px;text-align:center}
 .tip-history{background:#fff;border:1px solid #e0ece0;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
 .tip-history h3{font-size:14px;color:#2a5738;margin-bottom:10px}
 .tip-history-row{display:grid;grid-template-columns:1.2fr .8fr .7fr .7fr;gap:8px;align-items:center;padding:8px;border:1px solid #e8f0e8;border-radius:9px;margin-bottom:6px;font-size:12px}
@@ -211,6 +217,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
           <button class="tip-tab" data-tip-filter="phrase" onclick="setTipFilter('phrase')">Frases</button>
         </div>
       </div>
+      <div class="tip-folder-bar" id="tip-folder-bar"></div>
       <div id="tips-gallery"></div>
       <div class="tip-history">
         <h3>Historial de tips</h3>
@@ -283,6 +290,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Categoría</label>
       <select id="tip_type" onchange="toggleTipType()"><option value="image">Imagen</option><option value="pdf">PDF</option><option value="phrase">Frase</option></select>
     </div>
+    <div class="fg"><label>Carpeta</label><select id="tip_folder"></select></div>
     <div class="fg"><label>Título</label><input id="tip_title" placeholder="Ej: Receta rápida"/></div>
     <div class="fg"><label id="tip_desc_label">Descripción / pie de página</label><textarea id="tip_desc" rows="3" placeholder="Texto opcional para acompañar el tip..."></textarea></div>
     <div class="fg" id="tip_upload_box">
@@ -622,22 +630,78 @@ function readStore(key,fallback=[]){try{return JSON.parse(localStorage.getItem(k
 function writeStore(key,value){localStorage.setItem(key,JSON.stringify(value))}
 function tipLabel(type){return type==='image'?'Imagen':type==='pdf'?'PDF':'Frase'}
 let tipFilter='all';
+let tipFolderFilter='all';
+const defaultTipFolder={id:'general',name:'Sin carpeta',type:'all'};
 
 function loadTips(){
   window._nutri_tips = readStore('nutri_tips',[]);
+  window._nutri_tip_folders = readStore('nutri_tip_folders',[defaultTipFolder]);
+  if(!window._nutri_tip_folders.some(f=>f.id==='general')) window._nutri_tip_folders.unshift(defaultTipFolder);
   window._nutri_tip_history = readStore('nutri_tip_history',[]);
+  renderTipFolders();
+  fillTipFolderSelect();
   renderTipsGallery();
   renderTipHistory();
 }
 function setTipFilter(filter){
   tipFilter=filter;
+  if(tipFolderFilter!=='all'&&!folderMatchesType(tipFolderFilter,filter)) tipFolderFilter='all';
   document.querySelectorAll('[data-tip-filter]').forEach(b=>b.classList.toggle('active',b.dataset.tipFilter===filter));
+  renderTipFolders();
   renderTipsGallery();
+  renderTipHistory();
+}
+function setTipFolderFilter(folderId){
+  tipFolderFilter=folderId;
+  renderTipFolders();
+  renderTipsGallery();
+  renderTipHistory();
+}
+function createTipFolder(){
+  const name=prompt('Nombre de la carpeta');
+  if(!name||!name.trim())return;
+  const folders=window._nutri_tip_folders||[defaultTipFolder];
+  const clean=name.trim();
+  const folderType=tipFilter==='all'?'all':tipFilter;
+  if(folders.some(f=>f.name.toLowerCase()===clean.toLowerCase()&&(f.type||'all')===folderType)){showToast('⚠️ Esa carpeta ya existe');return}
+  const folder={id:uid(),name:clean,type:folderType};
+  folders.push(folder);
+  window._nutri_tip_folders=folders;
+  writeStore('nutri_tip_folders',folders);
+  tipFolderFilter=folder.id;
+  renderTipFolders();
+  fillTipFolderSelect();
+  renderTipsGallery();
+  renderTipHistory();
+  showToast('📁 Carpeta creada');
+}
+function renderTipFolders(){
+  const el=I('tip-folder-bar'); if(!el)return;
+  const folders=(window._nutri_tip_folders||[defaultTipFolder]).filter(f=>tipFilter==='all'||(f.type||'all')==='all'||f.type===tipFilter);
+  el.innerHTML=`<span class="tip-folder-label">Carpetas:</span>
+    <button class="tip-folder ${tipFolderFilter==='all'?'active':''}" onclick="setTipFolderFilter('all')">Todas</button>
+    ${folders.map(f=>`<button class="tip-folder ${tipFolderFilter===f.id?'active':''}" onclick="setTipFolderFilter('${f.id}')">📁 ${escapeHtml(f.name)}${tipFilter==='all'&&f.type&&f.type!=='all'?` · ${tipLabel(f.type)}`:''}</button>`).join('')}
+    <button class="tip-folder-add" onclick="createTipFolder()">+ Crear carpeta</button>`;
+}
+function fillTipFolderSelect(type){
+  const sel=I('tip_folder'); if(!sel)return;
+  const selectedType=type||I('tip_type')?.value||'image';
+  const folders=(window._nutri_tip_folders||[defaultTipFolder]).filter(f=>(f.type||'all')==='all'||f.type===selectedType);
+  const previous=sel.value;
+  sel.innerHTML=folders.map(f=>`<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+  if(folders.some(f=>f.id===previous)) sel.value=previous;
+}
+function folderName(folderId){
+  return (window._nutri_tip_folders||[]).find(f=>f.id===(folderId||'general'))?.name||'Sin carpeta';
+}
+function folderMatchesType(folderId,type){
+  const folder=(window._nutri_tip_folders||[]).find(f=>f.id===folderId);
+  return !folder||type==='all'||(folder.type||'all')==='all'||folder.type===type;
 }
 function renderTipsGallery(){
   const el = I('tips-gallery');
-  const tips = (window._nutri_tips||[]).filter(t=>tipFilter==='all'||t.type===tipFilter);
-  if(!tips.length){ el.innerHTML = `<div class="empty"><div>💡</div><p>No hay tips en esta categoría.</p></div>`; return }
+  const tips = (window._nutri_tips||[]).filter(t=>(tipFilter==='all'||t.type===tipFilter)&&(tipFolderFilter==='all'||(t.folderId||'general')===tipFolderFilter));
+  if(!tips.length){ el.innerHTML = `<div class="empty"><div>💡</div><p>No hay tips en esta vista.</p></div>`; return }
   el.innerHTML = `<div class="tip-grid">${tips.map(t=>{
     const media = t.type==='image' && t.data
       ? `<div class="tip-media"><img src="${t.data}" alt="${escapeHtml(t.title)}"/></div>`
@@ -647,7 +711,7 @@ function renderTipsGallery(){
     return `<div class="tip-card">
       ${media}
       <div class="tip-title">${escapeHtml(t.title)}</div>
-      <div class="tip-meta"><span class="tag ${t.type==='pdf'?'tb':t.type==='phrase'?'tr':'tg'}">${tipLabel(t.type)}</span><span class="tag">${new Date(t.updatedAt||t.createdAt||Date.now()).toLocaleDateString('es-CL')}</span></div>
+      <div class="tip-meta"><span class="tag ${t.type==='pdf'?'tb':t.type==='phrase'?'tr':'tg'}">${tipLabel(t.type)}</span><span class="tag">📁 ${escapeHtml(folderName(t.folderId))}</span><span class="tag">${new Date(t.updatedAt||t.createdAt||Date.now()).toLocaleDateString('es-CL')}</span></div>
       <div class="tip-desc">${escapeHtml(t.desc||'')}</div>
       <div class="tip-actions">
         <button class="bam" onclick="openSendModal('${t.id}')">Enviar</button>
@@ -658,17 +722,20 @@ function renderTipsGallery(){
 }
 function renderTipHistory(){
   const el=I('tips-history'); if(!el)return;
-  const rows=readStore('nutri_tip_history',[]).slice(0,80);
-  if(!rows.length){el.innerHTML='<div class="empty-h">Sin tips enviados o programados aún.</div>';return}
+  const rows=readStore('nutri_tip_history',[]).filter(r=>(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter)).slice(0,80);
+  if(!rows.length){el.innerHTML='<div class="empty-h">Sin tips enviados o programados en esta vista.</div>';return}
   el.innerHTML=rows.map(r=>`<div class="tip-history-row">
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
     <div>${new Date(r.when).toLocaleString('es-CL')}</div>
-    <div>${tipLabel(r.tipType)}</div>
+    <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span></div>
     <div><span class="tag ${r.status==='programado'?'tb':'tg'}">${escapeHtml(r.status)}</span></div>
   </div>`).join('');
 }
 function toggleTipType(){
   const type=I('tip_type').value;
+  const currentFolder=I('tip_folder')?.value;
+  fillTipFolderSelect(type);
+  if(currentFolder&&folderMatchesType(currentFolder,type)) I('tip_folder').value=currentFolder;
   I('tip_upload_box').style.display=type==='phrase'?'none':'block';
   I('tip_phrase_box').style.display=type==='phrase'?'block':'none';
   I('tip_desc_label').textContent=type==='pdf'?'Mensaje de acompañamiento':type==='image'?'Texto / pie de página opcional':'Descripción';
@@ -677,9 +744,13 @@ function toggleTipType(){
 }
 function openTipModal(id=''){
   const tip=(window._nutri_tips||[]).find(t=>t.id===id);
+  const type=tip?.type||'image';
   I('tip_modal_title').textContent=tip?'✏️ Editar tip':'➕ Nuevo tip';
   I('tip_id').value=tip?.id||'';
-  I('tip_type').value=tip?.type||'image';
+  I('tip_type').value=type;
+  fillTipFolderSelect(type);
+  const preferredFolder=tip?.folderId||((tipFolderFilter!=='all'&&folderMatchesType(tipFolderFilter,type))?tipFolderFilter:'general');
+  I('tip_folder').value=preferredFolder;
   I('tip_title').value=tip?.title||'';
   I('tip_desc').value=tip?.desc||'';
   I('tip_phrase').value=tip?.phrase||'';
@@ -692,7 +763,7 @@ async function saveTip(){
   if(!title){showToast('⚠️ Escribe un título');return}
   const tips=window._nutri_tips||[];
   const existing=tips.find(t=>t.id===id);
-  const obj={...(existing||{}),id:id||uid(),type,title,desc:I('tip_desc').value.trim(),updatedAt:new Date().toISOString(),createdAt:existing?.createdAt||new Date().toISOString()};
+  const obj={...(existing||{}),id:id||uid(),type,title,folderId:I('tip_folder').value||'general',desc:I('tip_desc').value.trim(),updatedAt:new Date().toISOString(),createdAt:existing?.createdAt||new Date().toISOString()};
   if(type==='phrase'){
     obj.phrase=I('tip_phrase').value.trim();
     if(!obj.phrase){showToast('⚠️ Escribe la frase');return}
@@ -773,13 +844,13 @@ function confirmSendTip(){
   const status=when>new Date(Date.now()+60000)?'programado':'enviado';
   const message=buildTipMessage(tip);
   const history=readStore('nutri_tip_history',[]);
-  recipients.forEach(r=>history.unshift({id:uid(),tipId:tip.id,tipTitle:I('tip_send_title').value||tip.title,tipType:tip.type,clientId:r.clientId,phone:r.phone,patientName:r.name,when:when.toISOString(),status,message}));
+  recipients.forEach(r=>history.unshift({id:uid(),tipId:tip.id,tipTitle:I('tip_send_title').value||tip.title,tipType:tip.type,folderId:tip.folderId||'general',clientId:r.clientId,phone:r.phone,patientName:r.name,when:when.toISOString(),status,message}));
   writeStore('nutri_tip_history',history);
   if(status==='enviado'){
     recipients.forEach(r=>window.open(`https://wa.me/${r.phone}?text=${encodeURIComponent(message)}`,'_blank'));
   }else{
     const sched=readStore('nutri_scheduled_sends',[]);
-    sched.unshift({id:uid(),tipId:tip.id,recipients,scheduledAt:when.toISOString(),message,status:'programado'});
+    sched.unshift({id:uid(),tipId:tip.id,tipType:tip.type,folderId:tip.folderId||'general',recipients,scheduledAt:when.toISOString(),message,status:'programado'});
     writeStore('nutri_scheduled_sends',sched);
   }
   closeM('tipSendModal'); renderTipHistory(); showToast(status==='programado'?'📅 Tip programado':'📤 Tip preparado para WhatsApp');
