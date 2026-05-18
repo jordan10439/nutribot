@@ -6,6 +6,8 @@ const path       = require("path");
 const db         = require("./src/db");
 const history    = require("./src/history");
 const messages   = require("./src/messages");
+const tips       = require("./src/tips");
+const { enviarTip } = require("./src/whatsapp");
 const { procesarMensaje, enviarMeta, enviarBienvenida } = require("./src/bot");
 const { recargarTodos } = require("./src/scheduler");
 
@@ -14,8 +16,8 @@ const PORT = process.env.PORT || 3000;
 const PASS = process.env.ADMIN_PASSWORD || "nutribot2024";
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "nutribot2024";
 
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false, limit: "25mb" }));
+app.use(bodyParser.json({ limit: "25mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 function auth(req, res, next) {
@@ -172,6 +174,98 @@ app.post("/api/messages/:key/reset", auth, (req, res) => {
 });
 app.get("/api/messages/labels", auth, (req, res) => res.json(messages.LABELS));
 
+// ── Tips programables ─────────────────────────────────────────────────────────
+function nombreCliente(client, phone) {
+  const idx = (client.phones || []).indexOf(phone);
+  return client.nombres?.[idx] || client.nombres?.[0] || "Paciente";
+}
+
+function recipientsFromClientIds(clientIds = [], includePairs = {}) {
+  const recipients = [];
+  for (const clientId of clientIds) {
+    const client = db.getById(clientId);
+    if (!client) continue;
+    const phones = includePairs[clientId] ? (client.phones || []) : [client.phones?.[0]].filter(Boolean);
+    for (const phone of phones) {
+      recipients.push({ clientId, phone, name: nombreCliente(client, phone) });
+    }
+  }
+  return recipients;
+}
+
+async function sendTipRecord(send) {
+  console.log("Tip encontrado para enviar", JSON.stringify({ id: send.id, tipId: send.tipId, phone: send.phone, patientName: send.patientName }));
+  const tip = tips.getTip(send.tipId);
+  if (!tip) {
+    const reason = "Tip no encontrado";
+    console.error("Error al enviar tip", reason);
+    tips.updateSend(send.id, { status: "error", error: reason });
+    return;
+  }
+  try {
+    tips.updateSend(send.id, { status: "enviando", error: "" });
+    console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
+    await enviarTip(send.phone, tip, send.message, send.patientName);
+    tips.updateSend(send.id, { status: "enviado", sentAt: new Date().toISOString(), error: "" });
+    history.registrar(send.clientId, send.phone, send.patientName, {
+      tipo: "tip_enviado",
+      meta: send.tipTitle,
+      metaEmoji: tip.type === "image" ? "🖼️" : tip.type === "pdf" ? "📄" : "💬",
+      comentario: send.message,
+      direccion: "saliente",
+      tipType: tip.type,
+    });
+    console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone }));
+  } catch (e) {
+    console.error("Error al enviar tip", JSON.stringify({ id: send.id, phone: send.phone, error: e.message }));
+    tips.updateSend(send.id, { status: "error", error: e.message });
+  }
+}
+
+let checkingTips = false;
+async function revisarTipsProgramados() {
+  if (checkingTips) return;
+  checkingTips = true;
+  console.log("Revisando tips programados");
+  try {
+    const due = tips.dueSends();
+    for (const send of due) await sendTipRecord(send);
+  } catch (e) {
+    console.error("Error revisando tips programados", e.message);
+  } finally {
+    checkingTips = false;
+  }
+}
+
+app.get("/api/tips", auth, (req, res) => res.json(tips.listTips()));
+app.post("/api/tips", auth, (req, res) => {
+  try { res.json({ ok: true, tip: tips.upsertTip(req.body) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.put("/api/tips/:id", auth, (req, res) => {
+  try { res.json({ ok: true, tip: tips.upsertTip(req.body, req.params.id) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.delete("/api/tips/:id", auth, (req, res) => {
+  tips.deleteTip(req.params.id);
+  res.json({ ok: true });
+});
+app.get("/api/tip-folders", auth, (req, res) => res.json(tips.listFolders()));
+app.post("/api/tip-folders", auth, (req, res) => {
+  try { res.json({ ok: true, folder: tips.createFolder(req.body) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.get("/api/tip-sends", auth, (req, res) => res.json(tips.listSends()));
+app.post("/api/tips/:id/send", auth, async (req, res) => {
+  const tip = tips.getTip(req.params.id);
+  if (!tip) return res.status(404).json({ error: "Tip no encontrado" });
+  const recipients = recipientsFromClientIds(req.body.clientIds || [], req.body.includePairs || {});
+  if (!recipients.length) return res.status(400).json({ error: "Selecciona al menos un paciente válido" });
+  const sends = tips.createSends(tip, recipients, req.body.message || "", req.body.scheduledAt);
+  await revisarTipsProgramados();
+  res.json({ ok: true, sends });
+});
+
 // ── Webhook Meta ───────────────────────────────────────────────────────────────
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
@@ -209,4 +303,6 @@ app.get("*", (_, res) => res.sendFile(path.join(__dirname, "public/index.html"))
 app.listen(PORT, () => {
   console.log(`\n🌱 NutriGO Panel v3 — puerto ${PORT}`);
   recargarTodos();
+  revisarTipsProgramados();
+  setInterval(revisarTipsProgramados, 60 * 1000);
 });

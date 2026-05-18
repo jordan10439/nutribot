@@ -626,18 +626,19 @@ async function loadMessages(){
 // ── TIPS: biblioteca local del panel ─────────────────────────────────────────
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function escapeHtml(v){return String(v||'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]))}
-function readStore(key,fallback=[]){try{return JSON.parse(localStorage.getItem(key)||JSON.stringify(fallback))}catch(e){return fallback}}
-function writeStore(key,value){localStorage.setItem(key,JSON.stringify(value))}
 function tipLabel(type){return type==='image'?'Imagen':type==='pdf'?'PDF':'Frase'}
 let tipFilter='all';
 let tipFolderFilter='all';
 const defaultTipFolder={id:'general',name:'Sin carpeta',type:'all'};
 
-function loadTips(){
-  window._nutri_tips = readStore('nutri_tips',[]);
-  window._nutri_tip_folders = readStore('nutri_tip_folders',[defaultTipFolder]);
+async function loadTips(){
+  window._nutri_tips = await api('GET','/tips');
+  window._nutri_tip_folders = await api('GET','/tip-folders');
+  window._nutri_tip_history = await api('GET','/tip-sends');
+  if(!Array.isArray(window._nutri_tips)) window._nutri_tips = [];
+  if(!Array.isArray(window._nutri_tip_folders)) window._nutri_tip_folders = [defaultTipFolder];
   if(!window._nutri_tip_folders.some(f=>f.id==='general')) window._nutri_tip_folders.unshift(defaultTipFolder);
-  window._nutri_tip_history = readStore('nutri_tip_history',[]);
+  if(!Array.isArray(window._nutri_tip_history)) window._nutri_tip_history = [];
   renderTipFolders();
   fillTipFolderSelect();
   renderTipsGallery();
@@ -657,17 +658,17 @@ function setTipFolderFilter(folderId){
   renderTipsGallery();
   renderTipHistory();
 }
-function createTipFolder(){
+async function createTipFolder(){
   const name=prompt('Nombre de la carpeta');
   if(!name||!name.trim())return;
   const folders=window._nutri_tip_folders||[defaultTipFolder];
   const clean=name.trim();
   const folderType=tipFilter==='all'?'all':tipFilter;
   if(folders.some(f=>f.name.toLowerCase()===clean.toLowerCase()&&(f.type||'all')===folderType)){showToast('⚠️ Esa carpeta ya existe');return}
-  const folder={id:uid(),name:clean,type:folderType};
-  folders.push(folder);
-  window._nutri_tip_folders=folders;
-  writeStore('nutri_tip_folders',folders);
+  const res=await api('POST','/tip-folders',{name:clean,type:folderType});
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  const folder=res.folder;
+  window._nutri_tip_folders=[...folders,folder];
   tipFolderFilter=folder.id;
   renderTipFolders();
   fillTipFolderSelect();
@@ -722,13 +723,13 @@ function renderTipsGallery(){
 }
 function renderTipHistory(){
   const el=I('tips-history'); if(!el)return;
-  const rows=readStore('nutri_tip_history',[]).filter(r=>(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter)).slice(0,80);
+  const rows=(window._nutri_tip_history||[]).filter(r=>(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter)).slice(0,80);
   if(!rows.length){el.innerHTML='<div class="empty-h">Sin tips enviados o programados en esta vista.</div>';return}
   el.innerHTML=rows.map(r=>`<div class="tip-history-row">
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
-    <div>${new Date(r.when).toLocaleString('es-CL')}</div>
+    <div>${new Date(r.scheduledAt||r.when||r.createdAt).toLocaleString('es-CL')}</div>
     <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span></div>
-    <div><span class="tag ${r.status==='programado'?'tb':'tg'}">${escapeHtml(r.status)}</span></div>
+    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}</div>
   </div>`).join('');
 }
 function toggleTipType(){
@@ -778,15 +779,15 @@ async function saveTip(){
     }
     delete obj.phrase;
   }
-  const next=existing?tips.map(t=>t.id===obj.id?obj:t):[obj,...tips];
-  try{writeStore('nutri_tips',next)}catch(e){showToast('⚠️ El archivo es muy grande para guardar en este navegador');return}
-  window._nutri_tips=next; closeM('tipModal'); renderTipsGallery(); showToast('✅ Tip guardado');
+  const res=await api(existing?'PUT':'POST',existing?`/tips/${obj.id}`:'/tips',obj);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  await loadTips();
+  closeM('tipModal'); showToast('✅ Tip guardado');
 }
-function deleteTip(id){
+async function deleteTip(id){
   if(!confirm('¿Eliminar este tip?'))return;
-  window._nutri_tips=(window._nutri_tips||[]).filter(t=>t.id!==id);
-  writeStore('nutri_tips',window._nutri_tips);
-  renderTipsGallery(); showToast('🗑️ Tip eliminado');
+  await api('DELETE',`/tips/${id}`);
+  await loadTips(); showToast('🗑️ Tip eliminado');
 }
 function buildTipMessage(tip){
   const title=(I('tip_send_title')?.value||tip.title||'').trim();
@@ -841,38 +842,19 @@ function confirmSendTip(){
   if(!date){showToast('⚠️ Selecciona fecha');return}
   const when=new Date(`${date}T${time}:00`);
   if(Number.isNaN(when.getTime())){showToast('⚠️ Fecha u hora inválida');return}
-  const status=when>new Date(Date.now()+60000)?'programado':'enviado';
   const message=buildTipMessage(tip);
-  const history=readStore('nutri_tip_history',[]);
-  recipients.forEach(r=>history.unshift({id:uid(),tipId:tip.id,tipTitle:I('tip_send_title').value||tip.title,tipType:tip.type,folderId:tip.folderId||'general',clientId:r.clientId,phone:r.phone,patientName:r.name,when:when.toISOString(),status,message}));
-  writeStore('nutri_tip_history',history);
-  if(status==='enviado'){
-    recipients.forEach(r=>window.open(`https://wa.me/${r.phone}?text=${encodeURIComponent(message)}`,'_blank'));
-  }else{
-    const sched=readStore('nutri_scheduled_sends',[]);
-    sched.unshift({id:uid(),tipId:tip.id,tipType:tip.type,folderId:tip.folderId||'general',recipients,scheduledAt:when.toISOString(),message,status:'programado'});
-    writeStore('nutri_scheduled_sends',sched);
-  }
-  closeM('tipSendModal'); renderTipHistory(); showToast(status==='programado'?'📅 Tip programado':'📤 Tip preparado para WhatsApp');
-}
-function processDueTipSchedules(){
-  const sched=readStore('nutri_scheduled_sends',[]);
-  if(!sched.length)return;
-  const now=Date.now();
-  const due=sched.filter(s=>new Date(s.scheduledAt).getTime()<=now&&s.status==='programado');
-  if(!due.length)return;
-  const keep=sched.filter(s=>!(new Date(s.scheduledAt).getTime()<=now&&s.status==='programado'));
-  const history=readStore('nutri_tip_history',[]);
-  due.forEach(s=>{
-    (s.recipients||[]).forEach(r=>window.open(`https://wa.me/${r.phone}?text=${encodeURIComponent(s.message||'')}`,'_blank'));
-    history.forEach(h=>{if(h.tipId===s.tipId&&h.status==='programado'&&h.when===s.scheduledAt)h.status='enviado'});
+  const includePairs={};
+  [...I('tip_send_clients').querySelectorAll('input[data-client]:checked')].forEach(input=>{
+    includePairs[input.dataset.client]=!!I(`tip_pair_${input.dataset.client}`)?.checked;
   });
-  writeStore('nutri_scheduled_sends',keep);
-  writeStore('nutri_tip_history',history);
-  renderTipHistory();
-  showToast('📤 Tip programado listo para WhatsApp');
+  api('POST',`/tips/${tip.id}/send`,{clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString()}).then(async res=>{
+    if(res.error){showToast(`⚠️ ${res.error}`);return}
+    closeM('tipSendModal');
+    await loadTips();
+    showToast(when>new Date(Date.now()+60000)?'📅 Tip programado':'📤 Tip enviado por WhatsApp');
+  });
 }
-window.addEventListener('load',()=>{if(document.querySelectorAll('.tab').length){loadTips();processDueTipSchedules();setInterval(processDueTipSchedules,30000)}});
+window.addEventListener('load',()=>{if(document.querySelectorAll('.tab').length)loadTips()});
 
 async function saveMsg(key){
   const value=I(`msg-${key}`).value;
