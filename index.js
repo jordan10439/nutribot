@@ -193,6 +193,37 @@ function recipientsFromClientIds(clientIds = [], includePairs = {}) {
   return recipients;
 }
 
+function recipientsFromTipBody(body = {}) {
+  const clientIds = body.clientId ? [body.clientId] : (body.clientIds || []);
+  const recipients = recipientsFromClientIds(clientIds, body.includePairs || {});
+  const directPhones = body.phone ? [body.phone] : (body.phones || []);
+
+  for (const phone of directPhones.filter(Boolean)) {
+    const client = db.getAll().find(c => (c.phones || []).includes(phone));
+    recipients.push({
+      clientId: client?.id || "directo",
+      phone,
+      name: body.patientName || (client ? nombreCliente(client, phone) : "Paciente"),
+    });
+  }
+
+  const seen = new Set();
+  return recipients.filter(r => {
+    const key = `${r.clientId}:${r.phone}`;
+    if (!r.phone || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function createAndReviewTipSends(tip, body = {}) {
+  const recipients = recipientsFromTipBody(body);
+  if (!recipients.length) throw new Error("Selecciona al menos un paciente válido");
+  const sends = tips.createSends(tip, recipients, body.message || "", body.scheduledAt);
+  await revisarTipsProgramados();
+  return sends;
+}
+
 async function sendTipRecord(send) {
   console.log("Tip encontrado para enviar", JSON.stringify({ id: send.id, tipId: send.tipId, phone: send.phone, patientName: send.patientName }));
   const tip = tips.getTip(send.tipId);
@@ -282,14 +313,23 @@ app.post("/api/tip-folders", auth, (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.get("/api/tip-sends", auth, (req, res) => res.json(tips.listSends()));
+app.post("/api/tips/send", auth, async (req, res) => {
+  try {
+    const tip = tips.getTip(req.body.tipId || req.body.id);
+    if (!tip) return res.status(404).json({ error: "Tip no encontrado" });
+    console.log("Ruta POST /api/tips/send", JSON.stringify({ tipId: tip.id, tipType: tip.type }));
+    const sends = await createAndReviewTipSends(tip, req.body);
+    res.json({ ok: true, sends });
+  } catch (e) {
+    console.error("Error real al enviar tip", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
 app.post("/api/tips/:id/send", auth, async (req, res) => {
   try {
     const tip = tips.getTip(req.params.id);
     if (!tip) return res.status(404).json({ error: "Tip no encontrado" });
-    const recipients = recipientsFromClientIds(req.body.clientIds || [], req.body.includePairs || {});
-    if (!recipients.length) return res.status(400).json({ error: "Selecciona al menos un paciente válido" });
-    const sends = tips.createSends(tip, recipients, req.body.message || "", req.body.scheduledAt);
-    await revisarTipsProgramados();
+    const sends = await createAndReviewTipSends(tip, req.body);
     res.json({ ok: true, sends });
   } catch (e) {
     console.error("Error real al enviar tip", e.message);

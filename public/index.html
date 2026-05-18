@@ -874,7 +874,7 @@ function confirmSendTip(){
   tipSending=true;
   const sendBtn=document.querySelector('#tipSendModal .bsv');
   if(sendBtn)sendBtn.disabled=true;
-  api('POST',`/tips/${tip.id}/send`,{clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString()}).then(async res=>{
+  api('POST','/tips/send',{tipId:tip.id,clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString()}).then(async res=>{
     if(res.error){showToast(`⚠️ ${res.error}`);return}
     closeM('tipSendModal');
     await loadTips();
