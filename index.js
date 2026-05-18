@@ -205,8 +205,12 @@ async function sendTipRecord(send) {
   try {
     tips.updateSend(send.id, { status: "enviando", error: "" });
     console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
-    await enviarTip(send.phone, tip, send.message, send.patientName);
-    tips.updateSend(send.id, { status: "enviado", sentAt: new Date().toISOString(), error: "" });
+    const result = await enviarTip(send.phone, tip, send.message, send.patientName);
+    tips.updateSend(send.id, {
+      status: "enviado",
+      sentAt: new Date().toISOString(),
+      error: result.warning ? `Texto enviado. Archivo no enviado: ${result.warning}` : "",
+    });
     history.registrar(send.clientId, send.phone, send.patientName, {
       tipo: "tip_enviado",
       meta: send.tipTitle,
@@ -215,7 +219,7 @@ async function sendTipRecord(send) {
       direccion: "saliente",
       tipType: tip.type,
     });
-    console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone }));
+    console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, warning: result.warning || "" }));
   } catch (e) {
     console.error("Error al enviar tip", JSON.stringify({ id: send.id, phone: send.phone, error: e.message }));
     tips.updateSend(send.id, { status: "error", error: e.message });

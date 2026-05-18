@@ -1,6 +1,20 @@
 // src/whatsapp.js — Meta WhatsApp Cloud API
 const conversations = require("./conversations");
 
+function formatWhatsAppError(data, status, context) {
+  const err = data?.error || {};
+  const parts = [
+    `WhatsApp/Meta rechazó la solicitud (${context})`,
+    `HTTP ${status}`,
+    err.code ? `code=${err.code}` : "",
+    err.type ? `type=${err.type}` : "",
+    err.error_subcode ? `subcode=${err.error_subcode}` : "",
+    err.fbtrace_id ? `fbtrace_id=${err.fbtrace_id}` : "",
+    err.message ? `message="${err.message}"` : "",
+  ].filter(Boolean);
+  return parts.join(" | ");
+}
+
 async function postWhatsApp(payload) {
   const res = await fetch(
     `https://graph.facebook.com/v19.0/${process.env.META_PHONE_ID}/messages`,
@@ -15,18 +29,38 @@ async function postWhatsApp(payload) {
   );
   const data = await res.json().catch(() => ({}));
   console.log("Respuesta de WhatsApp", JSON.stringify(data));
-  if (!res.ok || data.error) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  if (!res.ok || data.error) throw new Error(formatWhatsAppError(data, res.status, payload.type || "mensaje"));
   return data;
 }
 
 async function enviar(phone, mensaje, nombre = "") {
   try {
-    await postWhatsApp({ to: phone, type: "text", text: { body: mensaje } });
+    const res = await fetch(
+      `https://graph.facebook.com/v19.0/${process.env.META_PHONE_ID}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.META_TOKEN}`,
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to: phone,
+          type: "text",
+          text: { body: mensaje },
+        }),
+      }
+    );
+    const data = await res.json().catch(() => ({}));
+    console.log("Respuesta de WhatsApp", JSON.stringify(data));
+    if (!res.ok || data.error) throw new Error(formatWhatsAppError(data, res.status, "texto"));
     // Guardar en conversaciones
     conversations.registrar(phone, "enviado", mensaje, { nombre });
     console.log(`✅ Enviado a +${phone}`);
+    return { ok: true, data };
   } catch (e) {
     console.error(`❌ Error +${phone}:`, e.message);
+    return { ok: false, error: e.message };
   }
 }
 
@@ -48,25 +82,40 @@ async function uploadMedia(dataUrl, filename) {
   });
   const data = await res.json().catch(() => ({}));
   console.log("Respuesta de WhatsApp media", JSON.stringify(data));
-  if (!res.ok || data.error || !data.id) throw new Error(data.error?.message || `Error subiendo media HTTP ${res.status}`);
+  if (!res.ok || data.error || !data.id) throw new Error(formatWhatsAppError(data, res.status, "subida de media"));
   return data.id;
 }
 
 async function enviarTip(phone, tip, message, nombre = "") {
+  const text = message || tip.phrase || tip.desc || tip.title || "";
   if (tip.type === "phrase") {
-    await postWhatsApp({ to: phone, type: "text", text: { body: message || tip.phrase } });
-  } else {
+    const result = await enviar(phone, text, nombre);
+    if (!result.ok) throw new Error(result.error);
+    return { ok: true, textSent: true, mediaSent: false };
+  }
+
+  let textSent = false;
+  if (text) {
+    const textResult = await enviar(phone, text, nombre);
+    if (!textResult.ok) throw new Error(textResult.error);
+    textSent = true;
+  }
+
+  try {
     const mediaId = await uploadMedia(tip.data, tip.filename);
-    const caption = message || tip.desc || tip.title || "";
     if (tip.type === "image") {
-      await postWhatsApp({ to: phone, type: "image", image: { id: mediaId, caption } });
+      await postWhatsApp({ to: phone, type: "image", image: { id: mediaId } });
     } else if (tip.type === "pdf") {
-      await postWhatsApp({ to: phone, type: "document", document: { id: mediaId, caption, filename: tip.filename || `${tip.title}.pdf` } });
+      await postWhatsApp({ to: phone, type: "document", document: { id: mediaId, filename: tip.filename || `${tip.title}.pdf` } });
     } else {
       throw new Error(`Tipo de tip no soportado: ${tip.type}`);
     }
+  } catch (e) {
+    if (textSent) return { ok: true, textSent, mediaSent: false, warning: e.message };
+    throw e;
   }
   conversations.registrar(phone, "enviado", `[Tip] ${tip.title}`, { nombre });
+  return { ok: true, textSent, mediaSent: true };
 }
 
 async function enviarBotones(phone, headerText, buttons = []) {
