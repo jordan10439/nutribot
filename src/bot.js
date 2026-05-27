@@ -29,6 +29,35 @@ function nombreDe(client, phone) {
 function esIndividual(client) { return client.phones.length === 1; }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
 
+function calcularProgresoMeta(client, phone, currentMeta) {
+  const totalMetas = Math.max((client.goals || []).length, 1);
+  const metasCompletadas = new Set(
+    history.getHistorial(client.id)
+      .filter(entry => entry.tipo === "completada" && entry.phone === phone)
+      .map(entry => entry.goalId || entry.meta)
+      .filter(Boolean)
+  );
+  const currentKey = currentMeta?.id || currentMeta?.titulo;
+  if (currentKey) metasCompletadas.add(currentKey);
+  const completadas = Math.min(metasCompletadas.size, totalMetas);
+  return {
+    totalMetas,
+    completadas,
+    puntosAcumulados: completadas * 10,
+    puntosPosibles: totalMetas * 10,
+  };
+}
+
+function resumenProgresoPaciente(progreso) {
+  return [
+    "⭐ *Puntos de esta meta: 10/10*",
+    `✅ *Metas completadas: ${progreso.completadas}/${progreso.totalMetas}*`,
+    `🏆 *Puntaje acumulado: ${progreso.puntosAcumulados}/${progreso.puntosPosibles} puntos*`,
+    "",
+    "Cada meta completada suma 10 puntos. Sigue avanzando paso a paso 🌱",
+  ].join("\n");
+}
+
 const REACCION_EMOCIONAL = {
   positivo: "¡Qué bueno leer eso! ✨ Me alegra que esta meta haya dejado una sensación positiva. Cada avance cuenta 🌱",
   neutro: "Gracias por contármelo ✨ A veces los cambios se sienten de a poco, y eso también está bien 🌱",
@@ -438,14 +467,11 @@ async function procesarMensaje(m) {
         `${nombre} completó su meta "${s.meta?.titulo}". Se sintió ${estrellas(s.estrellasN ?? 3)} y fue ${dificultad.dificultad}. Celébralo en 2 oraciones.`
       );
 
-      const resumenPts = points.resumen(client.id);
+      const progreso = calcularProgresoMeta(client, phone, s.meta);
+      const resumenPts = resumenProgresoPaciente(progreso);
       let msgFinal = msg.get("meta_completada")
         .replace("{ia}", aiMsg)
         .replace("{resumen}", resumenPts);
-
-      if (resultado.subioNivel) {
-        msgFinal += `\n\n🆙 *¡Subiste de nivel!* ${resultado.nivelNuevo.emoji} *${resultado.nivelNuevo.nombre}*`;
-      }
 
       history.registrar(client.id, phone, nombre, {
         tipo: "completada",
@@ -456,7 +482,11 @@ async function procesarMensaje(m) {
         dificultad: dificultad.dificultad,
         estadoEmocional: s.estadoEmocional,
         requiereRevision,
-        puntos: resultado.puntos,
+        puntos: 10,
+        puntosAcumulados: progreso.puntosAcumulados,
+        puntosPosibles: progreso.puntosPosibles,
+        metasCompletadas: progreso.completadas,
+        totalMetas: progreso.totalMetas,
         direccion: "saliente",
       });
 
@@ -513,9 +543,10 @@ async function procesarMensaje(m) {
   }
 
   // ── Sin flujo activo ─────────────────────────────────────────────────────
+  const progreso = calcularProgresoMeta(client, phone);
   await enviar(phone,
-    `¡Hola ${nombre}! 👋 Soy NutriGO 🌱\n\n${points.resumen(client.id)}\n\n¡Sigue así! 💚`
+    `¡Hola ${nombre}! 👋 Soy NutriGO 🌱\n\n✅ *Metas completadas: ${progreso.completadas}/${progreso.totalMetas}*\n🏆 *Puntaje acumulado: ${progreso.puntosAcumulados}/${progreso.puntosPosibles} puntos*\n\n¡Sigue avanzando paso a paso! 💚`
   );
 }
 
-module.exports = { enviarMeta, enviarBienvenida, procesarMensaje, detectarEstadoEmocional, detectarDificultad };
+module.exports = { enviarMeta, enviarBienvenida, procesarMensaje, detectarEstadoEmocional, detectarDificultad, calcularProgresoMeta, resumenProgresoPaciente };
