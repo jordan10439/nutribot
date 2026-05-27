@@ -160,6 +160,8 @@ async function enviarBienvenida(clientId, phone) {
       meta: "Mensaje de bienvenida",
       metaEmoji: "👋",
       direccion: "saliente",
+      templateName,
+      templateLanguage: languageCode,
     });
     // Después de la bienvenida, enviar la primera meta si existe
     if (client.goals && client.goals.length > 0) {

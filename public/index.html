@@ -64,6 +64,26 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .tag{display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-right:3px;margin-top:2px}
 .tg{background:#e8f5e9;color:#2a5738}.tb{background:#e3f2fd;color:#1565c0}.tr{background:#fff3cd;color:#856404}
 .empty-h{text-align:center;padding:20px;color:#7a9a7a;font-size:12px}
+/* ACTIVIDAD */
+.activity-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.activity-selects{display:flex;gap:8px;flex-wrap:wrap}
+.activity-select{padding:8px 10px;border:1px solid #dbe9db;border-radius:8px;background:#fff;color:#2a5738;font-size:12px;font-weight:700;outline:none}
+.activity-filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.activity-filter{border:1px solid #dbe9db;background:#fff;color:#4d744d;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:800;cursor:pointer}
+.activity-filter.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.activity-stream{display:flex;flex-direction:column;gap:8px;max-width:900px}
+.activity-item{display:grid;grid-template-columns:116px 154px minmax(0,1fr);gap:12px;padding:12px;background:#fff;border:1px solid #e0ece0;border-radius:8px}
+.activity-item.error{border-left:3px solid #c94040}
+.activity-item.review{border-left:3px solid #c94040;background:#fffafa}
+.activity-time{font-size:11px;color:#718b75;line-height:1.45}
+.activity-patient{font-size:12px;font-weight:800;color:#2a5738;margin-bottom:5px;word-break:break-word}
+.activity-kind{font-size:12px;font-weight:800;color:#213b26;margin-bottom:4px}
+.activity-desc{font-size:12px;color:#425f48;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.activity-detail{font-size:11px;color:#637965;line-height:1.48;white-space:pre-wrap;margin-top:5px}
+.activity-media{display:flex;align-items:center;gap:9px;margin-top:8px}
+.activity-photo{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #dbe9db;cursor:pointer}
+.activity-photo-link{border:none;background:#edf7ee;color:#2a5738;font-size:11px;font-weight:800;padding:6px 9px;border-radius:7px;cursor:pointer}
+@media(max-width:650px){.activity-item{grid-template-columns:1fr;gap:7px}.activity-time{order:3}}
 /* METAS DASHBOARD */
 .goal-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 16px}
 .goal-filters{display:flex;gap:6px;flex-wrap:wrap}
@@ -192,7 +212,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="tab active" data-tab="p" onclick="showTab('p')">👥 Pacientes</div>
     <div class="tab" data-tab="goals" onclick="showTab('goals')">🎯 Metas</div>
     <div class="tab" data-tab="c" onclick="showTab('c')">💬 Conversaciones</div>
-    <div class="tab" data-tab="h" onclick="showTab('h')">📋 Historial</div>
+    <div class="tab" data-tab="h" onclick="showTab('h')">📋 Actividad</div>
     <div class="tab" data-tab="m" onclick="showTab('m')">⚙️ Mensajes</div>
     <div class="tab" data-tab="tips" onclick="showTab('tips')">💡 Tips</div>
   </div>
@@ -248,16 +268,38 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     </div>
   </div>
 
-  <!-- HISTORIAL GLOBAL -->
+  <!-- ACTIVIDAD GLOBAL -->
   <div id="th" style="display:none">
     <div class="content">
       <div class="sh">
-        <h2>📋 Historial completo</h2>
-        <select id="fcli" onchange="loadGlobal()" style="padding:7px 11px;border:2px solid #e0e8e0;border-radius:9px;font-size:12px;font-weight:700;outline:none">
-          <option value="">Todos los pacientes</option>
-        </select>
+        <h2>📋 Actividad</h2>
       </div>
-      <div id="hglobal"></div>
+      <div class="activity-toolbar">
+        <div class="activity-selects">
+          <select class="activity-select" id="fcli" onchange="loadGlobal()">
+            <option value="">Todos los pacientes</option>
+          </select>
+          <select class="activity-select" id="activity_order" onchange="renderActivity()">
+            <option value="desc">Más reciente primero</option>
+            <option value="asc">Más antiguo primero</option>
+          </select>
+        </div>
+      </div>
+      <div class="activity-filters">
+        <button class="activity-filter active" data-activity-filter="all" onclick="setActivityFilter('all')">Todos</button>
+        <button class="activity-filter" data-activity-filter="bienvenida_enviada" onclick="setActivityFilter('bienvenida_enviada')">Bienvenida enviada</button>
+        <button class="activity-filter" data-activity-filter="meta_enviada" onclick="setActivityFilter('meta_enviada')">Meta enviada</button>
+        <button class="activity-filter" data-activity-filter="completada" onclick="setActivityFilter('completada')">Meta completada</button>
+        <button class="activity-filter" data-activity-filter="no_completada" onclick="setActivityFilter('no_completada')">Meta no completada</button>
+        <button class="activity-filter" data-activity-filter="seguimiento_meta" onclick="setActivityFilter('seguimiento_meta')">Seguimiento de meta</button>
+        <button class="activity-filter" data-activity-filter="tip_enviado" onclick="setActivityFilter('tip_enviado')">Tip enviado</button>
+        <button class="activity-filter" data-activity-filter="plantilla" onclick="setActivityFilter('plantilla')">Plantilla enviada</button>
+        <button class="activity-filter" data-activity-filter="foto" onclick="setActivityFilter('foto')">Foto recibida</button>
+        <button class="activity-filter" data-activity-filter="comentario" onclick="setActivityFilter('comentario')">Comentario recibido</button>
+        <button class="activity-filter" data-activity-filter="error" onclick="setActivityFilter('error')">Error de envío</button>
+        <button class="activity-filter" data-activity-filter="revision" onclick="setActivityFilter('revision')">Revisión posterior</button>
+      </div>
+      <div id="hglobal" class="activity-stream"></div>
     </div>
   </div>
 
@@ -432,7 +474,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all";
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -720,7 +762,7 @@ function renderEntries(elId,entries,showClient=false){
             if(e.estadoEmocional) d+=` <span class="tag">${escapeHtml(e.estadoEmocional)}</span>`;
             if(e.requiereRevision) d+=` <span class="tag tr">Revisión posterior</span>`;
             if(['meta_enviada','tip_enviado'].includes(e.tipo)) d+=` <span class="tag">${e.utilityTemplateLabel?`Plantilla previa: ${escapeHtml(e.utilityTemplateLabel)}`:'Sin plantilla previa'}</span>`;
-            const comentario = (e.comentario && !/^estrellas_\d+$/.test(e.comentario) && !/^dificultad_\d+$/.test(e.comentario)) ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
+            const comentario = (e.comentario && !/^estrellas_\d+$/.test(e.comentario) && !/^dificultad_\d+$/.test(e.comentario)) ? `<div class="ecom">💬 "${escapeHtml(friendlyReply(e.comentario))}"</div>` : '';
             const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
             const seguimiento = e.tipo==='seguimiento_meta' ? `<div class="ecom">${e.respuestaEmocional?`Emoción: "${escapeHtml(e.respuestaEmocional)}"<br>Reacción enviada: ${escapeHtml(e.reaccionEmocional||'')}<br>`:''}${e.respuestaDificultad?`Dificultad: "${escapeHtml(e.respuestaDificultad)}"<br>Reacción enviada: ${escapeHtml(e.reaccionDificultad||'')}`:'Esperando respuesta de dificultad'}</div>` : '';
             // Add automatic motivational message for completed entries based on response
@@ -763,7 +805,7 @@ function renderEntries(elId,entries,showClient=false){
       if(e.estadoEmocional) d+=` <span class="tag">${escapeHtml(e.estadoEmocional)}</span>`;
       if(e.requiereRevision) d+=` <span class="tag tr">Revisión posterior</span>`;
       if(['meta_enviada','tip_enviado'].includes(e.tipo)) d+=` <span class="tag">${e.utilityTemplateLabel?`Plantilla previa: ${escapeHtml(e.utilityTemplateLabel)}`:'Sin plantilla previa'}</span>`;
-      const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
+      const comentario = e.comentario ? `<div class="ecom">💬 "${escapeHtml(friendlyReply(e.comentario))}"</div>` : '';
       const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
       const seguimiento = e.tipo==='seguimiento_meta' ? `<div class="ecom">${e.respuestaEmocional?`Emoción: "${escapeHtml(e.respuestaEmocional)}"<br>Reacción enviada: ${escapeHtml(e.reaccionEmocional||'')}<br>`:''}${e.respuestaDificultad?`Dificultad: "${escapeHtml(e.respuestaDificultad)}"<br>Reacción enviada: ${escapeHtml(e.reaccionDificultad||'')}`:'Esperando respuesta de dificultad'}</div>` : '';
       // Add automatic motivational message for completed entries based on response (copied from global view)
@@ -796,19 +838,141 @@ function renderEntries(elId,entries,showClient=false){
   el.innerHTML = html;
 }
 
+function setActivityFilter(filter){
+  activityFilter=filter;
+  document.querySelectorAll("[data-activity-filter]").forEach(button=>button.classList.toggle("active",button.dataset.activityFilter===filter));
+  renderActivity();
+}
+
+function activityReplyCode(value){
+  return String(value||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+
+function isTechnicalActivityReply(value){
+  const normalized=activityReplyCode(value);
+  return /^(meta_|estrellas_|dificultad_)/.test(normalized) || /^[a-z]+_[a-z0-9_]+$/i.test(normalized);
+}
+
+function activityMatches(entry){
+  if(activityFilter==="all")return true;
+  if(activityFilter==="plantilla")return entry.tipo==="plantilla_previa_enviada";
+  if(activityFilter==="foto")return entry.tipo==="mensaje_recibido" && !!entry.media?.id;
+  if(activityFilter==="comentario"){
+    return (entry.tipo==="mensaje_recibido" && !entry.media?.id && !isTechnicalActivityReply(entry.comentario))
+      || (entry.tipo==="completada" && !!entry.comentario);
+  }
+  if(activityFilter==="error")return ["meta_error","tip_error","plantilla_previa_error"].includes(entry.tipo);
+  if(activityFilter==="revision")return !!entry.requiereRevision;
+  return entry.tipo===activityFilter;
+}
+
+function activityDeliveryStatus(entry){
+  if(["meta_error","tip_error","plantilla_previa_error"].includes(entry.tipo) || entry.deliveryStatus==="failed"){
+    return { label:"Error", className:"status-error" };
+  }
+  if(entry.tipo==="completada")return { label:"Completada", className:"status-completada" };
+  if(entry.tipo==="no_completada")return { label:"No completada", className:"status-no_completada" };
+  if(entry.deliveryStatus==="read")return { label:"Leído", className:"status-completada" };
+  if(entry.deliveryStatus==="delivered")return { label:"Entregado", className:"status-completada" };
+  if(["accepted","sent"].includes(entry.deliveryStatus) || ["bienvenida_enviada","plantilla_previa_enviada","meta_enviada","tip_enviado"].includes(entry.tipo)){
+    return { label:"Enviado", className:"status-enviada" };
+  }
+  return { label:"Registrado", className:"status-pendiente" };
+}
+
+function activityMessageInfo(entry){
+  const title=entry.meta||"Sin título";
+  if(entry.tipo==="bienvenida_enviada"){
+    const name=entry.templateName||title;
+    return { kind:"Bienvenida enviada", description:`Bienvenida enviada: ${name}`, detail:entry.templateLanguage?`Idioma de plantilla: ${entry.templateLanguage}`:"" };
+  }
+  if(entry.tipo==="plantilla_previa_enviada"){
+    return { kind:"Plantilla enviada", description:`Plantilla previa enviada: ${entry.utilityTemplateLabel||title}` };
+  }
+  if(entry.tipo==="meta_enviada"){
+    return { kind:"Meta enviada", description:`Meta enviada: ${title}`, detail:entry.utilityTemplateLabel?`Con plantilla previa: ${entry.utilityTemplateLabel}`:"Sin plantilla previa" };
+  }
+  if(entry.tipo==="tip_enviado"){
+    return { kind:"Tip enviado", description:`Tip enviado: ${title}`, detail:[entry.tipType?`Tipo: ${entry.tipType}`:"",entry.utilityTemplateLabel?`Con plantilla previa: ${entry.utilityTemplateLabel}`:"Sin plantilla previa"].filter(Boolean).join(" · ") };
+  }
+  if(entry.tipo==="completada"){
+    return {
+      kind:"Meta completada",
+      description:`Meta completada: ${title}${entry.puntos?` · +${entry.puntos} puntos`:""}`,
+      detail:[entry.dificultad?`Dificultad: ${entry.dificultad}`:"",entry.comentario?`Comentario: ${entry.comentario}`:""].filter(Boolean).join("\n"),
+    };
+  }
+  if(entry.tipo==="no_completada"){
+    return { kind:"Meta no completada", description:`Paciente respondió: No completó la meta "${title}"` };
+  }
+  if(entry.tipo==="seguimiento_meta"){
+    return {
+      kind:"Seguimiento de meta",
+      description:entry.respuestaEmocional?`Respuesta emocional: ${entry.respuestaEmocional}`:`Seguimiento de la meta: ${title}`,
+      detail:[
+        entry.dificultad?`Dificultad: ${entry.dificultad}`:"",
+        entry.reaccionEmocional?`Reacción del bot: ${entry.reaccionEmocional}`:"",
+        entry.reaccionDificultad?`Reacción por dificultad: ${entry.reaccionDificultad}`:"",
+      ].filter(Boolean).join("\n"),
+    };
+  }
+  if(["meta_error","tip_error","plantilla_previa_error"].includes(entry.tipo)){
+    const kind=entry.tipo==="meta_error"?"Error al enviar meta":entry.tipo==="tip_error"?"Error al enviar tip":"Error al enviar plantilla";
+    return { kind:"Error de envío", description:`${kind}: ${title}`, detail:entry.comentario||"No se registró el motivo del error." };
+  }
+  if(entry.tipo==="mensaje_recibido"){
+    if(entry.media?.id){
+      const note=entry.comentario && !isTechnicalActivityReply(entry.comentario) ? `Comentario: ${entry.comentario}` : "";
+      return { kind:"Foto recibida", description:"📷 Foto recibida", detail:note };
+    }
+    const raw=activityReplyCode(entry.comentario);
+    if(/^meta_/.test(raw))return { kind:"Respuesta del paciente", description:`Paciente respondió: ${friendlyReply(entry.comentario)}` };
+    if(/^estrellas_/.test(raw))return { kind:"Respuesta emocional", description:friendlyReply(entry.comentario) };
+    if(/^dificultad_/.test(raw))return { kind:"Dificultad seleccionada", description:friendlyReply(entry.comentario) };
+    return { kind:"Comentario recibido", description:`Comentario: ${friendlyReply(entry.comentario)}` };
+  }
+  return { kind:"Actividad registrada", description:friendlyReply(entry.comentario||title) };
+}
+
+function renderActivity(){
+  const el=I("hglobal");
+  if(!el)return;
+  const asc=I("activity_order")?.value==="asc";
+  const rows=activityEntries
+    .filter(activityMatches)
+    .slice()
+    .sort((a,b)=>(asc?1:-1)*(new Date(a.fecha)-new Date(b.fecha)));
+  if(!rows.length){
+    el.innerHTML=`<div class="empty-h">No hay actividad registrada para este filtro.</div>`;
+    return;
+  }
+  el.innerHTML=rows.map(entry=>{
+    const info=activityMessageInfo(entry);
+    const status=activityDeliveryStatus(entry);
+    const review=entry.requiereRevision?`<span class="review-chip">👁 Revisar</span>`:"";
+    const media=entry.media?.id
+      ? `<div class="activity-media"><button class="activity-photo-link" onclick="openGoalPhoto('${encodeURIComponent(entry.media.id)}')">📷 Ver foto</button><img class="activity-photo" src="/api/media/${encodeURIComponent(entry.media.id)}?token=${encodeURIComponent(TOKEN)}" alt="Foto recibida" onclick="openGoalPhoto('${encodeURIComponent(entry.media.id)}')"/></div>`
+      : "";
+    return `<div class="activity-item ${status.className==="status-error"?"error":""} ${entry.requiereRevision?"review":""}">
+      <div class="activity-time">${panelDate(entry.fecha)}</div>
+      <div><div class="activity-patient">${escapeHtml(entry.nombre||entry.clientNombre||"Paciente")}</div><span class="status ${status.className}">${escapeHtml(status.label)}</span>${review}</div>
+      <div><div class="activity-kind">${escapeHtml(info.kind)}</div><div class="activity-desc">${escapeHtml(info.description)}</div>${info.detail?`<div class="activity-detail">${escapeHtml(info.detail)}</div>`:""}${media}</div>
+    </div>`;
+  }).join("");
+}
+
 async function loadGlobal(){
   const filtro=I("fcli").value;
   I("hglobal").innerHTML=`<div class="empty-h">Cargando...</div>`;
-  let todo;
   if(filtro){
     const h=await api("GET",`/clients/${filtro}/history`);
     const c=clients.find(x=>x.id===filtro);
-    todo=h.map(e=>({...e,clientNombre:c?.nombres?.join(" & ")}));
+    activityEntries=h.map(e=>({...e,clientNombre:c?.nombres?.join(" & ")}));
   } else {
-    todo=await api("GET","/history/all");
+    activityEntries=await api("GET","/history/all");
   }
-  I("s4").textContent=todo.filter(e=>new Date(e.fecha).toDateString()===new Date().toDateString()).length;
-  renderEntries("hglobal",todo,!filtro);
+  I("s4").textContent=activityEntries.filter(e=>new Date(e.fecha).toDateString()===new Date().toDateString()).length;
+  renderActivity();
 }
 
 // ── CHAT VIEW ────────────────────────────────────────────────────────────────
