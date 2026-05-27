@@ -304,15 +304,11 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     </div>
     <div class="fg"><label>Carpeta</label><select id="tip_folder"></select></div>
     <div class="fg"><label>Título</label><input id="tip_title" placeholder="Ej: Receta rápida"/></div>
-    <div class="fg"><label id="tip_desc_label">Descripción / pie de página</label><textarea id="tip_desc" rows="3" placeholder="Texto opcional para acompañar el tip..."></textarea></div>
+    <div class="fg"><label id="tip_desc_label">Descripción / contenido del tip</label><textarea id="tip_desc" rows="4" placeholder="Escribe el contenido que se enviará por WhatsApp..."></textarea></div>
     <div class="fg" id="tip_upload_box">
       <label>Archivo</label>
       <input type="file" id="tip_file" accept="image/*,.pdf" />
       <div class="tip-note" id="tip_file_hint"></div>
-    </div>
-    <div class="fg" id="tip_phrase_box" style="display:none">
-      <label>Frase</label>
-      <textarea id="tip_phrase" rows="4" placeholder="Escribe la frase aquí..."></textarea>
     </div>
     <div class="ma"><button class="bc" onclick="closeM('tipModal')">Cancelar</button><button class="bsv" onclick="saveTip()">Guardar tip</button></div>
   </div>
@@ -325,8 +321,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <input type="hidden" id="tip_send_id" />
     <div class="fg"><label>Seleccionar pacientes</label><div id="tip_send_clients" class="tip-send-list"></div></div>
     <div class="fg"><label>Título editable</label><input id="tip_send_title" oninput="previewTipSend()" /></div>
-    <div class="fg"><label>Mensaje / pie de página editable</label><textarea id="tip_send_message" rows="4" oninput="previewTipSend()"></textarea></div>
-    <div class="fg" id="tip_send_phrase_box"><label>Frase editable</label><textarea id="tip_send_phrase" rows="4" oninput="previewTipSend()"></textarea></div>
+    <div class="fg"><label id="tip_send_message_label">Descripción / contenido editable</label><textarea id="tip_send_message" rows="4" oninput="previewTipSend()"></textarea></div>
     <div class="fg"><label>Fecha</label><input type="date" id="tip_send_date" onchange="previewTipSend()" /></div>
     <div class="fg"><label>Hora</label><input type="time" id="tip_send_time" value="09:00" onchange="previewTipSend()"/></div>
     <div class="fg"><label>Plantilla previa opcional</label><select id="tip_send_utility_template" onchange="previewTipSend()"></select><div class="tip-note" id="tip_send_utility_preview"></div></div>
@@ -774,12 +769,12 @@ function renderTipsGallery(){
       ? `<div class="tip-media"><img src="${t.data}" alt="${escapeHtml(t.title)}"/></div>`
       : t.type==='pdf'
         ? `<div class="tip-media">📄 ${escapeHtml(t.filename||'PDF guardado')}</div>`
-        : `<div class="tip-media">“${escapeHtml((t.phrase||'').slice(0,110))}${(t.phrase||'').length>110?'…':''}”</div>`;
+        : (()=>{const content=t.phrase||t.desc||'';return `<div class="tip-media">“${escapeHtml(content.slice(0,110))}${content.length>110?'…':''}”</div>`})();
     return `<div class="tip-card">
       ${media}
       <div class="tip-title">${escapeHtml(t.title)}</div>
       <div class="tip-meta"><span class="tag ${t.type==='pdf'?'tb':t.type==='phrase'?'tr':'tg'}">${tipLabel(t.type)}</span><span class="tag">📁 ${escapeHtml(folderName(t.folderId))}</span><span class="tag">${new Date(t.updatedAt||t.createdAt||Date.now()).toLocaleDateString('es-CL')}</span></div>
-      <div class="tip-desc">${escapeHtml(t.desc||'')}</div>
+      ${t.type==='phrase'?'':`<div class="tip-desc">${escapeHtml(t.desc||'')}</div>`}
       <div class="tip-actions">
         <button class="bam" onclick="openSendModal('${t.id}')">Enviar</button>
         <button class="bam" onclick="openTipModal('${t.id}')">Editar</button>
@@ -804,8 +799,8 @@ function toggleTipType(){
   fillTipFolderSelect(type);
   if(currentFolder&&folderMatchesType(currentFolder,type)) I('tip_folder').value=currentFolder;
   I('tip_upload_box').style.display=type==='phrase'?'none':'block';
-  I('tip_phrase_box').style.display=type==='phrase'?'block':'none';
-  I('tip_desc_label').textContent=type==='pdf'?'Mensaje de acompañamiento':type==='image'?'Texto / pie de página opcional':'Descripción';
+  I('tip_desc_label').textContent=type==='pdf'?'Mensaje de acompañamiento (opcional)':type==='image'?'Pie de imagen / texto de acompañamiento (opcional)':'Descripción / contenido del tip';
+  I('tip_desc').placeholder=type==='pdf'?'Texto opcional para acompañar el PDF...':type==='image'?'Texto opcional para acompañar la imagen...':'Escribe el contenido que se enviará por WhatsApp...';
   I('tip_file').accept=type==='pdf'?'.pdf':'image/*';
   I('tip_file_hint').textContent=I('tip_id').value?'Deja este campo vacío para conservar el archivo actual.':'';
 }
@@ -820,8 +815,7 @@ function openTipModal(id=''){
   const preferredFolder=tip?.folderId||((tipFolderFilter!=='all'&&folderMatchesType(tipFolderFilter,type))?tipFolderFilter:'general');
   I('tip_folder').value=preferredFolder;
   I('tip_title').value=tip?.title||'';
-  I('tip_desc').value=tip?.desc||'';
-  I('tip_phrase').value=tip?.phrase||'';
+  I('tip_desc').value=tip?.type==='phrase'?(tip?.phrase||tip?.desc||''):(tip?.desc||'');
   I('tip_file').value='';
   toggleTipType();
   I('tipModal').classList.add('open');
@@ -839,8 +833,8 @@ async function saveTip(){
     const requestId=existing?.requestId||I('tip_id').dataset.requestId||uid();
     const obj={...(existing||{}),requestId,type,title,folderId:I('tip_folder').value||'general',desc:I('tip_desc').value.trim(),updatedAt:new Date().toISOString(),createdAt:existing?.createdAt||new Date().toISOString()};
     if(type==='phrase'){
-      obj.phrase=I('tip_phrase').value.trim();
-      if(!obj.phrase){showToast('⚠️ Escribe la frase');return}
+      obj.phrase=obj.desc;
+      if(!obj.desc){showToast('⚠️ Escribe el contenido del tip');return}
       delete obj.data; delete obj.filename;
     }else{
       const f=I('tip_file').files[0];
@@ -869,8 +863,7 @@ async function deleteTip(id){
 function buildTipMessage(tip){
   const title=(I('tip_send_title')?.value||tip.title||'').trim();
   const msg=(I('tip_send_message')?.value||'').trim();
-  const phrase=(I('tip_send_phrase')?.value||tip.phrase||'').trim();
-  return [title,tip.type==='phrase'?phrase:msg].filter(Boolean).join('\n\n');
+  return [title,msg].filter(Boolean).join('\n\n');
 }
 function selectedTipRecipients(){
   const rows=[...I('tip_send_clients').querySelectorAll('input[data-client]:checked')];
@@ -887,9 +880,8 @@ function openSendModal(tipId){
   if(!tip){showToast('⚠️ Tip inválido');return}
   I('tip_send_id').value=tipId;
   I('tip_send_title').value=tip.title||'';
-  I('tip_send_message').value=tip.desc||'';
-  I('tip_send_phrase').value=tip.phrase||'';
-  I('tip_send_phrase_box').style.display=tip.type==='phrase'?'block':'none';
+  I('tip_send_message').value=tip.type==='phrase'?(tip.phrase||tip.desc||''):(tip.desc||'');
+  I('tip_send_message_label').textContent=tip.type==='phrase'?'Descripción / contenido editable':tip.type==='pdf'?'Mensaje de acompañamiento editable':'Pie de imagen / texto de acompañamiento editable';
   fillUtilitySelect('tip_send_utility_template','');
   const box=I('tip_send_clients'); box.innerHTML='';
   (clients||[]).forEach(c=>{
@@ -917,6 +909,7 @@ function confirmSendTip(){
   if(tipSending)return;
   const tip=(window._nutri_tips||[]).find(t=>t.id===I('tip_send_id').value);
   if(!tip){showToast('⚠️ Tip inválido');return}
+  if(tip.type==='phrase'&&!I('tip_send_message').value.trim()){showToast('⚠️ Escribe el contenido del tip');return}
   const recipients=selectedTipRecipients();
   if(!recipients.length){showToast('⚠️ Selecciona al menos un paciente');return}
   const date=I('tip_send_date').value, time=I('tip_send_time').value||'09:00';
@@ -1145,9 +1138,7 @@ function closeM(id){
     const ttit = I('tip_title'); if(ttit) ttit.value = '';
     const tdesc = I('tip_desc'); if(tdesc) tdesc.value = '';
     const tf = I('tip_file'); if(tf) tf.value = '';
-    const tphr = I('tip_phrase'); if(tphr) tphr.value = '';
     const tup = I('tip_upload_box'); if(tup) tup.style.display = '';
-    const tpb = I('tip_phrase_box'); if(tpb) tpb.style.display = 'none';
   } else if(id==='tipSendModal'){
     const mm = I(id); if(mm) mm.classList.remove('open');
     const box = I('tip_send_clients'); if(box) box.innerHTML = '';
@@ -1156,7 +1147,6 @@ function closeM(id){
     const sid = I('tip_send_id'); if(sid) sid.value = '';
     const stit = I('tip_send_title'); if(stit) stit.value = '';
     const smsg = I('tip_send_message'); if(smsg) smsg.value = '';
-    const sphr = I('tip_send_phrase'); if(sphr) sphr.value = '';
     const sprev = I('tip_preview'); if(sprev) sprev.textContent = '';
     const sut = I('tip_send_utility_template'); if(sut) sut.value = '';
   } else if(id==='tipScheduledModal'){

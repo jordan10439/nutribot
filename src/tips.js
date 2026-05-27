@@ -46,11 +46,12 @@ function normalizeScheduledAt(value) {
 }
 
 function tipFingerprint(payload) {
+  const phraseText = payload.type === "phrase" ? String(payload.desc || payload.phrase || "") : "";
   return crypto.createHash("sha1").update(JSON.stringify({
     type: payload.type || "",
     title: String(payload.title || "").trim(),
-    desc: String(payload.desc || ""),
-    phrase: payload.type === "phrase" ? String(payload.phrase || "") : "",
+    desc: payload.type === "phrase" ? phraseText : String(payload.desc || ""),
+    phrase: phraseText,
     filename: payload.filename || "",
     data: payload.data || "",
     folderId: payload.folderId || "general",
@@ -102,14 +103,15 @@ function upsertTip(payload, id) {
     new Date(t.createdAt || 0).getTime() > Date.now() - 2 * 60 * 1000
   )) : null;
   if (byRecentDuplicate) return byRecentDuplicate;
+  const phraseText = payload.type === "phrase" ? String(payload.desc || payload.phrase || "") : undefined;
   const tip = {
     ...(existing || {}),
     id: existing?.id || uid(),
     requestId: existing?.requestId || payload.requestId || "",
     type: payload.type,
     title: String(payload.title || "").trim(),
-    desc: String(payload.desc || ""),
-    phrase: payload.type === "phrase" ? String(payload.phrase || "") : undefined,
+    desc: payload.type === "phrase" ? phraseText : String(payload.desc || ""),
+    phrase: phraseText,
     filename: payload.filename || existing?.filename || "",
     data: payload.data || existing?.data || "",
     folderId: payload.folderId || "general",
@@ -118,7 +120,7 @@ function upsertTip(payload, id) {
     updatedAt: now,
   };
   if (!tip.title) throw new Error("Título requerido");
-  if (tip.type === "phrase" && !tip.phrase) throw new Error("Frase requerida");
+  if (tip.type === "phrase" && !tip.desc) throw new Error("Contenido del tip requerido");
   if ((tip.type === "image" || tip.type === "pdf") && !tip.data) throw new Error("Archivo requerido");
   data.tips = existing ? data.tips.map(t => t.id === tip.id ? tip : t) : [tip, ...dedupeTips(data.tips)];
   save(data);
