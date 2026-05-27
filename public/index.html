@@ -501,7 +501,7 @@ function renderEntries(elId,entries,showClient=false){
         const items = byClient[clientName][metaKey].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
         const rows = items.map(e=>{
           const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-            const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo === 'tip_enviado' ? '📤 Tip enviado' : e.tipo === 'plantilla_previa_enviada' ? '📨 Plantilla previa enviada' : e.tipo === 'plantilla_previa_error' ? '⚠️ Error plantilla previa' : e.tipo === 'meta_error' ? '⚠️ Error meta' : e.tipo === 'tip_error' ? '⚠️ Error tip' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
+            const tipoLabel = e.tipo === 'seguimiento_meta' ? '🧭 Seguimiento de meta' : e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo === 'tip_enviado' ? '📤 Tip enviado' : e.tipo === 'plantilla_previa_enviada' ? '📨 Plantilla previa enviada' : e.tipo === 'plantilla_previa_error' ? '⚠️ Error plantilla previa' : e.tipo === 'meta_error' ? '⚠️ Error meta' : e.tipo === 'tip_error' ? '⚠️ Error tip' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
             let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
             // Resolve estrellas label: prefer explicit field, fall back to comentario pattern 'estrellas_<i>'
             let estrellasLabel = null; let estrellasCount = null;
@@ -521,9 +521,12 @@ function renderEntries(elId,entries,showClient=false){
             }
             if(dificultadLabel) d+=` <span class="tag tg">${dificultadLabel}</span>`;
             if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+            if(e.estadoEmocional) d+=` <span class="tag">${escapeHtml(e.estadoEmocional)}</span>`;
+            if(e.requiereRevision) d+=` <span class="tag tr">Revisión posterior</span>`;
             if(['meta_enviada','tip_enviado'].includes(e.tipo)) d+=` <span class="tag">${e.utilityTemplateLabel?`Plantilla previa: ${escapeHtml(e.utilityTemplateLabel)}`:'Sin plantilla previa'}</span>`;
             const comentario = (e.comentario && !/^estrellas_\d+$/.test(e.comentario) && !/^dificultad_\d+$/.test(e.comentario)) ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
             const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+            const seguimiento = e.tipo==='seguimiento_meta' ? `<div class="ecom">${e.respuestaEmocional?`Emoción: "${escapeHtml(e.respuestaEmocional)}"<br>Reacción enviada: ${escapeHtml(e.reaccionEmocional||'')}<br>`:''}${e.respuestaDificultad?`Dificultad: "${escapeHtml(e.respuestaDificultad)}"<br>Reacción enviada: ${escapeHtml(e.reaccionDificultad||'')}`:'Esperando respuesta de dificultad'}</div>` : '';
             // Add automatic motivational message for completed entries based on response
             let motiv = '';
             if(e.tipo==='completada'){
@@ -534,7 +537,7 @@ function renderEntries(elId,entries,showClient=false){
               if(sentiment==='bad') motiv = `<div class="mot">¡Ánimo! No te desanimes — pequeños pasos constantes suman. Mañana será mejor.</div>`;
               else if(sentiment==='good') motiv = `<div class="mot">¡Excelente! ¡Gran trabajo hoy, sigue así! 🎉</div>`;
             }
-          return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}${motiv}</div>`;
+          return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${seguimiento}${comentario}${media}${motiv}</div>`;
         }).join('');
         return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${metaKey}</div>${rows}</div>`;
       }).join('');
@@ -556,14 +559,17 @@ function renderEntries(elId,entries,showClient=false){
   const html = groups.map(g=>{
       const rows = g.items.map(e=>{
       const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-      const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo === 'tip_enviado' ? '📤 Tip enviado' : e.tipo === 'plantilla_previa_enviada' ? '📨 Plantilla previa enviada' : e.tipo === 'plantilla_previa_error' ? '⚠️ Error plantilla previa' : e.tipo === 'meta_error' ? '⚠️ Error meta' : e.tipo === 'tip_error' ? '⚠️ Error tip' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
+      const tipoLabel = e.tipo === 'seguimiento_meta' ? '🧭 Seguimiento de meta' : e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo === 'tip_enviado' ? '📤 Tip enviado' : e.tipo === 'plantilla_previa_enviada' ? '📨 Plantilla previa enviada' : e.tipo === 'plantilla_previa_error' ? '⚠️ Error plantilla previa' : e.tipo === 'meta_error' ? '⚠️ Error meta' : e.tipo === 'tip_error' ? '⚠️ Error tip' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
       let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
       if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
       if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
       if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+      if(e.estadoEmocional) d+=` <span class="tag">${escapeHtml(e.estadoEmocional)}</span>`;
+      if(e.requiereRevision) d+=` <span class="tag tr">Revisión posterior</span>`;
       if(['meta_enviada','tip_enviado'].includes(e.tipo)) d+=` <span class="tag">${e.utilityTemplateLabel?`Plantilla previa: ${escapeHtml(e.utilityTemplateLabel)}`:'Sin plantilla previa'}</span>`;
       const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
       const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
+      const seguimiento = e.tipo==='seguimiento_meta' ? `<div class="ecom">${e.respuestaEmocional?`Emoción: "${escapeHtml(e.respuestaEmocional)}"<br>Reacción enviada: ${escapeHtml(e.reaccionEmocional||'')}<br>`:''}${e.respuestaDificultad?`Dificultad: "${escapeHtml(e.respuestaDificultad)}"<br>Reacción enviada: ${escapeHtml(e.reaccionDificultad||'')}`:'Esperando respuesta de dificultad'}</div>` : '';
       // Add automatic motivational message for completed entries based on response (copied from global view)
       let motiv = '';
       if(e.tipo==='completada'){
@@ -587,7 +593,7 @@ function renderEntries(elId,entries,showClient=false){
         if(sentiment==='bad') motiv = `<div class="mot">¡Ánimo! No te desanimes — pequeños pasos constantes suman. Mañana será mejor.</div>`;
         else if(sentiment==='good') motiv = `<div class="mot">¡Excelente! ¡Gran trabajo hoy, sigue así! 🎉</div>`;
       }
-      return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${comentario}${media}${motiv}</div>`;
+      return `<div class="entry"><div class="eh2"><span class="et2">${tipoLabel} — <strong>${e.nombre}</strong></span><span class="ef2">${f}</span></div><div class="ed2">${d}</div>${seguimiento}${comentario}${media}${motiv}</div>`;
     }).join('');
     return `<div style="margin-bottom:12px"><div style="font-weight:800;color:#2a6a2a;margin-bottom:6px">🎯 ${g.meta}</div>${rows}</div>`;
   }).join('');

@@ -27,16 +27,18 @@ function save(data) {
 function registrar(clientId, phone, nombre, entry) {
   const db = load();
   if (!db[clientId]) db[clientId] = [];
-  db[clientId].unshift({
-    id: Date.now().toString(),
+  const savedEntry = {
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     phone,
     nombre,
     fecha: new Date().toISOString(),
     ...entry,
-  });
+  };
+  db[clientId].unshift(savedEntry);
   // Mantener solo los últimos 100 registros por cliente
   if (db[clientId].length > 100) db[clientId] = db[clientId].slice(0, 100);
   save(db);
+  return savedEntry;
 }
 
 function getHistorial(clientId) {
@@ -66,4 +68,13 @@ function updateByMetaMessageId(messageId, patch) {
   return updated;
 }
 
-module.exports = { registrar, getHistorial, getResumen, updateByMetaMessageId };
+function updateById(clientId, id, patch) {
+  const db = load();
+  const entry = db[clientId]?.find(item => item.id === id);
+  if (!entry) return null;
+  Object.assign(entry, patch);
+  save(db);
+  return entry;
+}
+
+module.exports = { registrar, getHistorial, getResumen, updateByMetaMessageId, updateById };

@@ -29,6 +29,89 @@ function nombreDe(client, phone) {
 function esIndividual(client) { return client.phones.length === 1; }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
 
+const REACCION_EMOCIONAL = {
+  positivo: "¡Qué bueno leer eso! ✨ Me alegra que esta meta haya dejado una sensación positiva. Cada avance cuenta 🌱",
+  neutro: "Gracias por contármelo ✨ A veces los cambios se sienten de a poco, y eso también está bien 🌱",
+  negativo: "Gracias por contármelo 💚 A veces una meta puede sentirse más difícil de lo esperado, y eso también es parte del proceso. Lo importante es reconocer cómo fue y seguir avanzando de a poco 🌱",
+};
+
+const REACCION_DIFICULTAD = {
+  "Fácil": "¡Qué bueno! ✨ Me alegra que esta meta haya sido fácil de realizar. Seguimos avanzando paso a paso 🌱",
+  "Normal": "Perfecto, gracias por contármelo ✨ Que haya sido manejable también es un buen avance 🌱",
+  "Difícil": "Gracias por responder 💚 Quedó registrado. No pasa nada si esta vez costó más, cada proceso tiene días más fáciles y otros más difíciles 🌱",
+};
+
+function normalizarTexto(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function detectarEstadoEmocional(incoming, buttons) {
+  const raw = incoming.raw || "";
+  const normalized = normalizarTexto(raw);
+  let respuesta = raw;
+  let estado = null;
+  let n = null;
+  const buttonMatch = raw.match(/^estrellas_(\d+)$/);
+
+  if (buttonMatch) {
+    const idx = Number(buttonMatch[1]);
+    respuesta = buttons[idx] || raw;
+    if (buttons.length >= 5) {
+      estado = idx <= 1 ? "negativo" : idx === 2 ? "neutro" : "positivo";
+      n = idx + 1;
+    } else {
+      estado = idx === 0 ? "negativo" : idx === 1 ? "neutro" : "positivo";
+      n = [1, 3, 5][idx] || null;
+    }
+  } else {
+    const buttonIndex = buttons.map(normalizarTexto).indexOf(normalized);
+    if (buttonIndex >= 0) {
+      return detectarEstadoEmocional({ raw: `estrellas_${buttonIndex}` }, buttons);
+    }
+    if (/(^|\W)(mal|cansancio|frustracion|tristeza|me costo|no pude|dificil|complicad[oa])(\W|$)/.test(normalized) || /^(1|2)$/.test(normalized)) {
+      estado = "negativo";
+      n = 1;
+    } else if (/(^|\W)(normal|mas o menos|igual|regular)(\W|$)/.test(normalized) || normalized === "3") {
+      estado = "neutro";
+      n = 3;
+    } else if (/(^|\W)(bien|feliz|con animo|motivad[oa]|orgullos[oa]|content[oa]|excelente)(\W|$)/.test(normalized) || /^(4|5)$/.test(normalized)) {
+      estado = "positivo";
+      n = 5;
+    }
+  }
+
+  return estado ? { estado, n, respuesta, reaccion: REACCION_EMOCIONAL[estado] } : null;
+}
+
+function detectarDificultad(incoming, buttons) {
+  const raw = incoming.raw || "";
+  const normalized = normalizarTexto(raw);
+  let respuesta = raw;
+  let dificultad = null;
+  const indexMatch = raw.match(/^dificultad_(\d+)$/);
+
+  if (indexMatch) {
+    const idx = Number(indexMatch[1]);
+    respuesta = buttons[idx] || raw;
+    dificultad = buttons.length >= 5
+      ? (idx <= 1 ? "Fácil" : idx === 2 ? "Normal" : "Difícil")
+      : (["Fácil", "Normal", "Difícil"][idx] || null);
+  } else if (/^dificultad_(facil|normal|dificil)$/.test(normalized)) {
+    dificultad = normalized.endsWith("facil") ? "Fácil" : normalized.endsWith("normal") ? "Normal" : "Difícil";
+    respuesta = dificultad;
+  } else {
+    const buttonIndex = buttons.map(normalizarTexto).indexOf(normalized);
+    if (buttonIndex >= 0) {
+      return detectarDificultad({ raw: `dificultad_${buttonIndex}` }, buttons);
+    }
+    if (/(^|\W)(muy facil|facil)(\W|$)/.test(normalized) || normalized === "1") dificultad = "Fácil";
+    else if (/(^|\W)(normal)(\W|$)/.test(normalized) || /^(2|3)$/.test(normalized)) dificultad = "Normal";
+    else if (/(^|\W)(muy dificil|dificil|complicad[oa])(\W|$)/.test(normalized) || /^(4|5)$/.test(normalized)) dificultad = "Difícil";
+  }
+
+  return dificultad ? { dificultad, respuesta, reaccion: REACCION_DIFICULTAD[dificultad] } : null;
+}
+
 // ── Enviar bienvenida con plantilla Meta ────────────────────────────────────
 async function enviarBienvenida(clientId, phone) {
   const client = db.getById(clientId);
@@ -268,33 +351,34 @@ async function procesarMensaje(m) {
 
   // ── Esperando ESTRELLAS ──────────────────────────────────────────────────
   if (s.flow === state.FLOW.ESPERANDO_ESTRELLAS) {
-    // Map three-button responses to a 1-5 scale for compatibility with points
-    let n = null;
     const be = msg.get("botones_estrellas") || ["Mal","Normal","Muy bien"];
-    const beNorm = be.map(x=>x.toString().trim().toLowerCase());
+    const emocional = detectarEstadoEmocional(incoming, be);
 
-    // Check id pattern estrellas_<i>
-    if (incoming.raw && /^estrellas_\d+$/.test(incoming.raw)) {
-      const idx = parseInt(incoming.raw.split("_")[1],10);
-      const map = [1,3,5];
-      if (!isNaN(idx)) n = map[idx] ?? null;
-    }
-    // Check title matches any configured button title
-    if (n === null && beNorm.includes(txt)) {
-      const idx = beNorm.indexOf(txt);
-      const map = [1,3,5];
-      n = map[idx] ?? null;
-    }
-    // fallback common words
-    if (n === null) {
-      if (/(^|\W)(mal|malo)(\W|$)/.test(txt)) n = 1;
-      else if (/(^|\W)(normal)(\W|$)/.test(txt)) n = 3;
-      else if (/(^|\W)(muy\s*bien|excelente|muybien)(\W|$)/.test(txt)) n = 5;
-    }
-
-    if (n) {
-      state.set(phone, { flow: state.FLOW.ESPERANDO_DIFICULTAD, estrellasN: n });
-      console.log('[bot] Estrellas aceptadas:', n, 'state -> ESPERANDO_DIFICULTAD');
+    if (emocional) {
+      const requiereRevision = emocional.estado === "negativo";
+      console.log("Respuesta emocional recibida", JSON.stringify({ phone, meta: s.meta?.titulo, respuesta: emocional.respuesta }));
+      console.log("Estado emocional detectado", emocional.estado);
+      console.log("Enviando reacción emocional", JSON.stringify({ phone, reaccion: emocional.reaccion }));
+      await enviar(phone, emocional.reaccion, nombre, { throwOnError: true, context: "reacción emocional" });
+      const seguimiento = history.registrar(client.id, phone, nombre, {
+        tipo: "seguimiento_meta",
+        meta: s.meta?.titulo,
+        metaEmoji: s.meta?.emoji,
+        respuestaEmocional: emocional.respuesta,
+        estadoEmocional: emocional.estado,
+        reaccionEmocional: emocional.reaccion,
+        requiereRevision,
+        seguimientoEstado: "pendiente_dificultad",
+        direccion: "saliente",
+      });
+      if (requiereRevision) console.log("Meta marcada para revisión posterior", JSON.stringify({ phone, meta: s.meta?.titulo, motivo: "respuesta emocional negativa" }));
+      state.set(phone, {
+        flow: state.FLOW.ESPERANDO_DIFICULTAD,
+        estrellasN: emocional.n,
+        estadoEmocional: emocional.estado,
+        seguimientoHistoryId: seguimiento.id,
+        requiereRevision,
+      });
       const bd = msg.get("botones_dificultad") || ["Fácil","Normal","Difícil"];
       const botones = bd.map((t, i) => ({ id: `dificultad_${i}`, title: t }));
       await enviarBotones(phone, msg.get("pedir_dificultad"), botones);
@@ -309,29 +393,43 @@ async function procesarMensaje(m) {
 
   // ── Esperando DIFICULTAD ─────────────────────────────────────────────────
   if (s.flow === state.FLOW.ESPERANDO_DIFICULTAD) {
-    // Accept replies from buttons (ids or titles) or simple text
-    let dif = null;
     const bd = msg.get("botones_dificultad") || ["Fácil","Normal","Difícil"];
-    const bdNorm = bd.map(x=>x.toString().trim().toLowerCase());
-    if (incoming.raw && /^dificultad_\d+$/.test(incoming.raw)) {
-      const idx = parseInt(incoming.raw.split("_")[1],10);
-      if (!isNaN(idx) && bd[idx]) dif = bd[idx];
-    }
-    if (!dif && bdNorm.includes(txt)) {
-      dif = bd[bdNorm.indexOf(txt)];
-    }
-    if (!dif) {
-      if (/(^|\W)(1|facil|fácil)(\W|$)/.test(txt)) dif = "Fácil";
-      else if (/(^|\W)(2|normal)(\W|$)/.test(txt)) dif = "Normal";
-      else if (/(^|\W)(3|dificil|difícil)(\W|$)/.test(txt)) dif = "Difícil";
-    }
+    const dificultad = detectarDificultad(incoming, bd);
 
-    if (dif) {
+    if (dificultad) {
+      const requiereRevision = !!s.requiereRevision || dificultad.dificultad === "Difícil";
+      console.log("Respuesta de dificultad recibida", JSON.stringify({ phone, meta: s.meta?.titulo, respuesta: dificultad.respuesta }));
+      console.log("Dificultad detectada", dificultad.dificultad);
+      console.log("Enviando reacción según dificultad", JSON.stringify({ phone, reaccion: dificultad.reaccion }));
+      await enviar(phone, dificultad.reaccion, nombre, { throwOnError: true, context: "reacción según dificultad" });
+      if (s.seguimientoHistoryId) {
+        history.updateById(client.id, s.seguimientoHistoryId, {
+          respuestaDificultad: dificultad.respuesta,
+          dificultad: dificultad.dificultad,
+          reaccionDificultad: dificultad.reaccion,
+          requiereRevision,
+          seguimientoEstado: "completo",
+          completadoAt: new Date().toISOString(),
+        });
+      } else {
+        history.registrar(client.id, phone, nombre, {
+          tipo: "seguimiento_meta",
+          meta: s.meta?.titulo,
+          metaEmoji: s.meta?.emoji,
+          respuestaDificultad: dificultad.respuesta,
+          dificultad: dificultad.dificultad,
+          reaccionDificultad: dificultad.reaccion,
+          requiereRevision,
+          seguimientoEstado: "completo",
+          direccion: "saliente",
+        });
+      }
+      if (requiereRevision) console.log("Meta marcada para revisión posterior", JSON.stringify({ phone, meta: s.meta?.titulo, motivo: dificultad.dificultad === "Difícil" ? "dificultad alta" : "respuesta emocional negativa" }));
       const resultado = points.sumar(client.id, phone, client.phones.length);
       state.set(phone, { flow: state.FLOW.ESPERANDO_COMENTARIO });
 
       const aiMsg = await respuestaIA(nombre,
-        `${nombre} completó su meta "${s.meta?.titulo}". Se sintió ${estrellas(s.estrellasN ?? 3)} y fue ${dif}. Celébralo en 2 oraciones.`
+        `${nombre} completó su meta "${s.meta?.titulo}". Se sintió ${estrellas(s.estrellasN ?? 3)} y fue ${dificultad.dificultad}. Celébralo en 2 oraciones.`
       );
 
       const resumenPts = points.resumen(client.id);
@@ -348,7 +446,9 @@ async function procesarMensaje(m) {
         meta: s.meta?.titulo,
         metaEmoji: s.meta?.emoji,
         estrellas: s.estrellasN,
-        dificultad: dif,
+        dificultad: dificultad.dificultad,
+        estadoEmocional: s.estadoEmocional,
+        requiereRevision,
         puntos: resultado.puntos,
         direccion: "saliente",
       });
@@ -382,7 +482,7 @@ async function procesarMensaje(m) {
 
   // ── Esperando COMENTARIO ─────────────────────────────────────────────────
   if (s.flow === state.FLOW.ESPERANDO_COMENTARIO) {
-    const comentario = ["omitir","skip","no","nada"].includes(txt) ? null : texto;
+    const comentario = ["omitir","skip","no","nada"].includes(txt) ? null : incoming.raw;
     if (comentario) {
       const historial = history.getHistorial(client.id);
       const ultimo = historial.find(h => h.phone === phone && h.tipo === "completada");
@@ -411,4 +511,4 @@ async function procesarMensaje(m) {
   );
 }
 
-module.exports = { enviarMeta, enviarBienvenida, procesarMensaje };
+module.exports = { enviarMeta, enviarBienvenida, procesarMensaje, detectarEstadoEmocional, detectarDificultad };

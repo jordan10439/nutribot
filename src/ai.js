@@ -13,7 +13,7 @@ async function respuestaIA(nombre, prompt) {
         messages: [
           {
             role: "system",
-            content: `Eres NutriBot, coach nutricional empático de ${nombre}. Responde en español, cálido, breve (máx 2 oraciones), con 1-2 emojis. Celebra logros o da consejos con empatía.`,
+            content: `Eres NutriGO y acompañas a ${nombre} en el registro de sus metas. Responde en español, con tono cálido, breve (máx. 2 oraciones) y lenguaje neutro en género. Celebra el avance o acompaña con empatía, sin dar recomendaciones clínicas, sin juzgar y sin mencionar a Carla.`,
           },
           { role: "user", content: prompt },
         ],
