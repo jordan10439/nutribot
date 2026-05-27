@@ -194,6 +194,7 @@ async function enviarMeta(clientId, meta, options = {}) {
       history.registrar(clientId, phone, nombre, {
         tipo: "meta_enviada",
         meta: meta.titulo,
+        goalId: meta.id,
         metaEmoji: meta.emoji,
         direccion: "saliente",
         utilityTemplateId,
@@ -214,6 +215,7 @@ async function enviarMeta(clientId, meta, options = {}) {
       history.registrar(clientId, phone, nombre, {
         tipo: templateFailed ? "plantilla_previa_error" : "meta_error",
         meta: templateFailed ? utilityTemplate.label : meta.titulo,
+        goalId: meta.id,
         metaEmoji: templateFailed ? "📨" : meta.emoji,
         comentario: detail,
         direccion: "saliente",
@@ -258,6 +260,7 @@ async function procesarMensaje(m) {
     const entry = {
       tipo: "mensaje_recibido",
       meta: s.meta?.titulo ?? "—",
+      goalId: s.meta?.id || "",
       metaEmoji: s.meta?.emoji ?? "💬",
       comentario: incoming.raw,
       direccion: "entrante",
@@ -306,6 +309,7 @@ async function procesarMensaje(m) {
       history.registrar(client.id, phone, nombre, {
         tipo: "no_completada",
         meta: meta?.titulo,
+        goalId: meta?.id || "",
         metaEmoji: meta?.emoji,
         direccion: "entrante",
       });
@@ -363,6 +367,7 @@ async function procesarMensaje(m) {
       const seguimiento = history.registrar(client.id, phone, nombre, {
         tipo: "seguimiento_meta",
         meta: s.meta?.titulo,
+        goalId: s.meta?.id || "",
         metaEmoji: s.meta?.emoji,
         respuestaEmocional: emocional.respuesta,
         estadoEmocional: emocional.estado,
@@ -415,6 +420,7 @@ async function procesarMensaje(m) {
         history.registrar(client.id, phone, nombre, {
           tipo: "seguimiento_meta",
           meta: s.meta?.titulo,
+          goalId: s.meta?.id || "",
           metaEmoji: s.meta?.emoji,
           respuestaDificultad: dificultad.respuesta,
           dificultad: dificultad.dificultad,
@@ -444,6 +450,7 @@ async function procesarMensaje(m) {
       history.registrar(client.id, phone, nombre, {
         tipo: "completada",
         meta: s.meta?.titulo,
+        goalId: s.meta?.id || "",
         metaEmoji: s.meta?.emoji,
         estrellas: s.estrellasN,
         dificultad: dificultad.dificultad,

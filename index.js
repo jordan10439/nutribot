@@ -148,6 +148,7 @@ app.post("/api/clients/:id/welcome", auth, async (req, res) => {
 // ── Historial ──────────────────────────────────────────────────────────────────
 app.get("/api/clients/:id/history", auth, (req, res) => res.json(history.getHistorial(req.params.id)));
 app.get("/api/clients/:id/resumen", auth, (req, res) => res.json(history.getResumen(req.params.id)));
+app.get("/api/goals/dashboard", auth, (req, res) => res.json(history.getGoalsDashboard(db.getAll())));
 app.get("/api/history/all", auth, (req, res) => {
   const clients = db.getAll();
   let todo = [];

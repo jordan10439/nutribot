@@ -64,6 +64,36 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .tag{display:inline-block;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-right:3px;margin-top:2px}
 .tg{background:#e8f5e9;color:#2a5738}.tb{background:#e3f2fd;color:#1565c0}.tr{background:#fff3cd;color:#856404}
 .empty-h{text-align:center;padding:20px;color:#7a9a7a;font-size:12px}
+/* METAS DASHBOARD */
+.goal-toolbar{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 16px}
+.goal-filters{display:flex;gap:6px;flex-wrap:wrap}
+.goal-filter{border:1px solid #dbe9db;background:#fff;color:#4d744d;border-radius:8px;padding:7px 11px;font-size:12px;font-weight:800;cursor:pointer}
+.goal-filter.active{border-color:#3d7a4f;background:#e8f5e9;color:#2a5738}
+.goal-select,.goal-date{padding:8px 10px;border:1px solid #dbe9db;border-radius:8px;background:#fff;color:#2a5738;font-size:12px;font-weight:700;outline:none}
+.goal-summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:18px}
+.goal-summary{background:#fff;border:1px solid #e0ece0;border-radius:8px;padding:13px}
+.goal-summary-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px}
+.goal-summary-head strong{font-size:13px;color:#2a5738}
+.goal-state{font-size:10px;font-weight:800;border-radius:10px;padding:3px 7px;background:#e8f5e9;color:#2a5738;white-space:nowrap}
+.goal-state.review{background:#fce7e7;color:#a92c2c}
+.goal-metrics{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.goal-metric{font-size:11px;color:#587158}
+.goal-metric b{display:block;font-size:15px;color:#2a5738}
+.goal-list{background:#fff;border:1px solid #e0ece0;border-radius:8px;padding:12px}
+.goal-list-head{display:grid;grid-template-columns:1.3fr .9fr .8fr .9fr .8fr 38px;gap:10px;padding:0 10px 8px;color:#7a9a7a;font-size:11px;font-weight:800}
+.goal-row{display:grid;grid-template-columns:1.3fr .9fr .8fr .9fr .8fr 38px;gap:10px;align-items:center;padding:11px 10px;border-top:1px solid #edf3ed;font-size:12px}
+.goal-row.review{background:#fffafa;border-left:3px solid #c94040;padding-left:7px}
+.goal-title strong{display:block;color:#213b26;font-size:13px}.goal-title span{display:block;color:#7a9a7a;margin-top:3px}
+.goal-small{font-size:11px;color:#5a765e}.goal-alert{display:inline-block;color:#a92c2c;font-weight:800;font-size:11px;margin-top:4px}
+.status{display:inline-block;border-radius:10px;padding:3px 8px;font-size:10px;font-weight:800}
+.status-pendiente{background:#f3f3f3;color:#687468}.status-enviada{background:#e3f2fd;color:#1565c0}.status-completada{background:#e8f5e9;color:#256535}
+.status-no_completada,.status-error{background:#fce7e7;color:#a92c2c}.status-en_seguimiento{background:#fff3cd;color:#856404}
+.review-chip{display:inline-block;padding:2px 7px;border-radius:10px;background:#fce7e7;color:#a92c2c;font-size:10px;font-weight:800;margin-left:5px}
+.goal-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.goal-detail-field{border:1px solid #edf3ed;border-radius:7px;padding:9px;font-size:12px;color:#4a6a4a}
+.goal-detail-field strong{display:block;color:#2a5738;margin-bottom:4px;font-size:11px}
+.goal-event{border-top:1px solid #edf3ed;padding:9px 0;font-size:12px;color:#4a6a4a}.goal-event:first-child{border-top:none}
+.goal-event-time{font-size:10px;color:#7a9a7a;float:right}
 /* MENSAJES CONFIG */
 .msg-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:10px;border:1px solid #e0ece0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
 .msg-label{font-size:12px;font-weight:700;color:#5a6a5a;margin-bottom:6px}
@@ -132,7 +162,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .msg-time{font-size:10px;color:rgba(255,255,255,.7);margin-top:4px;text-align:right}
 .msg-time-in{font-size:10px;color:#7a9a7a;margin-top:4px}
 .msg-name{font-size:10px;color:#7a9a7a;margin-bottom:2px;font-weight:700}
-@media(max-width:600px){.stats{grid-template-columns:1fr 1fr}.hres{grid-template-columns:1fr 1fr}.tip-history-row{grid-template-columns:1fr}.ma{flex-wrap:wrap}}
+@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.hres{grid-template-columns:1fr 1fr}.tip-history-row{grid-template-columns:1fr}.ma{flex-wrap:wrap}.goal-list-head{display:none}.goal-row{grid-template-columns:1fr;gap:7px;padding:12px}.goal-detail-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -149,6 +179,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   <div class="topbar"><h1>🌱 NutriGO Admin</h1><button class="logout" onclick="logout()">Salir</button></div>
   <div class="tabs">
     <div class="tab active" data-tab="p" onclick="showTab('p')">👥 Pacientes</div>
+    <div class="tab" data-tab="goals" onclick="showTab('goals')">🎯 Metas</div>
     <div class="tab" data-tab="c" onclick="showTab('c')">💬 Conversaciones</div>
     <div class="tab" data-tab="h" onclick="showTab('h')">📋 Historial</div>
     <div class="tab" data-tab="m" onclick="showTab('m')">⚙️ Mensajes</div>
@@ -166,6 +197,28 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
       </div>
       <div class="sh"><h2>👥 Pacientes</h2><button class="ba" onclick="openCM()">+ Agregar</button></div>
       <div id="clist"></div>
+    </div>
+  </div>
+
+  <!-- METAS -->
+  <div id="tgoals" style="display:none">
+    <div class="content">
+      <div class="sh"><h2>🎯 Metas</h2></div>
+      <div class="goal-toolbar">
+        <div class="goal-filters">
+          <button class="goal-filter active" data-goal-filter="all" onclick="setGoalFilter('all')">Todas</button>
+          <button class="goal-filter" data-goal-filter="pendiente" onclick="setGoalFilter('pendiente')">Pendientes</button>
+          <button class="goal-filter" data-goal-filter="completada" onclick="setGoalFilter('completada')">Completadas</button>
+          <button class="goal-filter" data-goal-filter="dificil" onclick="setGoalFilter('dificil')">Difíciles</button>
+          <button class="goal-filter" data-goal-filter="revision" onclick="setGoalFilter('revision')">Requieren revisión</button>
+        </div>
+        <div class="goal-filters">
+          <select class="goal-select" id="goal_patient_filter" onchange="renderGoalsDashboard()"><option value="">Todos los pacientes</option></select>
+          <input class="goal-date" id="goal_date_filter" type="date" onchange="renderGoalsDashboard()" title="Filtrar por fecha de envío"/>
+        </div>
+      </div>
+      <div id="goal-summary-grid" class="goal-summary-grid"></div>
+      <div id="goal-list" class="goal-list"></div>
     </div>
   </div>
 
@@ -283,6 +336,15 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   </div>
 </div>
 
+<!-- Modal Detalle Meta -->
+<div class="mo" id="goalDetailModal">
+  <div class="modal">
+    <h2 id="goal_detail_title">🎯 Detalle de meta</h2>
+    <div id="goal_detail_content"></div>
+    <div class="ma"><button class="bc" onclick="closeM('goalDetailModal')">Cerrar</button></div>
+  </div>
+</div>
+
 <!-- Modal Enviar Meta -->
 <div class="mo" id="metaSendModal">
   <div class="modal">
@@ -348,7 +410,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[];
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -382,11 +444,12 @@ function logout(){TOKEN="";I("ls").style.display="flex";I("app").style.display="
 
 function showTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active', el.getAttribute('data-tab')===t));
-  const map = {p:'tp', c:'tc', h:'th', m:'tm', tips:'ttips'};
+  const map = {p:'tp', goals:'tgoals', c:'tc', h:'th', m:'tm', tips:'ttips'};
   Object.values(map).forEach(id=>{ const el=I(id); if(el) el.style.display='none'; });
   const target = map[t] || map.p;
   if(target){ I(target).style.display = (t==='c') ? 'flex' : 'block'; }
   if(t==='h') loadGlobal();
+  if(t==='goals') loadGoalsDashboard();
   if(t==='m') loadMessages();
   if(t==='c') updateChatSel();
   if(t==='tips') loadTips();
@@ -395,35 +458,114 @@ function showTab(t){
 async function loadAll(){
   await loadUtilityTemplates();
   clients=await api("GET","/clients");
+  await loadGoalsDashboard(false);
   renderClients();
   I("s1").textContent=clients.length;
   I("s2").textContent=clients.reduce((a,c)=>a+(c.goals?.length||0),0);
   I("s3").textContent=clients.filter(c=>c.phones?.length>1).length;
   I("fcli").innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${c.id}">${c.nombres?.join(" & ")}</option>`).join("");
   updateChatSel();
-  updateClientSummaries();
 }
 
-async function updateClientSummaries(){
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  for(const c of clients){
-    try{
-      const h = await api("GET",`/clients/${c.id}/history`);
-      const monthEntries = (h||[]).filter(e=>{const d=new Date(e.fecha);return d.getFullYear()===year && d.getMonth()===month});
-      const sent = monthEntries.filter(e=>e.tipo==='meta_enviada').length;
-      const completedEntries = monthEntries.filter(e=>e.tipo==='completada');
-      const completed = completedEntries.length;
-      const points = completedEntries.reduce((s,e)=>(s+(Number(e.puntos)||0)),0);
-      const possible = sent * 10; // assume 10 pts per meta if not provided
-      const el = I(`summary-${c.id}`);
-      if(el) el.textContent = `${points}/${possible} pts • ${completed}/${sent} metas completadas este mes`;
-    }catch(e){
-      const el = I(`summary-${c.id}`);
-      if(el) el.textContent = `—`;
-    }
+async function loadGoalsDashboard(refreshPatients=true){
+  const data=await api("GET","/goals/dashboard");
+  goalsDashboard=data?.goals&&data?.summaries?data:{goals:[],summaries:[]};
+  const select=I("goal_patient_filter");
+  if(select){
+    const selected=select.value;
+    select.innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${c.id}">${escapeHtml(c.nombres?.join(" & "))}</option>`).join("");
+    select.value=clients.some(c=>c.id===selected)?selected:"";
   }
+  renderGoalsDashboard();
+  if(refreshPatients)renderClients();
+}
+
+function setGoalFilter(filter){
+  goalFilter=filter;
+  document.querySelectorAll("[data-goal-filter]").forEach(button=>button.classList.toggle("active",button.dataset.goalFilter===filter));
+  renderGoalsDashboard();
+}
+
+function goalStatusTag(goal){
+  return `<span class="status status-${goal.status}">${escapeHtml(goal.statusLabel)}</span>`;
+}
+
+function panelDate(value){
+  return value?new Date(value).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"Sin registro";
+}
+
+function panelDateKey(value){
+  if(!value)return "";
+  const date=new Date(value);
+  const pad=part=>String(part).padStart(2,"0");
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+}
+
+function visibleGoals(){
+  const patient=I("goal_patient_filter")?.value||"";
+  const date=I("goal_date_filter")?.value||"";
+  return (goalsDashboard.goals||[]).filter(goal=>{
+    if(patient&&goal.clientId!==patient)return false;
+    if(date&&panelDateKey(goal.sentAt)!==date)return false;
+    if(goalFilter==="pendiente"&&goal.status!=="pendiente")return false;
+    if(goalFilter==="completada"&&goal.status!=="completada")return false;
+    if(goalFilter==="dificil"&&goal.difficulty!=="Difícil")return false;
+    if(goalFilter==="revision"&&!goal.requiresReview)return false;
+    return true;
+  }).sort((a,b)=>Number(b.requiresReview)-Number(a.requiresReview)||new Date(b.lastResponseAt||b.sentAt||0)-new Date(a.lastResponseAt||a.sentAt||0));
+}
+
+function renderGoalsDashboard(){
+  const patientFilter=I("goal_patient_filter")?.value||"";
+  const summaries=(goalsDashboard.summaries||[]).filter(summary=>!patientFilter||summary.clientId===patientFilter);
+  const summaryEl=I("goal-summary-grid");
+  const listEl=I("goal-list");
+  if(!summaryEl||!listEl)return;
+  summaryEl.innerHTML=summaries.length?summaries.map(summary=>`<div class="goal-summary">
+    <div class="goal-summary-head"><strong>${escapeHtml(summary.patientName)}</strong><span class="goal-state ${summary.requiresReview?'review':''}">${escapeHtml(summary.generalStatus)}</span></div>
+    <div class="goal-metrics">
+      <div class="goal-metric"><b>${summary.completed}/${summary.total}</b>Completadas</div>
+      <div class="goal-metric"><b>${summary.points}/${summary.possiblePoints}</b>Puntos</div>
+      <div class="goal-metric"><b>${summary.pending}</b>Pendientes</div>
+      <div class="goal-metric"><b>${summary.difficult}</b>Difíciles</div>
+      <div class="goal-metric"><b>${summary.requiresReview}</b>Revisión</div>
+    </div>
+  </div>`).join(""):`<div class="empty-h">No hay pacientes para este filtro.</div>`;
+  const goals=visibleGoals();
+  listEl.innerHTML=goals.length?`<div class="goal-list-head"><span>Meta / paciente</span><span>Envío</span><span>Estado</span><span>Seguimiento</span><span>Última respuesta</span><span></span></div>`+goals.map(goal=>`<div class="goal-row ${goal.requiresReview?'review':''}">
+    <div class="goal-title"><strong>${escapeHtml(goal.emoji)} ${escapeHtml(goal.title)}</strong><span>${escapeHtml(goal.patientName)}</span></div>
+    <div class="goal-small">${panelDate(goal.sentAt)}</div>
+    <div>${goalStatusTag(goal)}${goal.requiresReview?`<div class="goal-alert">● Revisión posterior</div>`:''}</div>
+    <div class="goal-small">${goal.emotionalResponse?`Emoción: "${escapeHtml(goal.emotionalResponse)}"<br>`:""}${goal.difficulty?`Dificultad: ${escapeHtml(goal.difficulty)}`:"Sin respuesta"}${goal.comment?`<br>Comentario: "${escapeHtml(goal.comment)}"`:""}</div>
+    <div class="goal-small">${panelDate(goal.lastResponseAt)}${goal.points?`<br>+${goal.points} puntos`:""}</div>
+    <button class="bi" onclick="openGoalDetail('${goal.key}')" title="Ver detalle">👁</button>
+  </div>`).join(""):`<div class="empty-h">No hay metas que coincidan con estos filtros.</div>`;
+}
+
+function openGoalsForPatient(clientId){
+  showTab("goals");
+  I("goal_patient_filter").value=clientId;
+  setGoalFilter("all");
+}
+
+function openGoalDetail(key){
+  const goal=(goalsDashboard.goals||[]).find(item=>item.key===key);
+  if(!goal)return;
+  I("goal_detail_title").textContent=`${goal.emoji} ${goal.title}`;
+  const events=goal.events||[];
+  const label={meta_enviada:"Meta enviada",meta_error:"Error al enviar",plantilla_previa_error:"Error de plantilla previa",no_completada:"No completada",seguimiento_meta:"Seguimiento",completada:"Completada",mensaje_recibido:"Mensaje recibido"};
+  I("goal_detail_content").innerHTML=`<div class="goal-detail-grid">
+    <div class="goal-detail-field"><strong>Paciente</strong>${escapeHtml(goal.patientName)}</div>
+    <div class="goal-detail-field"><strong>Estado</strong>${goalStatusTag(goal)} ${goal.requiresReview?'<span class="review-chip">Revisión posterior</span>':''}</div>
+    <div class="goal-detail-field"><strong>Meta enviada</strong>${escapeHtml(goal.description||goal.title)}<br><span class="goal-small">${panelDate(goal.sentAt)}</span></div>
+    <div class="goal-detail-field"><strong>Última respuesta</strong>${panelDate(goal.lastResponseAt)}${goal.points?`<br>+${goal.points} puntos`:''}</div>
+    <div class="goal-detail-field"><strong>Cómo se sintió</strong>${goal.emotionalResponse?`"${escapeHtml(goal.emotionalResponse)}"`:"Sin respuesta"}${goal.emotionalReaction?`<br><span class="goal-small">Bot: ${escapeHtml(goal.emotionalReaction)}</span>`:""}</div>
+    <div class="goal-detail-field"><strong>Dificultad</strong>${escapeHtml(goal.difficulty||"Sin respuesta")}${goal.difficultyReaction?`<br><span class="goal-small">Bot: ${escapeHtml(goal.difficultyReaction)}</span>`:""}</div>
+    <div class="goal-detail-field" style="grid-column:1/-1"><strong>Comentario</strong>${escapeHtml(goal.comment||"Sin comentario")}</div>
+  </div>
+  <div style="font-size:12px;font-weight:800;color:#2a5738;margin-bottom:5px">Historial de eventos</div>
+  <div>${events.length?events.map(event=>`<div class="goal-event"><span class="goal-event-time">${panelDate(event.fecha)}</span><strong>${escapeHtml(label[event.tipo]||event.tipo)}</strong>${event.comentario?`<br>${escapeHtml(event.comentario)}`:""}${event.requiereRevision?` <span class="review-chip">Revisión posterior</span>`:""}</div>`).join(""):`<div class="empty-h">Sin eventos registrados.</div>`}</div>`;
+  I("goalDetailModal").classList.add("open");
 }
 
 function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];return d.map(x=>n[x]).join(", ")}
@@ -434,6 +576,8 @@ function renderClients(){
   el.innerHTML=clients.map(c=>{
     const solo=c.phones?.length===1;
     const ini=(c.nombres?.[0]||"?")[0].toUpperCase();
+    const summary=(goalsDashboard.summaries||[]).find(item=>item.clientId===c.id)||{total:(c.goals||[]).length,completed:0,points:0,possiblePoints:(c.goals||[]).length*10,pending:(c.goals||[]).length,requiresReview:0,generalStatus:"En progreso"};
+    const reviewBadge=summary.requiresReview?`<span class="review-chip">● Requiere revisión</span>`:"";
     const metas=(c.goals||[]).map(m=>`
       <div class="mi2">
         <span class="me2">${m.emoji||"🎯"}</span>
@@ -445,17 +589,17 @@ function renderClients(){
     return`<div class="card">
       <div class="ch">
         <div class="av">${ini}</div>
-        <div class="ci"><h3>${c.nombres?.join(" & ")} <span class="badge ${solo?"bs2":"bp2"}">${solo?"Individual":"Pareja"}</span></h3><p>📱 ${c.phones?.join(" · ")}</p></div>
+        <div class="ci"><h3>${c.nombres?.join(" & ")} <span class="badge ${solo?"bs2":"bp2"}">${solo?"Individual":"Pareja"}</span>${reviewBadge}</h3><p>📱 ${c.phones?.join(" · ")}</p></div>
         <div class="cac">
           <button class="bi" onclick="delClient('${c.id}')" title="Eliminar">🗑️</button>
         </div>
       </div>
-      <div id="summary-${c.id}" style="margin-bottom:8px;font-size:12px;color:#4a6a4a">Cargando resumen...</div>
+      <div id="summary-${c.id}" style="margin-bottom:8px;font-size:12px;color:#4a6a4a">${summary.completed}/${summary.total} metas completadas · ${summary.points}/${summary.possiblePoints} puntos · ${summary.pending} pendientes · ${escapeHtml(summary.generalStatus)}</div>
       <div class="ms">
         <div class="mt2"><span>🎯 Metas (${c.goals?.length||0})</span><button class="bam" onclick="openMM('${c.id}')">+ Meta</button></div>
         ${metas||'<p style="font-size:11px;color:#7a9a7a;padding:6px">Sin metas aún.</p>'}
         <button class="bwelcome" onclick="sendWelcome('${c.id}')">👋 Reenviar mensaje de bienvenida</button>
-        <button class="bwelcome" onclick="sendResumen('${c.id}')">📊 Enviar resumen</button>
+        <button class="bhist" onclick="openGoalsForPatient('${c.id}')">🎯 Ver resumen de metas</button>
         <button class="bhist" onclick="toggleH('${c.id}')">📋 Ver historial</button>
         <div class="hp" id="h-${c.id}">
           <div style="font-size:12px;font-weight:800;color:#2a5738;margin-bottom:10px">📋 Historial</div>
@@ -983,6 +1127,7 @@ async function cancelScheduledTip(id){
   showToast('Tip programado cancelado');
 }
 window.addEventListener('load',()=>{if(document.querySelectorAll('.tab').length)loadTips()});
+setInterval(()=>{if(TOKEN&&I('tgoals')?.style.display!=='none')loadGoalsDashboard();},30000);
 
 async function saveMsg(key){
   const value=I(`msg-${key}`).value;
@@ -1017,14 +1162,6 @@ async function sendWelcome(id){
   const res=await api("POST",`/clients/${id}/welcome`);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   showToast("👋 Bienvenida enviada");
-}
-
-async function sendResumen(id){
-  const c=clients.find(x=>x.id===id);
-  if(!confirm(`¿Enviar resumen a ${c?.nombres?.join(" & ")}?`))return;
-  const res = await fetch(`/api/clients/${id}/resumen-puntos`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-token': TOKEN } });
-  if (res.ok) showToast('📊 Resumen enviado');
-  else showToast('❌ Error enviando resumen');
 }
 
 // ── METAS ────────────────────────────────────────────────────────────────────
@@ -1133,6 +1270,7 @@ async function confirmSendMeta(){
   const res=await api("POST",`/clients/${cid}/send`,{goalId:gid,utilityTemplateId:I("meta_send_utility_template").value});
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   closeM("metaSendModal");
+  await loadGoalsDashboard();
   showToast(`📤 Meta enviada a ${c?.nombres?.join(" & ")}`);
 }
 

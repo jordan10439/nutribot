@@ -53,6 +53,105 @@ function getResumen(clientId) {
   return { completadas, noCompletadas, total: h.length, promEstrellas: promEstrellas.toFixed(1) };
 }
 
+function getGoalsDashboard(clients, sourceHistory) {
+  const allHistory = sourceHistory || load();
+  const allowedTypes = new Set(["meta_enviada", "meta_error", "plantilla_previa_error", "no_completada", "seguimiento_meta", "completada", "mensaje_recibido"]);
+  const statusLabel = {
+    pendiente: "Pendiente",
+    enviada: "Enviada",
+    completada: "Completada",
+    no_completada: "No completada",
+    en_seguimiento: "En seguimiento",
+    error: "Error",
+  };
+
+  const goals = [];
+  const summaries = [];
+
+  for (const client of clients) {
+    const clientHistory = allHistory[client.id] || [];
+    const clientGoals = client.goals || [];
+
+    for (const goal of clientGoals) {
+      const events = clientHistory
+        .filter(entry => allowedTypes.has(entry.tipo) && (
+          entry.goalId ? entry.goalId === goal.id : entry.meta === goal.titulo
+        ))
+        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+      const sendEvent = events.find(entry => ["meta_enviada", "meta_error", "plantilla_previa_error"].includes(entry.tipo));
+      const cycleStartedAt = sendEvent ? new Date(sendEvent.fecha).getTime() : 0;
+      const currentEvents = cycleStartedAt
+        ? events.filter(entry => new Date(entry.fecha).getTime() >= cycleStartedAt)
+        : events;
+      const completed = currentEvents.find(entry => entry.tipo === "completada");
+      const followup = currentEvents.find(entry => entry.tipo === "seguimiento_meta");
+      const declined = currentEvents.find(entry => entry.tipo === "no_completada");
+      const failed = currentEvents.find(entry => ["meta_error", "plantilla_previa_error"].includes(entry.tipo));
+      const lastResponse = currentEvents.find(entry => ["seguimiento_meta", "completada", "no_completada", "mensaje_recibido"].includes(entry.tipo));
+      const difficulty = followup?.dificultad || completed?.dificultad || "";
+      const requiresReview = !!(followup?.requiereRevision || completed?.requiereRevision || difficulty === "Difícil");
+      let status = "pendiente";
+      if (failed && !completed) status = "error";
+      else if (completed) status = "completada";
+      else if (followup) status = "en_seguimiento";
+      else if (declined) status = "no_completada";
+      else if (sendEvent) status = "enviada";
+
+      goals.push({
+        key: `${client.id}:${goal.id}`,
+        clientId: client.id,
+        patientName: (client.nombres || []).join(" & "),
+        goalId: goal.id,
+        title: goal.titulo,
+        description: goal.descripcion || "",
+        emoji: goal.emoji || "🎯",
+        sentAt: sendEvent?.fecha || "",
+        status,
+        statusLabel: statusLabel[status],
+        emotionalResponse: followup?.respuestaEmocional || "",
+        emotionalState: followup?.estadoEmocional || completed?.estadoEmocional || "",
+        emotionalReaction: followup?.reaccionEmocional || "",
+        difficultyResponse: followup?.respuestaDificultad || "",
+        difficulty,
+        difficultyReaction: followup?.reaccionDificultad || "",
+        comment: completed?.comentario || "",
+        requiresReview,
+        lastResponseAt: lastResponse?.fecha || "",
+        points: completed ? Number(completed.puntos) || 10 : 0,
+        events,
+      });
+    }
+
+    const patientGoals = goals.filter(goal => goal.clientId === client.id);
+    const completedCount = patientGoals.filter(goal => goal.status === "completada").length;
+    const reviewCount = patientGoals.filter(goal => goal.requiresReview).length;
+    const difficultCount = patientGoals.filter(goal => goal.difficulty === "Difícil").length;
+    const total = patientGoals.length;
+    const pending = Math.max(total - completedCount, 0);
+    const generalStatus = reviewCount
+      ? "Requiere revisión"
+      : total > 0 && completedCount === total
+        ? "Completado"
+        : total > 0 && completedCount >= Math.ceil(total / 2)
+          ? "Buen avance"
+          : "En progreso";
+    summaries.push({
+      clientId: client.id,
+      patientName: (client.nombres || []).join(" & "),
+      total,
+      completed: completedCount,
+      points: completedCount * 10,
+      possiblePoints: total * 10,
+      pending,
+      difficult: difficultCount,
+      requiresReview: reviewCount,
+      generalStatus,
+    });
+  }
+
+  return { goals, summaries };
+}
+
 function updateByMetaMessageId(messageId, patch) {
   const db = load();
   let updated = null;
@@ -77,4 +176,4 @@ function updateById(clientId, id, patch) {
   return entry;
 }
 
-module.exports = { registrar, getHistorial, getResumen, updateByMetaMessageId, updateById };
+module.exports = { registrar, getHistorial, getResumen, getGoalsDashboard, updateByMetaMessageId, updateById };
