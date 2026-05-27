@@ -146,7 +146,9 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .tip-actions{margin-top:auto;display:flex;gap:6px;flex-wrap:wrap}
 .tip-actions .bam{flex:1;min-width:74px;text-align:center}
 .tip-history{background:#fff;border:1px solid #e0ece0;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
-.tip-history h3{font-size:14px;color:#2a5738;margin-bottom:10px}
+.tip-history-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.tip-history h3{font-size:14px;color:#2a5738}
+.tip-history-select{min-width:210px;padding:8px 10px;border:1px solid #dbe9db;border-radius:8px;background:#fff;color:#2a5738;font-size:12px;font-weight:700;outline:none}
 .tip-history-row{display:grid;grid-template-columns:1.2fr .8fr .7fr .7fr;gap:8px;align-items:center;padding:8px;border:1px solid #e8f0e8;border-radius:9px;margin-bottom:6px;font-size:12px}
 .tip-send-list{max-height:210px;overflow:auto;padding:8px;border:1px solid #e0e8e0;border-radius:8px}
 .tip-client-row{padding:7px;border-bottom:1px solid #eef4ee}
@@ -328,7 +330,12 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
       <div class="tip-folder-bar" id="tip-folder-bar"></div>
       <div id="tips-gallery"></div>
       <div class="tip-history">
-        <h3>Historial de tips</h3>
+        <div class="tip-history-head">
+          <h3>Historial de tips</h3>
+          <select class="tip-history-select" id="tip_history_patient" onchange="renderTipHistory()">
+            <option value="">Todos los pacientes</option>
+          </select>
+        </div>
         <div id="tips-history"></div>
       </div>
     </div>
@@ -1181,6 +1188,13 @@ function uniqueTips(tips){
   });
 }
 
+function fillTipHistoryPatientSelect(){
+  const select=I('tip_history_patient'); if(!select)return;
+  const selected=select.value;
+  select.innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.nombres?.join(' & ')||'Paciente')}</option>`).join('');
+  select.value=clients.some(c=>c.id===selected)?selected:'';
+}
+
 async function loadTips(){
   window._nutri_tips = uniqueTips(await api('GET','/tips'));
   window._nutri_tip_folders = await api('GET','/tip-folders');
@@ -1189,6 +1203,7 @@ async function loadTips(){
   if(!Array.isArray(window._nutri_tip_folders)) window._nutri_tip_folders = [defaultTipFolder];
   if(!window._nutri_tip_folders.some(f=>f.id==='general')) window._nutri_tip_folders.unshift(defaultTipFolder);
   if(!Array.isArray(window._nutri_tip_history)) window._nutri_tip_history = [];
+  fillTipHistoryPatientSelect();
   renderTipFolders();
   fillTipFolderSelect();
   renderTipsGallery();
@@ -1273,14 +1288,20 @@ function renderTipsGallery(){
 }
 function renderTipHistory(){
   const el=I('tips-history'); if(!el)return;
-  const rows=(window._nutri_tip_history||[]).filter(r=>(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter)).slice(0,80);
-  if(!rows.length){el.innerHTML='<div class="empty-h">Sin tips enviados o programados en esta vista.</div>';return}
-  el.innerHTML=rows.map(r=>`<div class="tip-history-row">
+  const patientId=I('tip_history_patient')?.value||'';
+  const selectedClient=clients.find(c=>c.id===patientId);
+  const patientNames=selectedClient?.nombres||[];
+  const rows=(window._nutri_tip_history||[]).filter(r=>(!patientId||r.clientId===patientId||(!r.clientId&&patientNames.includes(r.patientName)))&&(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter)).slice(0,80);
+  if(!rows.length){el.innerHTML=`<div class="empty-h">${patientId?'No hay tips registrados para este paciente.':'Sin tips enviados o programados en esta vista.'}</div>`;return}
+  el.innerHTML=rows.map(r=>{
+    const eventDate=r.status==='enviado'?(r.sentAt||r.scheduledAt||r.when||r.createdAt):r.status==='cancelado'?(r.cancelledAt||r.scheduledAt||r.when||r.createdAt):(r.scheduledAt||r.when||r.createdAt);
+    const eventLabel=r.status==='enviado'?'Enviado':r.status==='cancelado'?'Cancelado':'Programado para';
+    return `<div class="tip-history-row">
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
-    <div>${new Date(r.scheduledAt||r.when||r.createdAt).toLocaleString('es-CL')}</div>
+    <div><span style="color:#7a9a7a">${eventLabel}</span><br>${new Date(eventDate).toLocaleString('es-CL')}</div>
     <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span><br><span style="color:#7a9a7a">${r.utilityTemplateId?`Previo: ${escapeHtml(utilityTemplateLabel(r.utilityTemplateId))}`:'Sin plantilla previa'}</span></div>
     <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Meta: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID: ${escapeHtml(r.metaMessageId)}</span>`:''}${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
-  </div>`).join('');
+  </div>`}).join('');
 }
 function toggleTipType(){
   const type=I('tip_type').value;
