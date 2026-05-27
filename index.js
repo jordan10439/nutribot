@@ -44,11 +44,15 @@ app.post("/api/clients", auth, async (req, res) => {
   recargarTodos();
   // Enviar bienvenida solo si el cliente lo solicita (body.sendWelcome === true)
   if (req.body.sendWelcome) {
-    for (const phone of phones) {
-      await enviarBienvenida(client.id, phone);
+    try {
+      for (const phone of phones) {
+        await enviarBienvenida(client.id, phone);
+      }
+    } catch (e) {
+      return res.status(502).json({ error: e.message, client, welcomeSent: false });
     }
   }
-  res.json({ ok: true, client });
+  res.json({ ok: true, client, welcomeSent: !!req.body.sendWelcome });
 });
 
 app.delete("/api/clients/:id", auth, (req, res) => {
@@ -131,10 +135,14 @@ app.post("/api/clients/:id/send", auth, async (req, res) => {
 });
 
 app.post("/api/clients/:id/welcome", auth, async (req, res) => {
-  const client = db.getById(req.params.id);
-  if (!client) return res.status(404).json({ error: "No encontrado" });
-  for (const phone of client.phones) await enviarBienvenida(client.id, phone);
-  res.json({ ok: true });
+  try {
+    const client = db.getById(req.params.id);
+    if (!client) return res.status(404).json({ error: "No encontrado" });
+    for (const phone of client.phones) await enviarBienvenida(client.id, phone);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
 });
 
 // ── Historial ──────────────────────────────────────────────────────────────────

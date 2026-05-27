@@ -53,7 +53,7 @@ function resetAll() {
 }
 
 const LABELS = {
-  bienvenida:       "Mensaje de bienvenida (primer contacto)",
+  bienvenida:       "Texto legado de bienvenida (el registro usa plantilla Meta)",
   pedir_listo:      "Pedir confirmación de meta completada",
   pedir_foto:       "Pedir foto de evidencia",
   pedir_estrellas:  "Pedir calificación de bienestar (1-5)",

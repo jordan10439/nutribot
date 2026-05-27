@@ -1004,14 +1004,17 @@ async function saveClient(sendWelcome=false){
   if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
   if(!nombres[0]||!phones[0]){showToast("⚠️ Completa nombre y teléfono");return}
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
-  await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!!sendWelcome});
-  closeM("cm");showToast(sendWelcome?"✅ Paciente guardado — bienvenida enviada":"✅ Paciente guardado");loadAll();
+  const res=await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!!sendWelcome});
+  closeM("cm");
+  if(res.error){showToast(`⚠️ Paciente guardado, pero no se envió la bienvenida: ${res.error}`);loadAll();return}
+  showToast(sendWelcome?"✅ Paciente guardado — bienvenida enviada":"✅ Paciente guardado");loadAll();
 }
 async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadAll()}
 async function sendWelcome(id){
   const c=clients.find(x=>x.id===id);
   if(!confirm(`¿Enviar mensaje de bienvenida a ${c?.nombres?.join(" & ")}?`))return;
-  await api("POST",`/clients/${id}/welcome`);
+  const res=await api("POST",`/clients/${id}/welcome`);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
   showToast("👋 Bienvenida enviada");
 }
 

@@ -192,20 +192,25 @@ async function enviarPlantilla(phone, nombrePlantilla, variables = []) {
   }
 }
 
-async function enviarPlantillaUtilidad(phone, template, nombre = "") {
-  const metaName = utilityTemplates.configuredName(template);
-  const languageCode = utilityTemplates.configuredLanguage();
-  console.log("Enviando plantilla previa", JSON.stringify({ phone, templateId: template.id, metaName }));
+async function enviarPlantillaOficial(phone, templateName, languageCode, context, nombre = "") {
   const data = await postWhatsApp({
     to: phone,
     type: "template",
     template: {
-      name: metaName,
+      name: templateName,
       language: { code: languageCode },
     },
   });
-  conversations.registrar(phone, "enviado", `[Plantilla previa: ${template.label}]`, { nombre });
+  conversations.registrar(phone, "enviado", `[Plantilla: ${context}]`, { nombre });
   return { ok: true, data };
 }
 
-module.exports = { enviar, enviarPlantilla, enviarPlantillaUtilidad, enviarBotones, enviarTip };
+async function enviarPlantillaUtilidad(phone, template, nombre = "") {
+  const metaName = utilityTemplates.configuredName(template);
+  const languageCode = utilityTemplates.configuredLanguage(template);
+  console.log("Plantilla previa seleccionada", JSON.stringify({ phone, templateId: template.id, label: template.label }));
+  console.log("Template enviado a Meta", JSON.stringify({ name: metaName, languageCode }));
+  return enviarPlantillaOficial(phone, metaName, languageCode, `Plantilla previa: ${template.label}`, nombre);
+}
+
+module.exports = { enviar, enviarPlantilla, enviarPlantillaOficial, enviarPlantillaUtilidad, enviarBotones, enviarTip };

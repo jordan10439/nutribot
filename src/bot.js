@@ -1,14 +1,24 @@
 // src/bot.js
 const db      = require("./db");
 const state   = require("./state");
-const { enviar, enviarBotones, enviarPlantillaUtilidad } = require("./whatsapp");
+const { enviar, enviarBotones, enviarPlantillaOficial, enviarPlantillaUtilidad } = require("./whatsapp");
 const { respuestaIA } = require("./ai");
 const points  = require("./points");
 const history = require("./history");
 const msg     = require("./messages");
 const utilityTemplates = require("./utilityTemplates");
 
-const TEMPLATE_NAME = process.env.META_TEMPLATE_NAME || "m_ensaje_inicial_nutrigo";
+const WELCOME_TEMPLATE_NAME = process.env.META_WELCOME_TEMPLATE_NAME || process.env.META_TEMPLATE_NAME || "";
+const WELCOME_TEMPLATE_LANGUAGE = process.env.META_WELCOME_TEMPLATE_LANGUAGE || "";
+
+function configuredWelcomeValue(value, variable, field) {
+  const clean = String(value || "").trim();
+  const placeholder = /placeholder|ejemplo|example|cambiar|configurar|nombre[_ -]?real/i.test(clean);
+  if (!clean || placeholder) {
+    throw new Error(`Falta configurar ${field} de la plantilla de bienvenida aprobada en Meta (${variable})`);
+  }
+  return clean;
+}
 
 function findClientByPhone(phone) {
   return db.getAll().find(c => c.phones.includes(phone));
@@ -26,27 +36,11 @@ async function enviarBienvenida(clientId, phone) {
   const nombre = nombreDe(client, phone);
 
   try {
-    const res = await fetch(
-      `https://graph.facebook.com/v19.0/${process.env.META_PHONE_ID}/messages`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.META_TOKEN}`,
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: phone,
-          type: "template",
-          template: {
-            name: TEMPLATE_NAME,
-            language: { code: "es" },
-          },
-        }),
-      }
-    );
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
+    const templateName = configuredWelcomeValue(WELCOME_TEMPLATE_NAME, "META_WELCOME_TEMPLATE_NAME", "el nombre técnico real");
+    const languageCode = configuredWelcomeValue(WELCOME_TEMPLATE_LANGUAGE, "META_WELCOME_TEMPLATE_LANGUAGE", "el idioma");
+    console.log("Plantilla de bienvenida seleccionada", JSON.stringify({ name: templateName, languageCode, phone }));
+    console.log("Template enviado a Meta", JSON.stringify({ name: templateName, languageCode }));
+    await enviarPlantillaOficial(phone, templateName, languageCode, "Bienvenida", nombre);
     console.log(`✅ Bienvenida enviada a +${phone}`);
 
     history.registrar(clientId, phone, nombre, {
@@ -60,12 +54,8 @@ async function enviarBienvenida(clientId, phone) {
       await enviarMeta(clientId, client.goals[0]);
     }
   } catch (e) {
-    console.error(`❌ Error bienvenida +${phone}:`, e.message);
-    // Fallback a mensaje de texto si la plantilla falla
-    await enviar(phone, msg.get("bienvenida"));
-    if (client.goals && client.goals.length > 0) {
-      await enviarMeta(clientId, client.goals[0]);
-    }
+    console.error(`Error real al enviar bienvenida a +${phone}:`, e.message);
+    throw e;
   }
 }
 

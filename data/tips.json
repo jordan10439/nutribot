@@ -33,11 +33,13 @@
       "phone": "56962849942",
       "patientName": "carla",
       "message": "hola\n\nhola",
-      "scheduledAt": "2026-05-28T17:53:00.000Z",
+      "scheduledAt": "2026-05-28T18:44:00.000Z",
       "status": "programado",
       "error": "",
       "createdAt": "2026-05-27T17:53:44.156Z",
-      "sentAt": null
+      "sentAt": null,
+      "utilityTemplateId": "",
+      "updatedAt": "2026-05-27T18:42:30.795Z"
     }
   ]
 }
