@@ -154,18 +154,26 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .toast{position:fixed;bottom:20px;right:20px;background:#2a5738;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:700;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:2000}
 .empty{text-align:center;padding:40px 20px;color:#7a9a7a}.empty div{font-size:44px;margin-bottom:10px}
 /* CHAT VIEW */
-.chat-header{background:#fff;border-bottom:2px solid #e0ece0;padding:10px 16px;display:flex;align-items:center;gap:10px}
-.chat-sel{flex:1;padding:8px 12px;border:2px solid #e0e8e0;border-radius:9px;font-size:13px;font-weight:700;outline:none}
+.chat-header{background:#fff;border-bottom:1px solid #e0ece0;padding:14px 16px;display:flex;align-items:center;gap:12px;justify-content:center}
+.chat-header-inner{width:min(760px,100%);display:flex;align-items:center;gap:12px}
+.chat-sel{flex:1;padding:9px 12px;border:1px solid #dbe9db;border-radius:8px;font-size:13px;font-weight:700;outline:none;background:#fff}
 .chat-sel:focus{border-color:#3d7a4f}
-.chat-area{max-height:calc(100vh - 200px);overflow-y:auto;padding:16px}
-.msg-out{display:flex;justify-content:flex-end;margin-bottom:8px}
-.msg-in{display:flex;justify-content:flex-start;margin-bottom:8px}
-.bubble-out{background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;border-radius:16px 16px 4px 16px;padding:10px 14px;max-width:75%;font-size:13px;line-height:1.5}
-.bubble-in{background:#fff;color:#1a2e1a;border-radius:16px 16px 16px 4px;padding:10px 14px;max-width:75%;font-size:13px;line-height:1.5;border:1px solid #e0ece0;box-shadow:0 2px 8px rgba(0,0,0,.06)}
-.msg-time{font-size:10px;color:rgba(255,255,255,.7);margin-top:4px;text-align:right}
-.msg-time-in{font-size:10px;color:#7a9a7a;margin-top:4px}
-.msg-name{font-size:10px;color:#7a9a7a;margin-bottom:2px;font-weight:700}
-@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.hres{grid-template-columns:1fr 1fr}.tip-history-row{grid-template-columns:1fr}.ma{flex-wrap:wrap}.goal-list-head{display:none}.goal-row{grid-template-columns:1fr;gap:7px;padding:12px}.goal-detail-grid{grid-template-columns:1fr}}
+.chat-area{height:calc(100vh - 116px);overflow-y:auto;padding:18px 16px;background:#f5f8f5}
+.chat-thread{width:min(760px,100%);margin:0 auto}
+.chat-day{display:flex;justify-content:center;margin:8px 0 14px}
+.chat-day span{background:#e4ece4;color:#5b715d;border-radius:14px;padding:4px 12px;font-size:11px;font-weight:700}
+.msg-out{display:flex;justify-content:flex-end;margin-bottom:6px}
+.msg-in{display:flex;justify-content:flex-start;margin-bottom:6px}
+.chat-message{max-width:min(78%,570px)}
+.bubble-out,.bubble-in{border-radius:12px;padding:9px 12px;font-size:13px;line-height:1.46;white-space:pre-wrap;word-break:break-word}
+.bubble-out{background:#e4f1e6;color:#1d3824;border-radius:12px 12px 3px 12px;border:1px solid #d5e6d7}
+.bubble-in{background:#fff;color:#1a2e1a;border-radius:12px 12px 12px 3px;border:1px solid #dfe9df}
+.chat-kind{display:block;font-size:10px;font-weight:800;text-transform:uppercase;color:#55775c;margin-bottom:4px}
+.msg-time,.msg-time-in{font-size:10px;color:#718473;margin-top:5px;text-align:right}
+.msg-name{font-size:10px;color:#708270;margin-bottom:3px;font-weight:700}
+.chat-photo{display:block;max-width:210px;max-height:210px;object-fit:cover;border-radius:7px;margin:6px 0 4px;cursor:pointer;border:1px solid #dbe9db}
+.chat-photo-link{display:inline-block;border:none;background:transparent;padding:2px 0;color:#2a5738;font-size:12px;font-weight:800;cursor:pointer}
+@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.hres{grid-template-columns:1fr 1fr}.tip-history-row{grid-template-columns:1fr}.ma{flex-wrap:wrap}.goal-list-head{display:none}.goal-row{grid-template-columns:1fr;gap:7px;padding:12px}.goal-detail-grid{grid-template-columns:1fr}.chat-header-inner{flex-direction:column;align-items:stretch}.chat-area{height:calc(100vh - 150px)}.chat-message{max-width:90%}}
 </style>
 </head>
 <body>
@@ -228,13 +236,15 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   <!-- CONVERSACIONES (chat view) -->
   <div id="tc" style="display:none;flex:1;flex-direction:column">
     <div class="chat-header">
-      <span style="font-size:13px;font-weight:700;color:#2a5738">💬 Conversación de:</span>
-      <select class="chat-sel" id="chat-sel" onchange="loadChat()">
-        <option value="">Selecciona un paciente...</option>
-      </select>
+      <div class="chat-header-inner">
+        <span style="font-size:13px;font-weight:700;color:#2a5738">💬 Conversación</span>
+        <select class="chat-sel" id="chat-sel" onchange="loadChat()">
+          <option value="">Selecciona un paciente...</option>
+        </select>
+      </div>
     </div>
     <div class="chat-area" id="chat-area">
-      <div class="empty"><div>💬</div><p>Selecciona un paciente para ver su conversación</p></div>
+      <div class="chat-thread"><div class="empty"><div>💬</div><p>Selecciona un paciente para ver su conversación</p></div></div>
     </div>
   </div>
 
@@ -805,38 +815,161 @@ async function loadGlobal(){
 function updateChatSel(){
   const sel=I("chat-sel");
   const cur=sel.value;
-  sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+clients.map(c=>`<option value="${c.id}">${c.nombres?.join(" & ")}</option>`).join("");
+  const options=clients.flatMap(c=>(c.phones||[]).map((phone,index)=>({
+    value:`${c.id}::${phone}`,
+    label:(c.nombres?.[index]||c.nombres?.[0]||"Paciente")+(c.phones.length>1?` · ${phone}`:""),
+  })));
+  sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
   sel.value=cur;
 }
 
-async function loadChat(){
-  const id=I("chat-sel").value;
-  const el=I("chat-area");
-  if(!id){el.innerHTML=`<div class="empty"><div>💬</div><p>Selecciona un paciente</p></div>`;return}
-  const h=await api("GET",`/clients/${id}/history`);
-  if(!h.length){el.innerHTML=`<div class="empty"><div>💬</div><p>Sin mensajes aún</p></div>`;return}
+function friendlyReply(value){
+  const raw=String(value||"").trim();
+  const normalized=raw.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const direct={
+    meta_si:"Sí, completó la meta",
+    meta_no:"No completó la meta",
+    dificultad_facil:"Dificultad: Fácil",
+    dificultad_normal:"Dificultad: Normal",
+    dificultad_dificil:"Dificultad: Difícil",
+    dificultad_0:"Dificultad: Fácil",
+    dificultad_1:"Dificultad: Normal",
+    dificultad_2:"Dificultad: Difícil",
+    dificultad_3:"Dificultad: Difícil",
+    estrellas_0:"Cómo se sintió: Mal",
+    estrellas_1:"Cómo se sintió: Normal",
+    estrellas_2:"Cómo se sintió: Muy bien",
+    estrellas_3:"Cómo se sintió: Muy bien",
+  };
+  if(direct[normalized])return direct[normalized];
+  if(/^meta_/.test(normalized))return "Respuesta sobre la meta";
+  if(/^estrellas_/.test(normalized))return "Respuesta sobre cómo se sintió";
+  if(/^dificultad_/.test(normalized))return "Respuesta sobre dificultad";
+  if(/^[a-z]+_[a-z0-9_]+$/i.test(normalized))return "Respuesta registrada";
+  return raw||"Sin texto";
+}
 
-  // Ordenar por fecha ascendente para el chat
-  const sorted=[...h].reverse();
-  el.innerHTML=sorted.map(e=>{
-    const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-    const esEntrante=e.direccion==="entrante"||e.tipo==="mensaje_recibido";
-    if(esEntrante){
-      return`<div class="msg-in">
-        <div>
-          <div class="msg-name">${e.nombre}</div>
-          <div class="bubble-in">${e.comentario||e.meta||"—"}<div class="msg-time-in">${f}</div></div>
-        </div>
-      </div>`;
-    } else {
-      const ico={meta_enviada:"📤 Meta enviada",bienvenida_enviada:"👋 Bienvenida",completada:"✅ Completada"};
-      return`<div class="msg-out">
-        <div>
-          <div class="bubble-out">${ico[e.tipo]||"🤖"}: ${e.meta||"—"}<div class="msg-time">${f}</div></div>
-        </div>
-      </div>`;
+function chatDateKey(value){
+  const d=new Date(value);
+  return d.toLocaleDateString("es-CL",{year:"numeric",month:"2-digit",day:"2-digit"});
+}
+
+function chatDayLabel(value){
+  const d=new Date(value);
+  const today=new Date();
+  const yesterday=new Date(Date.now()-86400000);
+  if(d.toDateString()===today.toDateString())return "Hoy";
+  if(d.toDateString()===yesterday.toDateString())return "Ayer";
+  return d.toLocaleDateString("es-CL",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+}
+
+function chatTime(value){
+  return new Date(value).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"});
+}
+
+function chatEvent(time,direction,kind,text,entry={},suffix=""){
+  return { time, direction, kind, text, media:entry.media||null, suffix, source:entry };
+}
+
+function offsetChatTime(value,offset){
+  return new Date(new Date(value).getTime()+offset).toISOString();
+}
+
+function buildChatTimeline(historyEntries,client){
+  const timeline=[];
+  let expectingComment=false;
+  const followups=historyEntries.filter(entry=>entry.tipo==="seguimiento_meta");
+  [...historyEntries].sort((a,b)=>new Date(a.fecha)-new Date(b.fecha)).forEach(entry=>{
+    if(entry.tipo==="mensaje_recibido"){
+      const mediaText=entry.media?.id?"📷 Foto enviada":friendlyReply(entry.comentario);
+      const raw=String(entry.comentario||"").toLowerCase();
+      const relatedFollowup=followups.find(item=>(!entry.goalId||item.goalId===entry.goalId)&&(
+        String(item.respuestaEmocional||"").toLowerCase()===raw||String(item.respuestaDificultad||"").toLowerCase()===raw
+      ));
+      const kind=entry.media?.id
+        ?"Foto enviada"
+        : /^meta_/.test(raw)
+          ?"Respuesta sobre meta"
+          : /^estrellas_/.test(raw)||String(relatedFollowup?.respuestaEmocional||"").toLowerCase()===raw
+            ?"Respuesta emocional"
+            : /^dificultad_/.test(raw)||String(relatedFollowup?.respuestaDificultad||"").toLowerCase()===raw
+              ?"Dificultad seleccionada"
+              : expectingComment
+                ?"Comentario del paciente"
+                :"Respuesta del paciente";
+      const text=kind==="Respuesta emocional"&&!/^estrellas_/.test(raw)
+        ?`Cómo se sintió: ${mediaText}`
+        : kind==="Dificultad seleccionada"&&!/^dificultad_/.test(raw)
+          ?`Dificultad: ${mediaText}`
+          : expectingComment&&!entry.media?.id&&!/^((meta|estrellas|dificultad)_)/.test(raw)
+            ?`Comentario: ${mediaText}`
+            : mediaText;
+      timeline.push(chatEvent(entry.fecha,"in",kind,text,entry,entry.media?.id&&entry.comentario?friendlyReply(entry.comentario):""));
+      const goal=(client?.goals||[]).find(item=>item.id===entry.goalId||item.titulo===entry.meta);
+      if(entry.media?.id){
+        timeline.push(chatEvent(offsetChatTime(entry.fecha,1),"out","Mensaje automático del bot","¿Cómo te sientes después de completar la meta?",entry));
+      } else if(raw==="meta_si"||/^(si|sí|s|yes|y)$/.test(raw)){
+        timeline.push(chatEvent(offsetChatTime(entry.fecha,1),"out","Mensaje automático del bot",goal?.requiereFoto?"Envíame una foto como evidencia de tu meta completada 📷":"¿Cómo te sientes después de completar la meta?",entry));
+      }
+      return;
     }
-  }).join("");
+    if(entry.tipo==="meta_enviada"){
+      timeline.push(chatEvent(entry.fecha,"out","Meta enviada",`🎯 Meta enviada: ${entry.meta||"Meta"}`,entry));
+      timeline.push(chatEvent(entry.fecha,"out","Mensaje automático del bot","¿Completaste esta meta?",entry));
+      return;
+    }
+    if(entry.tipo==="plantilla_previa_enviada"||entry.tipo==="bienvenida_enviada"){
+      timeline.push(chatEvent(entry.fecha,"out","Plantilla enviada",`📨 ${entry.meta||"Plantilla enviada"}`,entry));
+      return;
+    }
+    if(entry.tipo==="tip_enviado"){
+      timeline.push(chatEvent(entry.fecha,"out","Tip enviado",`💡 Tip enviado: ${entry.meta||"Tip"}`,entry));
+      return;
+    }
+    if(entry.tipo==="seguimiento_meta"){
+      if(entry.reaccionEmocional) timeline.push(chatEvent(entry.fecha,"out","Seguimiento de meta",entry.reaccionEmocional,entry));
+      if(entry.respuestaEmocional) timeline.push(chatEvent(entry.fecha,"out","Mensaje automático del bot","¿Qué tan difícil fue cumplirla?",entry));
+      if(entry.reaccionDificultad) timeline.push(chatEvent(entry.completadoAt||entry.fecha,"out","Seguimiento de meta",entry.reaccionDificultad,entry));
+      return;
+    }
+    if(entry.tipo==="completada"){
+      timeline.push(chatEvent(entry.fecha,"out","Meta completada",`🎉 Meta completada: ${entry.meta||"Meta"}${entry.puntos?`\n+${entry.puntos} puntos`:""}`,entry));
+      timeline.push(chatEvent(entry.fecha,"out","Mensaje automático del bot","¿Quieres dejar algún comentario? (opcional)",entry));
+      expectingComment=true;
+      return;
+    }
+    if(entry.tipo==="meta_error"||entry.tipo==="tip_error"||entry.tipo==="plantilla_previa_error"){
+      timeline.push(chatEvent(entry.fecha,"out","Error de envío",entry.comentario||"No se pudo enviar el mensaje.",entry));
+    }
+  });
+  return timeline.sort((a,b)=>new Date(a.time)-new Date(b.time));
+}
+
+function renderChatBubble(item,patientName){
+  const incoming=item.direction==="in";
+  const media=item.media?.id?`<button class="chat-photo-link" onclick="openGoalPhoto('${encodeURIComponent(item.media.id)}')">📷 Ver foto</button><img class="chat-photo" src="/api/media/${encodeURIComponent(item.media.id)}?token=${encodeURIComponent(TOKEN)}" alt="Foto enviada" onclick="openGoalPhoto('${encodeURIComponent(item.media.id)}')"/>`:"";
+  const suffix=item.suffix?`<div style="margin-top:5px">${escapeHtml(item.suffix)}</div>`:"";
+  return `<div class="${incoming?"msg-in":"msg-out"}"><div class="chat-message">${incoming?`<div class="msg-name">${escapeHtml(patientName)}</div>`:""}<div class="${incoming?"bubble-in":"bubble-out"}"><span class="chat-kind">${escapeHtml(item.kind)}</span>${escapeHtml(item.text)}${media}${suffix}<div class="${incoming?"msg-time-in":"msg-time"}">${chatTime(item.time)}</div></div></div></div>`;
+}
+
+async function loadChat(){
+  const selected=I("chat-sel").value;
+  const el=I("chat-area");
+  if(!selected){el.innerHTML=`<div class="chat-thread"><div class="empty"><div>💬</div><p>Selecciona un paciente para ver su conversación</p></div></div>`;return}
+  const [id,phone]=selected.split("::");
+  const client=clients.find(item=>item.id===id);
+  const patientName=client?.nombres?.[(client?.phones||[]).indexOf(phone)]||client?.nombres?.[0]||"Paciente";
+  const h=(await api("GET",`/clients/${id}/history`)).filter(entry=>!phone||entry.phone===phone);
+  const timeline=buildChatTimeline(h,client);
+  if(!timeline.length){el.innerHTML=`<div class="chat-thread"><div class="empty"><div>💬</div><p>Aún no hay conversación registrada con este paciente.</p></div></div>`;return}
+
+  let currentDay="";
+  el.innerHTML=`<div class="chat-thread">${timeline.map(item=>{
+    const day=chatDateKey(item.time);
+    const separator=day!==currentDay?`<div class="chat-day"><span>${escapeHtml(chatDayLabel(item.time))}</span></div>`:"";
+    currentDay=day;
+    return separator+renderChatBubble(item,patientName);
+  }).join("")}</div>`;
   el.scrollTop=el.scrollHeight;
 }
 
