@@ -80,13 +80,13 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .goal-metric{font-size:11px;color:#587158}
 .goal-metric b{display:block;font-size:15px;color:#2a5738}
 .goal-list{background:#fff;border:1px solid #e0ece0;border-radius:8px;padding:12px}
-.goal-list-head{display:grid;grid-template-columns:1.3fr .9fr .8fr .9fr .8fr 38px;gap:10px;padding:0 10px 8px;color:#7a9a7a;font-size:11px;font-weight:800}
-.goal-row{display:grid;grid-template-columns:1.3fr .9fr .8fr .9fr .8fr 38px;gap:10px;align-items:center;padding:11px 10px;border-top:1px solid #edf3ed;font-size:12px}
+.goal-list-head{display:grid;grid-template-columns:1.25fr .75fr 1fr 1.15fr .7fr .9fr .8fr 38px;gap:9px;padding:0 10px 8px;color:#7a9a7a;font-size:11px;font-weight:800}
+.goal-row{display:grid;grid-template-columns:1.25fr .75fr 1fr 1.15fr .7fr .9fr .8fr 38px;gap:9px;align-items:center;padding:11px 10px;border-top:1px solid #edf3ed;font-size:12px}
 .goal-row.review{background:#fffafa;border-left:3px solid #c94040;padding-left:7px}
 .goal-title strong{display:block;color:#213b26;font-size:13px}.goal-title span{display:block;color:#7a9a7a;margin-top:3px}
 .goal-small{font-size:11px;color:#5a765e}.goal-alert{display:inline-block;color:#a92c2c;font-weight:800;font-size:11px;margin-top:4px}
 .status{display:inline-block;border-radius:10px;padding:3px 8px;font-size:10px;font-weight:800}
-.status-pendiente{background:#f3f3f3;color:#687468}.status-enviada{background:#e3f2fd;color:#1565c0}.status-completada{background:#e8f5e9;color:#256535}
+.status-pendiente{background:#f3f3f3;color:#687468}.status-programada{background:#fff3cd;color:#856404}.status-enviada{background:#e3f2fd;color:#1565c0}.status-completada{background:#e8f5e9;color:#256535}
 .status-no_completada,.status-error{background:#fce7e7;color:#a92c2c}.status-en_seguimiento{background:#fff3cd;color:#856404}
 .review-chip{display:inline-block;padding:2px 7px;border-radius:10px;background:#fce7e7;color:#a92c2c;font-size:10px;font-weight:800;margin-left:5px}
 .goal-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
@@ -94,6 +94,9 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .goal-detail-field strong{display:block;color:#2a5738;margin-bottom:4px;font-size:11px}
 .goal-event{border-top:1px solid #edf3ed;padding:9px 0;font-size:12px;color:#4a6a4a}.goal-event:first-child{border-top:none}
 .goal-event-time{font-size:10px;color:#7a9a7a;float:right}
+.goal-photo-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #dbe9db;display:block;cursor:pointer;margin-top:4px}
+.goal-photo-large{display:block;max-width:100%;max-height:68vh;margin:0 auto;border-radius:8px}
+.goal-photo-link{border:none;background:transparent;color:#2a5738;font-size:11px;font-weight:800;cursor:pointer;text-align:left;padding:0}
 /* MENSAJES CONFIG */
 .msg-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:10px;border:1px solid #e0ece0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
 .msg-label{font-size:12px;font-weight:700;color:#5a6a5a;margin-bottom:6px}
@@ -345,6 +348,15 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   </div>
 </div>
 
+<!-- Modal Foto Meta -->
+<div class="mo" id="goalPhotoModal">
+  <div class="modal">
+    <h2>📷 Foto enviada</h2>
+    <img class="goal-photo-large" id="goal_photo_large" alt="Foto enviada por el paciente"/>
+    <div class="ma"><button class="bc" onclick="closeM('goalPhotoModal')">Cerrar</button></div>
+  </div>
+</div>
+
 <!-- Modal Enviar Meta -->
 <div class="mo" id="metaSendModal">
   <div class="modal">
@@ -490,8 +502,29 @@ function goalStatusTag(goal){
   return `<span class="status status-${goal.status}">${escapeHtml(goal.statusLabel)}</span>`;
 }
 
+function goalDeliveryLabel(status){
+  return ({accepted:"Aceptada por WhatsApp",sent:"Enviada por WhatsApp",delivered:"Entregada",read:"Leída",failed:"Falló"})[status]||"";
+}
+
 function panelDate(value){
   return value?new Date(value).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"Sin registro";
+}
+
+function goalProgramming(goal){
+  if(goal.status==="error")return goal.deliveryError?`Error al enviar: ${escapeHtml(goal.deliveryError)}`:"Error al enviar";
+  if(goal.sentAt)return `Enviada el ${panelDate(goal.sentAt)}`;
+  if(goal.scheduledAt)return `Programada para ${panelDate(goal.scheduledAt)}`;
+  return "Sin programación";
+}
+
+function goalPhotoUrl(photo){
+  return photo?.id?`/api/media/${encodeURIComponent(photo.id)}?token=${encodeURIComponent(TOKEN)}`:"";
+}
+
+function goalPhotoSummary(goal){
+  if(!goal.photo?.id)return "Sin foto";
+  const url=goalPhotoUrl(goal.photo);
+  return `<button class="goal-photo-link" onclick="openGoalPhoto('${encodeURIComponent(goal.photo.id)}')">📷 Ver foto</button><img class="goal-photo-thumb" src="${url}" alt="Foto del seguimiento" onclick="openGoalPhoto('${encodeURIComponent(goal.photo.id)}')"/>`;
 }
 
 function panelDateKey(value){
@@ -506,8 +539,8 @@ function visibleGoals(){
   const date=I("goal_date_filter")?.value||"";
   return (goalsDashboard.goals||[]).filter(goal=>{
     if(patient&&goal.clientId!==patient)return false;
-    if(date&&panelDateKey(goal.sentAt)!==date)return false;
-    if(goalFilter==="pendiente"&&goal.status!=="pendiente")return false;
+    if(date&&panelDateKey(goal.sentAt||goal.scheduledAt)!==date)return false;
+    if(goalFilter==="pendiente"&&!["pendiente","programada"].includes(goal.status))return false;
     if(goalFilter==="completada"&&goal.status!=="completada")return false;
     if(goalFilter==="dificil"&&goal.difficulty!=="Difícil")return false;
     if(goalFilter==="revision"&&!goal.requiresReview)return false;
@@ -532,12 +565,14 @@ function renderGoalsDashboard(){
     </div>
   </div>`).join(""):`<div class="empty-h">No hay pacientes para este filtro.</div>`;
   const goals=visibleGoals();
-  listEl.innerHTML=goals.length?`<div class="goal-list-head"><span>Meta / paciente</span><span>Envío</span><span>Estado</span><span>Seguimiento</span><span>Última respuesta</span><span></span></div>`+goals.map(goal=>`<div class="goal-row ${goal.requiresReview?'review':''}">
+  listEl.innerHTML=goals.length?`<div class="goal-list-head"><span>Meta / paciente</span><span>Estado de envío</span><span>Programación</span><span>Seguimiento</span><span>Foto</span><span>Última respuesta</span><span>Revisión</span><span></span></div>`+goals.map(goal=>`<div class="goal-row ${goal.requiresReview?'review':''}">
     <div class="goal-title"><strong>${escapeHtml(goal.emoji)} ${escapeHtml(goal.title)}</strong><span>${escapeHtml(goal.patientName)}</span></div>
-    <div class="goal-small">${panelDate(goal.sentAt)}</div>
-    <div>${goalStatusTag(goal)}${goal.requiresReview?`<div class="goal-alert">● Revisión posterior</div>`:''}</div>
+    <div>${goalStatusTag(goal)}${goal.deliveryStatus?`<div class="goal-small">${escapeHtml(goalDeliveryLabel(goal.deliveryStatus))}</div>`:""}</div>
+    <div class="goal-small">${goalProgramming(goal)}</div>
     <div class="goal-small">${goal.emotionalResponse?`Emoción: "${escapeHtml(goal.emotionalResponse)}"<br>`:""}${goal.difficulty?`Dificultad: ${escapeHtml(goal.difficulty)}`:"Sin respuesta"}${goal.comment?`<br>Comentario: "${escapeHtml(goal.comment)}"`:""}</div>
+    <div class="goal-small">${goalPhotoSummary(goal)}</div>
     <div class="goal-small">${panelDate(goal.lastResponseAt)}${goal.points?`<br>+${goal.points} puntos`:""}</div>
+    <div class="goal-small">${goal.requiresReview?`<span class="review-chip">👁 Revisar</span>`:"Sin revisión"}</div>
     <button class="bi" onclick="openGoalDetail('${goal.key}')" title="Ver detalle">👁</button>
   </div>`).join(""):`<div class="empty-h">No hay metas que coincidan con estos filtros.</div>`;
 }
@@ -556,16 +591,23 @@ function openGoalDetail(key){
   const label={meta_enviada:"Meta enviada",meta_error:"Error al enviar",plantilla_previa_error:"Error de plantilla previa",no_completada:"No completada",seguimiento_meta:"Seguimiento",completada:"Completada",mensaje_recibido:"Mensaje recibido"};
   I("goal_detail_content").innerHTML=`<div class="goal-detail-grid">
     <div class="goal-detail-field"><strong>Paciente</strong>${escapeHtml(goal.patientName)}</div>
-    <div class="goal-detail-field"><strong>Estado</strong>${goalStatusTag(goal)} ${goal.requiresReview?'<span class="review-chip">Revisión posterior</span>':''}</div>
-    <div class="goal-detail-field"><strong>Meta enviada</strong>${escapeHtml(goal.description||goal.title)}<br><span class="goal-small">${panelDate(goal.sentAt)}</span></div>
+    <div class="goal-detail-field"><strong>Estado de envío</strong>${goalStatusTag(goal)} ${goal.requiresReview?'<span class="review-chip">Revisión posterior</span>':''}<br><span class="goal-small">${goalProgramming(goal)}${goal.requiresReview&&goal.reviewReasons?.length?`<br>Revisar: ${escapeHtml(goal.reviewReasons.join(", "))}`:""}</span></div>
+    <div class="goal-detail-field"><strong>Meta</strong>${escapeHtml(goal.description||goal.title)}</div>
     <div class="goal-detail-field"><strong>Última respuesta</strong>${panelDate(goal.lastResponseAt)}${goal.points?`<br>+${goal.points} puntos`:''}</div>
     <div class="goal-detail-field"><strong>Cómo se sintió</strong>${goal.emotionalResponse?`"${escapeHtml(goal.emotionalResponse)}"`:"Sin respuesta"}${goal.emotionalReaction?`<br><span class="goal-small">Bot: ${escapeHtml(goal.emotionalReaction)}</span>`:""}</div>
     <div class="goal-detail-field"><strong>Dificultad</strong>${escapeHtml(goal.difficulty||"Sin respuesta")}${goal.difficultyReaction?`<br><span class="goal-small">Bot: ${escapeHtml(goal.difficultyReaction)}</span>`:""}</div>
     <div class="goal-detail-field" style="grid-column:1/-1"><strong>Comentario</strong>${escapeHtml(goal.comment||"Sin comentario")}</div>
+    <div class="goal-detail-field" style="grid-column:1/-1"><strong>Foto enviada por el paciente</strong>${goal.photo?.id?`${goalPhotoSummary(goal)}<br><span class="goal-small">Recibida: ${panelDate(goal.photoAt)}${goal.photoComment?` · Comentario: "${escapeHtml(goal.photoComment)}"`:""}</span>`:"Sin foto"}</div>
   </div>
   <div style="font-size:12px;font-weight:800;color:#2a5738;margin-bottom:5px">Historial de eventos</div>
   <div>${events.length?events.map(event=>`<div class="goal-event"><span class="goal-event-time">${panelDate(event.fecha)}</span><strong>${escapeHtml(label[event.tipo]||event.tipo)}</strong>${event.comentario?`<br>${escapeHtml(event.comentario)}`:""}${event.requiereRevision?` <span class="review-chip">Revisión posterior</span>`:""}</div>`).join(""):`<div class="empty-h">Sin eventos registrados.</div>`}</div>`;
   I("goalDetailModal").classList.add("open");
+}
+
+function openGoalPhoto(encodedId){
+  const id=decodeURIComponent(encodedId);
+  I("goal_photo_large").src=`/api/media/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
+  I("goalPhotoModal").classList.add("open");
 }
 
 function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];return d.map(x=>n[x]).join(", ")}
@@ -1228,6 +1270,7 @@ async function saveMeta(sendNow=false){
   const scheduleMode = document.querySelector('input[name="m_schedule_mode"]:checked')?.value || 'dias';
   const dias=[...document.querySelectorAll(".db.active")].map(b=>+b.dataset.day);
   const specificDate = I("m_specific_date").value || null;
+  if(scheduleMode==='date'&&!specificDate){showToast("⚠️ Selecciona una fecha específica");return}
   const payload = {
     titulo,
     descripcion:I("md").value.trim()||titulo,
@@ -1238,8 +1281,13 @@ async function saveMeta(sendNow=false){
     repetirFreq: { unit: I("m_repetir_unit").value, value: Number(I("m_repetir_val").value) },
     utilityTemplateId: I("m_utility_template").value
   };
-  if(scheduleMode === 'dias') payload.dias = dias;
-  else payload.specificDate = specificDate;
+  if(scheduleMode === 'dias'){
+    payload.dias = dias;
+    payload.specificDate = "";
+  } else {
+    payload.dias = [];
+    payload.specificDate = specificDate;
+  }
   let res;
   if(mid){
     res = await api("PUT",`/clients/${clientId}/goals/${mid}`, payload);

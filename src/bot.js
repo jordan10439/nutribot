@@ -269,8 +269,8 @@ async function getIncomingText(m) {
     if (m.interactive?.type === 'button_reply') text = m.interactive.button_reply?.id || m.interactive.button_reply?.title || "";
     else if (m.interactive?.type === 'list_reply') text = m.interactive.list_reply?.id || m.interactive.list_reply?.title || "";
   }
-  // sometimes media messages include captions
-  if (!text && (m.caption?.body)) text = m.caption.body;
+  // Los mensajes de media pueden traer un comentario en caption.
+  if (!text) text = m.image?.caption || m.video?.caption || m.document?.caption || m.caption?.body || "";
   const tieneMedia = ['image','video','document'].includes(type) || !!(m.image||m.video||m.document);
   return { raw: text || '', norm: (text || '').toString().trim().toLowerCase(), type, tieneMedia };
 }

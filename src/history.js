@@ -53,12 +53,50 @@ function getResumen(clientId) {
   return { completadas, noCompletadas, total: h.length, promEstrellas: promEstrellas.toFixed(1) };
 }
 
+function datePartsInTimezone(date, timezone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone || "America/Santiago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  return Object.fromEntries(formatter.formatToParts(date).filter(part => part.type !== "literal").map(part => [part.type, part.value]));
+}
+
+function nextScheduledLocal(goal, timezone, now = new Date()) {
+  if (!goal?.hora) return "";
+  const [hour, minute] = String(goal.hora).split(":").map(Number);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return "";
+  const tz = timezone || "America/Santiago";
+  const today = datePartsInTimezone(now, tz);
+  const weekdays = { Sun: 7, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const allowedDays = goal.dias?.length ? goal.dias.map(Number) : [1, 2, 3, 4, 5];
+  const specificDate = goal.specificDate ? String(goal.specificDate).slice(0, 10) : "";
+
+  for (let offset = 0; offset <= 14; offset++) {
+    const candidate = datePartsInTimezone(new Date(now.getTime() + offset * 86400000), tz);
+    const dateKey = `${candidate.year}-${candidate.month}-${candidate.day}`;
+    if (specificDate && dateKey !== specificDate) continue;
+    if (!specificDate && !allowedDays.includes(weekdays[candidate.weekday])) continue;
+    const nowMinutes = Number(today.hour) * 60 + Number(today.minute);
+    const scheduledMinutes = hour * 60 + minute;
+    if (offset === 0 && scheduledMinutes <= nowMinutes) continue;
+    return `${dateKey}T${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+  }
+  return "";
+}
+
 function getGoalsDashboard(clients, sourceHistory) {
   const allHistory = sourceHistory || load();
   const allowedTypes = new Set(["meta_enviada", "meta_error", "plantilla_previa_error", "no_completada", "seguimiento_meta", "completada", "mensaje_recibido"]);
   const statusLabel = {
     pendiente: "Pendiente",
     enviada: "Enviada",
+    programada: "Programada",
     completada: "Completada",
     no_completada: "No completada",
     en_seguimiento: "En seguimiento",
@@ -88,9 +126,17 @@ function getGoalsDashboard(clients, sourceHistory) {
       const declined = currentEvents.find(entry => entry.tipo === "no_completada");
       const failed = currentEvents.find(entry => ["meta_error", "plantilla_previa_error"].includes(entry.tipo));
       const lastResponse = currentEvents.find(entry => ["seguimiento_meta", "completada", "no_completada", "mensaje_recibido"].includes(entry.tipo));
+      const photoEvent = currentEvents.find(entry => entry.media?.id);
       const difficulty = followup?.dificultad || completed?.dificultad || "";
-      const requiresReview = !!(followup?.requiereRevision || completed?.requiereRevision || difficulty === "Difícil");
-      let status = "pendiente";
+      const scheduledAt = nextScheduledLocal(goal, client.timezone);
+      const photoReviewPending = !!photoEvent;
+      const reviewReasons = [
+        (followup?.estadoEmocional === "negativo" || completed?.estadoEmocional === "negativo") ? "Respuesta emocional negativa" : "",
+        difficulty === "Difícil" ? "Dificultad alta" : "",
+        photoReviewPending ? "Foto pendiente de revisar" : "",
+      ].filter(Boolean);
+      const requiresReview = !!(followup?.requiereRevision || completed?.requiereRevision || reviewReasons.length);
+      let status = scheduledAt ? "programada" : "pendiente";
       if (failed && !completed) status = "error";
       else if (completed) status = "completada";
       else if (followup) status = "en_seguimiento";
@@ -105,7 +151,11 @@ function getGoalsDashboard(clients, sourceHistory) {
         title: goal.titulo,
         description: goal.descripcion || "",
         emoji: goal.emoji || "🎯",
+        requiresPhoto: !!goal.requiereFoto,
         sentAt: sendEvent?.fecha || "",
+        scheduledAt: status === "programada" ? scheduledAt : "",
+        deliveryStatus: sendEvent?.deliveryStatus || "",
+        deliveryError: failed?.comentario || "",
         status,
         statusLabel: statusLabel[status],
         emotionalResponse: followup?.respuestaEmocional || "",
@@ -115,7 +165,12 @@ function getGoalsDashboard(clients, sourceHistory) {
         difficulty,
         difficultyReaction: followup?.reaccionDificultad || "",
         comment: completed?.comentario || "",
+        photo: photoEvent?.media || null,
+        photoAt: photoEvent?.fecha || "",
+        photoComment: photoEvent?.comentario || "",
+        photoReviewPending,
         requiresReview,
+        reviewReasons,
         lastResponseAt: lastResponse?.fecha || "",
         points: completed ? Number(completed.puntos) || 10 : 0,
         events,

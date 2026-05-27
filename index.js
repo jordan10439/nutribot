@@ -66,14 +66,15 @@ app.post("/api/clients/:id/goals", auth, (req, res) => {
   const client = db.getById(req.params.id);
   if (!client) return res.status(404).json({ error: "No encontrado" });
   // Accept additional per-goal settings: requiereFoto, repetirSiNo, repetirFreq
-  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq, utilityTemplateId } = req.body;
+  const { titulo, descripcion, emoji, hora, dias, specificDate, requiereFoto, repetirSiNo, repetirFreq, utilityTemplateId } = req.body;
   const goal = {
     id: Date.now().toString(),
     titulo,
     descripcion: descripcion || titulo,
     emoji: emoji || "🎯",
     hora: hora || "09:00",
-    dias: dias || [1,2,3,4,5],
+    dias: specificDate ? [] : (dias || [1,2,3,4,5]),
+    specificDate: specificDate || "",
     requiereFoto: !!requiereFoto,
     repetirSiNo: !!repetirSiNo,
     repetirFreq: repetirFreq || { unit: "hours", value: 24 },
@@ -92,12 +93,13 @@ app.put("/api/clients/:id/goals/:goalId", auth, (req, res) => {
   if (!client) return res.status(404).json({ error: "No encontrado" });
   const goal = client.goals?.find(g => g.id === req.params.goalId);
   if (!goal) return res.status(404).json({ error: "Meta no encontrada" });
-  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq, utilityTemplateId } = req.body;
+  const { titulo, descripcion, emoji, hora, dias, specificDate, requiereFoto, repetirSiNo, repetirFreq, utilityTemplateId } = req.body;
   if (titulo) goal.titulo = titulo;
   if (descripcion) goal.descripcion = descripcion;
   if (emoji) goal.emoji = emoji;
   if (hora) goal.hora = hora;
   if (dias) goal.dias = dias;
+  if (typeof specificDate !== "undefined") goal.specificDate = specificDate || "";
   if (typeof requiereFoto !== 'undefined') goal.requiereFoto = !!requiereFoto;
   if (typeof repetirSiNo !== 'undefined') goal.repetirSiNo = !!repetirSiNo;
   if (repetirFreq) goal.repetirFreq = repetirFreq;
