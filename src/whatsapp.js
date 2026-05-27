@@ -34,7 +34,7 @@ async function postWhatsApp(payload) {
   return data;
 }
 
-async function enviar(phone, mensaje, nombre = "") {
+async function enviar(phone, mensaje, nombre = "", options = {}) {
   try {
     const res = await fetch(
       `https://graph.facebook.com/v19.0/${process.env.META_PHONE_ID}/messages`,
@@ -61,6 +61,7 @@ async function enviar(phone, mensaje, nombre = "") {
     return { ok: true, data };
   } catch (e) {
     console.error(`❌ Error +${phone}:`, e.message);
+    if (options.throwOnError) throw e;
     return { ok: false, error: e.message };
   }
 }
@@ -90,6 +91,7 @@ async function uploadMedia(dataUrl, filename) {
 async function enviarTip(phone, tip, message, nombre = "") {
   const text = message || tip.phrase || tip.desc || tip.title || "";
   if (tip.type === "phrase") {
+    console.log("Enviando tip");
     console.log("Enviando tip tipo Frase");
     console.log(`Número destino +${phone}`);
     console.log("Función de WhatsApp utilizada", "enviar");
@@ -115,14 +117,14 @@ async function enviarTip(phone, tip, message, nombre = "") {
       throw new Error(`Tipo de tip no soportado: ${tip.type}`);
     }
   } catch (e) {
-    if (textSent) return { ok: true, textSent, mediaSent: false, warning: e.message };
+    if (textSent) throw new Error(`Se envió el texto del tip, pero falló el archivo: ${e.message}`);
     throw e;
   }
   conversations.registrar(phone, "enviado", `[Tip] ${tip.title}`, { nombre });
   return { ok: true, textSent, mediaSent: true };
 }
 
-async function enviarBotones(phone, headerText, buttons = []) {
+async function enviarBotones(phone, headerText, buttons = [], options = {}) {
   try {
     // buttons: array of { id, title }
     const interactive = {
@@ -151,8 +153,11 @@ async function enviarBotones(phone, headerText, buttons = []) {
     if (data.error) throw new Error(data.error.message);
     conversations.registrar(phone, "enviado", `[Botones] ${headerText}`);
     console.log(`✅ Botones enviados a +${phone}`);
+    return { ok: true, data };
   } catch (e) {
     console.error(`❌ Error botones +${phone}:`, e.message);
+    if (options.throwOnError) throw e;
+    return { ok: false, error: e.message };
   }
 }
 
@@ -210,7 +215,10 @@ async function enviarPlantillaUtilidad(phone, template, nombre = "") {
   const languageCode = utilityTemplates.configuredLanguage(template);
   console.log("Plantilla previa seleccionada", JSON.stringify({ phone, templateId: template.id, label: template.label }));
   console.log("Template enviado a Meta", JSON.stringify({ name: metaName, languageCode }));
-  return enviarPlantillaOficial(phone, metaName, languageCode, `Plantilla previa: ${template.label}`, nombre);
+  console.log("Enviando plantilla previa");
+  const result = await enviarPlantillaOficial(phone, metaName, languageCode, `Plantilla previa: ${template.label}`, nombre);
+  console.log("Plantilla previa enviada correctamente", JSON.stringify({ phone, templateId: template.id, metaName }));
+  return result;
 }
 
 module.exports = { enviar, enviarPlantilla, enviarPlantillaOficial, enviarPlantillaUtilidad, enviarBotones, enviarTip };

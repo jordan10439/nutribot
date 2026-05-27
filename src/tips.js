@@ -223,6 +223,10 @@ function getTip(id) {
   return load().tips.find(t => t.id === id);
 }
 
+function getSend(id) {
+  return load().sends.find(s => s.id === id) || null;
+}
+
 module.exports = {
   DEFAULT_FOLDER,
   cancelScheduledSend,
@@ -230,6 +234,7 @@ module.exports = {
   createSends,
   deleteTip,
   dueSends,
+  getSend,
   getTip,
   listFolders,
   listSends,

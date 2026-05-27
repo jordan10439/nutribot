@@ -247,7 +247,7 @@ async function createAndReviewTipSends(tip, body = {}) {
     utilityTemplates.validateId(body.utilityTemplateId)
   );
   await revisarTipsProgramados();
-  return sends;
+  return sends.map(send => tips.getSend(send.id) || send);
 }
 
 async function sendTipRecord(send) {
@@ -259,19 +259,32 @@ async function sendTipRecord(send) {
     tips.updateSend(send.id, { status: "error", error: reason });
     return;
   }
+  let utilityTemplateSent = false;
+  let contentStarted = false;
   try {
     tips.updateSend(send.id, { status: "enviando", error: "" });
     console.log("Tip listo para enviar", JSON.stringify({ id: send.id, tipo: tip.type }));
     console.log("Fecha programada", send.scheduledAt);
     console.log("Fecha actual", new Date().toISOString());
     console.log(`Número destino +${send.phone}`);
-    if (tip.type === "phrase") console.log("Enviando tip tipo Frase");
-    console.log("Función de WhatsApp utilizada", "enviarTip -> enviar");
-    console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
     const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
     if (utilityTemplate) {
       await enviarPlantillaUtilidad(send.phone, utilityTemplate, send.patientName);
+      utilityTemplateSent = true;
+      history.registrar(send.clientId, send.phone, send.patientName, {
+        tipo: "plantilla_previa_enviada",
+        meta: utilityTemplate.label,
+        metaEmoji: "📨",
+        direccion: "saliente",
+        utilityTemplateId: send.utilityTemplateId,
+        utilityTemplateLabel: utilityTemplate.label,
+      });
     }
+    console.log("Continuando con envío de contenido principal");
+    console.log("Enviando tip", JSON.stringify({ id: send.id, phone: send.phone, tipId: send.tipId, tipo: tip.type }));
+    console.log("Función de WhatsApp utilizada", "enviarTip -> enviar");
+    console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
+    contentStarted = true;
     const result = await enviarTip(send.phone, tip, send.message, send.patientName);
     console.log("Respuesta de WhatsApp", JSON.stringify(result));
     tips.updateSend(send.id, {
@@ -289,10 +302,26 @@ async function sendTipRecord(send) {
       utilityTemplateId: send.utilityTemplateId || "",
       utilityTemplateLabel: utilityTemplate?.label || "",
     });
-    console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, warning: result.warning || "" }));
+    console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone }));
   } catch (e) {
-    console.error("Error real al enviar tip", JSON.stringify({ id: send.id, phone: send.phone, error: e.message }));
-    tips.updateSend(send.id, { status: "error", error: e.message });
+    const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
+    const templateFailed = utilityTemplate && !utilityTemplateSent && !contentStarted;
+    const detail = templateFailed
+      ? `Error al enviar plantilla previa: ${e.message}`
+      : utilityTemplateSent
+        ? `Plantilla previa enviada correctamente, pero falló el envío del tip: ${e.message}`
+        : `Error al enviar tip: ${e.message}`;
+    console.error(templateFailed ? "Error al enviar plantilla previa" : "Error al enviar contenido principal", JSON.stringify({ id: send.id, phone: send.phone, error: detail }));
+    tips.updateSend(send.id, { status: "error", error: detail });
+    history.registrar(send.clientId, send.phone, send.patientName, {
+      tipo: templateFailed ? "plantilla_previa_error" : "tip_error",
+      meta: templateFailed ? utilityTemplate.label : send.tipTitle,
+      metaEmoji: templateFailed ? "📨" : (tip.type === "image" ? "🖼️" : tip.type === "pdf" ? "📄" : "💬"),
+      comentario: detail,
+      direccion: "saliente",
+      utilityTemplateId: send.utilityTemplateId || "",
+      utilityTemplateLabel: utilityTemplate?.label || "",
+    });
   }
 }
 

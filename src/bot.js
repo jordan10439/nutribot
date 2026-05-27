@@ -70,7 +70,8 @@ async function enviarMeta(clientId, meta, options = {}) {
 
   for (const phone of client.phones) {
     const nombre = nombreDe(client, phone);
-    state.set(phone, { flow: state.FLOW.META_ENVIADA, clientId, meta });
+    let utilityTemplateSent = false;
+    let contentStarted = false;
 
     const texto =
       `🎯 *¡Nueva Meta!*\n\n` +
@@ -84,20 +85,53 @@ async function enviarMeta(clientId, meta, options = {}) {
       { id: `meta_si`, title: "Sí" },
       { id: `meta_no`, title: "No" }
     ];
-    if (utilityTemplate) {
-      await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
+    try {
+      if (utilityTemplate) {
+        await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
+        utilityTemplateSent = true;
+        history.registrar(clientId, phone, nombre, {
+          tipo: "plantilla_previa_enviada",
+          meta: utilityTemplate.label,
+          metaEmoji: "📨",
+          direccion: "saliente",
+          utilityTemplateId,
+          utilityTemplateLabel: utilityTemplate.label,
+        });
+      }
+      console.log("Continuando con envío de contenido principal");
+      console.log("Enviando meta", JSON.stringify({ clientId, phone, goalId: meta.id, titulo: meta.titulo }));
+      contentStarted = true;
+      await enviar(phone, texto, nombre, { throwOnError: true });
+      await enviarBotones(phone, msg.get("pedir_listo"), botones, { throwOnError: true });
+      state.set(phone, { flow: state.FLOW.META_ENVIADA, clientId, meta });
+      history.registrar(clientId, phone, nombre, {
+        tipo: "meta_enviada",
+        meta: meta.titulo,
+        metaEmoji: meta.emoji,
+        direccion: "saliente",
+        utilityTemplateId,
+        utilityTemplateLabel: utilityTemplate?.label || "",
+      });
+      console.log("Meta enviada correctamente", JSON.stringify({ clientId, phone, goalId: meta.id }));
+    } catch (e) {
+      const templateFailed = utilityTemplate && !utilityTemplateSent && !contentStarted;
+      const detail = templateFailed
+        ? `Error al enviar plantilla previa: ${e.message}`
+        : utilityTemplateSent
+          ? `Plantilla previa enviada correctamente, pero falló el envío de la meta: ${e.message}`
+          : `Error al enviar meta: ${e.message}`;
+      console.error(templateFailed ? "Error al enviar plantilla previa" : "Error al enviar contenido principal", detail);
+      history.registrar(clientId, phone, nombre, {
+        tipo: templateFailed ? "plantilla_previa_error" : "meta_error",
+        meta: templateFailed ? utilityTemplate.label : meta.titulo,
+        metaEmoji: templateFailed ? "📨" : meta.emoji,
+        comentario: detail,
+        direccion: "saliente",
+        utilityTemplateId,
+        utilityTemplateLabel: utilityTemplate?.label || "",
+      });
+      throw new Error(detail);
     }
-    await enviar(phone, texto);
-    await enviarBotones(phone, msg.get("pedir_listo"), botones);
-
-    history.registrar(clientId, phone, nombre, {
-      tipo: "meta_enviada",
-      meta: meta.titulo,
-      metaEmoji: meta.emoji,
-      direccion: "saliente",
-      utilityTemplateId,
-      utilityTemplateLabel: utilityTemplate?.label || "",
-    });
   }
   console.log(`📤 Meta "${meta.titulo}" enviada a ${client.nombres.join(" & ")}`);
 }

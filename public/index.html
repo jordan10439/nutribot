@@ -506,7 +506,7 @@ function renderEntries(elId,entries,showClient=false){
         const items = byClient[clientName][metaKey].sort((a,b)=>new Date(b.fecha)-new Date(a.fecha));
         const rows = items.map(e=>{
           const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-            const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
+            const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo === 'tip_enviado' ? '📤 Tip enviado' : e.tipo === 'plantilla_previa_enviada' ? '📨 Plantilla previa enviada' : e.tipo === 'plantilla_previa_error' ? '⚠️ Error plantilla previa' : e.tipo === 'meta_error' ? '⚠️ Error meta' : e.tipo === 'tip_error' ? '⚠️ Error tip' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
             let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
             // Resolve estrellas label: prefer explicit field, fall back to comentario pattern 'estrellas_<i>'
             let estrellasLabel = null; let estrellasCount = null;
@@ -561,7 +561,7 @@ function renderEntries(elId,entries,showClient=false){
   const html = groups.map(g=>{
       const rows = g.items.map(e=>{
       const f=new Date(e.fecha).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
-      const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
+      const tipoLabel = e.tipo === 'completada' ? '✅ Completada' : e.tipo === 'no_completada' ? '❌ No completó' : e.tipo === 'meta_enviada' ? '📤 Meta enviada' : e.tipo === 'tip_enviado' ? '📤 Tip enviado' : e.tipo === 'plantilla_previa_enviada' ? '📨 Plantilla previa enviada' : e.tipo === 'plantilla_previa_error' ? '⚠️ Error plantilla previa' : e.tipo === 'meta_error' ? '⚠️ Error meta' : e.tipo === 'tip_error' ? '⚠️ Error tip' : e.tipo==='bienvenida_enviada'?'👋 Bienvenida':'💬';
       let d = `<span class="tag tb">${e.metaEmoji||"🎯"} ${e.meta||""}</span>`;
       if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
       if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
@@ -933,8 +933,10 @@ function confirmSendTip(){
   if(sendBtn)sendBtn.disabled=true;
   api('POST','/tips/send',{tipId:tip.id,clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString(),utilityTemplateId:I('tip_send_utility_template').value}).then(async res=>{
     if(res.error){showToast(`⚠️ ${res.error}`);return}
+    const failed=(res.sends||[]).find(s=>s.status==='error');
     closeM('tipSendModal');
     await loadTips();
+    if(failed){showToast(`⚠️ ${failed.error}`);return}
     showToast(when>new Date(Date.now()+60000)?'📅 Tip programado':'📤 Tip enviado por WhatsApp');
   }).finally(()=>{
     tipSending=false;
