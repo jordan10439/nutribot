@@ -269,8 +269,9 @@ async function sendTipRecord(send) {
     console.log(`Número destino +${send.phone}`);
     const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
     if (utilityTemplate) {
-      await enviarPlantillaUtilidad(send.phone, utilityTemplate, send.patientName);
+      const templateResult = await enviarPlantillaUtilidad(send.phone, utilityTemplate, send.patientName);
       utilityTemplateSent = true;
+      tips.updateSend(send.id, { utilityTemplateMessageId: templateResult.messageId });
       history.registrar(send.clientId, send.phone, send.patientName, {
         tipo: "plantilla_previa_enviada",
         meta: utilityTemplate.label,
@@ -278,6 +279,8 @@ async function sendTipRecord(send) {
         direccion: "saliente",
         utilityTemplateId: send.utilityTemplateId,
         utilityTemplateLabel: utilityTemplate.label,
+        metaMessageId: templateResult.messageId,
+        deliveryStatus: "accepted",
       });
     }
     console.log("Continuando con envío de contenido principal");
@@ -286,11 +289,14 @@ async function sendTipRecord(send) {
     console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
     contentStarted = true;
     const result = await enviarTip(send.phone, tip, send.message, send.patientName);
-    console.log("Respuesta de WhatsApp", JSON.stringify(result));
+    console.log("Confirmación interna de envío de tip", JSON.stringify(result));
     tips.updateSend(send.id, {
       status: "enviado",
       sentAt: new Date().toISOString(),
-      error: result.warning ? `Texto enviado. Archivo no enviado: ${result.warning}` : "",
+      error: "",
+      metaMessageId: result.primaryMessageId,
+      textMessageId: result.textMessageId || "",
+      deliveryStatus: "accepted",
     });
     history.registrar(send.clientId, send.phone, send.patientName, {
       tipo: "tip_enviado",
@@ -301,8 +307,10 @@ async function sendTipRecord(send) {
       tipType: tip.type,
       utilityTemplateId: send.utilityTemplateId || "",
       utilityTemplateLabel: utilityTemplate?.label || "",
+      metaMessageId: result.primaryMessageId,
+      deliveryStatus: "accepted",
     });
-    console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone }));
+    console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, metaMessageId: result.primaryMessageId }));
   } catch (e) {
     const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
     const templateFailed = utilityTemplate && !utilityTemplateSent && !contentStarted;
@@ -440,6 +448,27 @@ app.post("/webhook", async (req, res) => {
     if (body.object !== "whatsapp_business_account") return;
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
+        for (const status of change.value?.statuses || []) {
+          const errorText = (status.errors || []).map(error => error.title || error.message || JSON.stringify(error)).join(" | ");
+          console.log("Estado de entrega Meta", JSON.stringify({ id: status.id, status: status.status, recipientId: status.recipient_id, errors: status.errors || [] }));
+          if (status.status === "failed") {
+            const knownTip = tips.findByMetaMessageId(status.id);
+            const isTipTemplate = knownTip?.utilityTemplateMessageId === status.id;
+            const detail = `${isTipTemplate ? "Meta reportó fallo de entrega de la plantilla previa" : "Meta reportó fallo de entrega del contenido principal"}: ${errorText || "sin detalle"}`;
+            tips.updateByMetaMessageId(status.id, { status: "error", deliveryStatus: "failed", error: detail });
+            const updatedHistory = history.updateByMetaMessageId(status.id, { deliveryStatus: "failed", comentario: detail });
+            if (updatedHistory) {
+              const failedType = updatedHistory.tipo === "plantilla_previa_enviada"
+                ? "plantilla_previa_error"
+                : updatedHistory.tipo === "meta_enviada" ? "meta_error" : "tip_error";
+              history.updateByMetaMessageId(status.id, { tipo: failedType });
+            }
+            console.error(isTipTemplate ? "Error al enviar plantilla previa" : "Error al enviar contenido principal", JSON.stringify({ messageId: status.id, error: detail }));
+          } else {
+            tips.updateByMetaMessageId(status.id, { deliveryStatus: status.status });
+            history.updateByMetaMessageId(status.id, { deliveryStatus: status.status });
+          }
+        }
         const messages2 = change.value?.messages;
         if (!messages2?.length) continue;
         for (const m of messages2) {

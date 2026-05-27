@@ -795,7 +795,7 @@ function renderTipHistory(){
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
     <div>${new Date(r.scheduledAt||r.when||r.createdAt).toLocaleString('es-CL')}</div>
     <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span><br><span style="color:#7a9a7a">${r.utilityTemplateId?`Previo: ${escapeHtml(utilityTemplateLabel(r.utilityTemplateId))}`:'Sin plantilla previa'}</span></div>
-    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
+    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Meta: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID: ${escapeHtml(r.metaMessageId)}</span>`:''}${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
   </div>`).join('');
 }
 function toggleTipType(){

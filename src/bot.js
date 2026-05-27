@@ -72,6 +72,7 @@ async function enviarMeta(clientId, meta, options = {}) {
     const nombre = nombreDe(client, phone);
     let utilityTemplateSent = false;
     let contentStarted = false;
+    let mainMessageId = "";
 
     const texto =
       `🎯 *¡Nueva Meta!*\n\n` +
@@ -87,7 +88,7 @@ async function enviarMeta(clientId, meta, options = {}) {
     ];
     try {
       if (utilityTemplate) {
-        await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
+        const templateResult = await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
         utilityTemplateSent = true;
         history.registrar(clientId, phone, nombre, {
           tipo: "plantilla_previa_enviada",
@@ -96,13 +97,16 @@ async function enviarMeta(clientId, meta, options = {}) {
           direccion: "saliente",
           utilityTemplateId,
           utilityTemplateLabel: utilityTemplate.label,
+          metaMessageId: templateResult.messageId,
+          deliveryStatus: "accepted",
         });
       }
       console.log("Continuando con envío de contenido principal");
       console.log("Enviando meta", JSON.stringify({ clientId, phone, goalId: meta.id, titulo: meta.titulo }));
       contentStarted = true;
-      await enviar(phone, texto, nombre, { throwOnError: true });
-      await enviarBotones(phone, msg.get("pedir_listo"), botones, { throwOnError: true });
+      const textResult = await enviar(phone, texto, nombre, { throwOnError: true, context: "meta" });
+      mainMessageId = textResult.messageId;
+      const buttonResult = await enviarBotones(phone, msg.get("pedir_listo"), botones, { throwOnError: true, context: "botones de meta" });
       state.set(phone, { flow: state.FLOW.META_ENVIADA, clientId, meta });
       history.registrar(clientId, phone, nombre, {
         tipo: "meta_enviada",
@@ -111,8 +115,11 @@ async function enviarMeta(clientId, meta, options = {}) {
         direccion: "saliente",
         utilityTemplateId,
         utilityTemplateLabel: utilityTemplate?.label || "",
+        metaMessageId: textResult.messageId,
+        interactionMessageId: buttonResult.messageId,
+        deliveryStatus: "accepted",
       });
-      console.log("Meta enviada correctamente", JSON.stringify({ clientId, phone, goalId: meta.id }));
+      console.log("Meta enviada correctamente", JSON.stringify({ clientId, phone, goalId: meta.id, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId }));
     } catch (e) {
       const templateFailed = utilityTemplate && !utilityTemplateSent && !contentStarted;
       const detail = templateFailed
@@ -129,6 +136,7 @@ async function enviarMeta(clientId, meta, options = {}) {
         direccion: "saliente",
         utilityTemplateId,
         utilityTemplateLabel: utilityTemplate?.label || "",
+        metaMessageId: mainMessageId,
       });
       throw new Error(detail);
     }

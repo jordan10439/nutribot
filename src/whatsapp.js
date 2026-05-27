@@ -16,7 +16,12 @@ function formatWhatsAppError(data, status, context) {
   return parts.join(" | ");
 }
 
-async function postWhatsApp(payload) {
+function getMessageId(data) {
+  return data?.messages?.[0]?.id || "";
+}
+
+async function postWhatsApp(payload, context = payload.type || "mensaje") {
+  console.log(`Payload exacto enviado a Meta para ${context}`, JSON.stringify({ messaging_product: "whatsapp", ...payload }));
   const res = await fetch(
     `https://graph.facebook.com/v19.0/${process.env.META_PHONE_ID}/messages`,
     {
@@ -29,36 +34,31 @@ async function postWhatsApp(payload) {
     }
   );
   const data = await res.json().catch(() => ({}));
-  console.log("Respuesta de WhatsApp", JSON.stringify(data));
-  if (!res.ok || data.error) throw new Error(formatWhatsAppError(data, res.status, payload.type || "mensaje"));
-  return data;
+  console.log(`Respuesta real de Meta para ${context}`, JSON.stringify(data));
+  if (!res.ok || data.error) throw new Error(formatWhatsAppError(data, res.status, context));
+  const messageId = getMessageId(data);
+  if (!messageId) {
+    console.error("No se recibió message ID de Meta, no marcar como enviado", JSON.stringify({ context, data }));
+    throw new Error(`No se recibió message ID de Meta para ${context}, no marcar como enviado`);
+  }
+  console.log(`Message ID de Meta para ${context}`, messageId);
+  return { data, messageId };
 }
 
 async function enviar(phone, mensaje, nombre = "", options = {}) {
   try {
-    const res = await fetch(
-      `https://graph.facebook.com/v19.0/${process.env.META_PHONE_ID}/messages`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.META_TOKEN}`,
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: phone,
-          type: "text",
-          text: { body: mensaje },
-        }),
-      }
-    );
-    const data = await res.json().catch(() => ({}));
-    console.log("Respuesta de WhatsApp", JSON.stringify(data));
-    if (!res.ok || data.error) throw new Error(formatWhatsAppError(data, res.status, "texto"));
-    // Guardar en conversaciones
+    const text = String(mensaje || "").trim();
+    if (!text) throw new Error("Contenido principal vacío, no se envía a Meta");
+    console.log("Contenido principal a enviar:", text);
+    console.log("Número destino contenido principal:", phone);
+    const result = await postWhatsApp({
+      to: phone,
+      type: "text",
+      text: { body: text },
+    }, options.context || "contenido principal");
     conversations.registrar(phone, "enviado", mensaje, { nombre });
     console.log(`✅ Enviado a +${phone}`);
-    return { ok: true, data };
+    return { ok: true, data: result.data, messageId: result.messageId };
   } catch (e) {
     console.error(`❌ Error +${phone}:`, e.message);
     if (options.throwOnError) throw e;
@@ -95,33 +95,36 @@ async function enviarTip(phone, tip, message, nombre = "") {
     console.log("Enviando tip tipo Frase");
     console.log(`Número destino +${phone}`);
     console.log("Función de WhatsApp utilizada", "enviar");
-    const result = await enviar(phone, text, nombre);
+    const result = await enviar(phone, text, nombre, { throwOnError: true, context: "tip" });
     if (!result.ok) throw new Error(result.error);
-    return { ok: true, textSent: true, mediaSent: false };
+    return { ok: true, textSent: true, mediaSent: false, primaryMessageId: result.messageId };
   }
 
   let textSent = false;
+  let textMessageId = "";
   if (text) {
-    const textResult = await enviar(phone, text, nombre);
+    const textResult = await enviar(phone, text, nombre, { throwOnError: true, context: "texto del tip" });
     if (!textResult.ok) throw new Error(textResult.error);
     textSent = true;
+    textMessageId = textResult.messageId;
   }
 
   try {
     const mediaId = await uploadMedia(tip.data, tip.filename);
+    let mediaResult;
     if (tip.type === "image") {
-      await postWhatsApp({ to: phone, type: "image", image: { id: mediaId } });
+      mediaResult = await postWhatsApp({ to: phone, type: "image", image: { id: mediaId } }, "imagen del tip");
     } else if (tip.type === "pdf") {
-      await postWhatsApp({ to: phone, type: "document", document: { id: mediaId, filename: tip.filename || `${tip.title}.pdf` } });
+      mediaResult = await postWhatsApp({ to: phone, type: "document", document: { id: mediaId, filename: tip.filename || `${tip.title}.pdf` } }, "PDF del tip");
     } else {
       throw new Error(`Tipo de tip no soportado: ${tip.type}`);
     }
+    conversations.registrar(phone, "enviado", `[Tip] ${tip.title}`, { nombre });
+    return { ok: true, textSent, mediaSent: true, primaryMessageId: mediaResult.messageId, textMessageId };
   } catch (e) {
     if (textSent) throw new Error(`Se envió el texto del tip, pero falló el archivo: ${e.message}`);
     throw e;
   }
-  conversations.registrar(phone, "enviado", `[Tip] ${tip.title}`, { nombre });
-  return { ok: true, textSent, mediaSent: true };
 }
 
 async function enviarBotones(phone, headerText, buttons = [], options = {}) {
@@ -133,27 +136,10 @@ async function enviarBotones(phone, headerText, buttons = [], options = {}) {
       action: { buttons: buttons.map(b => ({ type: "reply", reply: { id: b.id, title: b.title } })) }
     };
 
-    const res = await fetch(
-      `https://graph.facebook.com/v19.0/${process.env.META_PHONE_ID}/messages`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.META_TOKEN}`,
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: phone,
-          type: "interactive",
-          interactive,
-        }),
-      }
-    );
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
+    const result = await postWhatsApp({ to: phone, type: "interactive", interactive }, options.context || "botones de meta");
     conversations.registrar(phone, "enviado", `[Botones] ${headerText}`);
     console.log(`✅ Botones enviados a +${phone}`);
-    return { ok: true, data };
+    return { ok: true, data: result.data, messageId: result.messageId };
   } catch (e) {
     console.error(`❌ Error botones +${phone}:`, e.message);
     if (options.throwOnError) throw e;
@@ -198,16 +184,16 @@ async function enviarPlantilla(phone, nombrePlantilla, variables = []) {
 }
 
 async function enviarPlantillaOficial(phone, templateName, languageCode, context, nombre = "") {
-  const data = await postWhatsApp({
+  const result = await postWhatsApp({
     to: phone,
     type: "template",
     template: {
       name: templateName,
       language: { code: languageCode },
     },
-  });
+  }, context);
   conversations.registrar(phone, "enviado", `[Plantilla: ${context}]`, { nombre });
-  return { ok: true, data };
+  return { ok: true, data: result.data, messageId: result.messageId };
 }
 
 async function enviarPlantillaUtilidad(phone, template, nombre = "") {

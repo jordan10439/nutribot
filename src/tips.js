@@ -227,6 +227,27 @@ function getSend(id) {
   return load().sends.find(s => s.id === id) || null;
 }
 
+function updateByMetaMessageId(messageId, patch) {
+  const data = load();
+  const send = data.sends.find(s => (
+    s.metaMessageId === messageId ||
+    s.textMessageId === messageId ||
+    s.utilityTemplateMessageId === messageId
+  ));
+  if (!send) return null;
+  Object.assign(send, patch, { updatedAt: new Date().toISOString() });
+  save(data);
+  return send;
+}
+
+function findByMetaMessageId(messageId) {
+  return load().sends.find(s => (
+    s.metaMessageId === messageId ||
+    s.textMessageId === messageId ||
+    s.utilityTemplateMessageId === messageId
+  )) || null;
+}
+
 module.exports = {
   DEFAULT_FOLDER,
   cancelScheduledSend,
@@ -234,6 +255,7 @@ module.exports = {
   createSends,
   deleteTip,
   dueSends,
+  findByMetaMessageId,
   getSend,
   getTip,
   listFolders,
@@ -241,6 +263,7 @@ module.exports = {
   listTips,
   pendingSends,
   updateSend,
+  updateByMetaMessageId,
   updateScheduledSend,
   upsertTip,
 };

@@ -51,4 +51,19 @@ function getResumen(clientId) {
   return { completadas, noCompletadas, total: h.length, promEstrellas: promEstrellas.toFixed(1) };
 }
 
-module.exports = { registrar, getHistorial, getResumen };
+function updateByMetaMessageId(messageId, patch) {
+  const db = load();
+  let updated = null;
+  for (const entries of Object.values(db)) {
+    const entry = entries.find(item => item.metaMessageId === messageId || item.interactionMessageId === messageId);
+    if (entry) {
+      Object.assign(entry, patch);
+      updated = entry;
+      break;
+    }
+  }
+  if (updated) save(db);
+  return updated;
+}
+
+module.exports = { registrar, getHistorial, getResumen, updateByMetaMessageId };
