@@ -173,6 +173,42 @@ function updateSend(id, patch) {
   return send;
 }
 
+function updateScheduledSend(id, payload) {
+  const data = load();
+  const send = data.sends.find(s => s.id === id);
+  if (!send) throw new Error("Envío de tip no encontrado");
+  if (!["programado", "pendiente"].includes(send.status)) {
+    throw new Error("Solo puedes editar tips pendientes o programados");
+  }
+  const scheduledAt = normalizeScheduledAt(payload.scheduledAt || send.scheduledAt);
+  Object.assign(send, {
+    message: typeof payload.message === "string" ? payload.message : send.message,
+    scheduledAt,
+    status: new Date(scheduledAt).getTime() > Date.now() ? "programado" : "pendiente",
+    error: "",
+    updatedAt: new Date().toISOString(),
+  });
+  save(data);
+  return send;
+}
+
+function cancelScheduledSend(id) {
+  const data = load();
+  const send = data.sends.find(s => s.id === id);
+  if (!send) throw new Error("Envío de tip no encontrado");
+  if (!["programado", "pendiente"].includes(send.status)) {
+    throw new Error("Solo puedes cancelar tips pendientes o programados");
+  }
+  Object.assign(send, {
+    status: "cancelado",
+    error: "",
+    cancelledAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  save(data);
+  return send;
+}
+
 function dueSends() {
   const now = Date.now();
   return pendingSends().filter(s => {
@@ -187,6 +223,7 @@ function getTip(id) {
 
 module.exports = {
   DEFAULT_FOLDER,
+  cancelScheduledSend,
   createFolder,
   createSends,
   deleteTip,
@@ -197,5 +234,6 @@ module.exports = {
   listTips,
   pendingSends,
   updateSend,
+  updateScheduledSend,
   upsertTip,
 };

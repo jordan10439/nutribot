@@ -1,0 +1,43 @@
+{
+  "tips": [
+    {
+      "id": "mpod4b2a2cr0rw",
+      "requestId": "mpod3yo5vhas54",
+      "type": "phrase",
+      "title": "hola",
+      "desc": "hola",
+      "phrase": "hola",
+      "filename": "",
+      "data": "",
+      "folderId": "general",
+      "fingerprint": "86356de6415c71a356152a95d80c0d8395e250e2",
+      "createdAt": "2026-05-27T17:53:12.705Z",
+      "updatedAt": "2026-05-27T17:53:12.705Z"
+    }
+  ],
+  "folders": [
+    {
+      "id": "general",
+      "name": "Sin carpeta",
+      "type": "all"
+    }
+  ],
+  "sends": [
+    {
+      "id": "mpod4zbwvmm9ej",
+      "tipId": "mpod4b2a2cr0rw",
+      "tipTitle": "hola",
+      "tipType": "phrase",
+      "folderId": "general",
+      "clientId": "carla_1779904406115",
+      "phone": "56962849942",
+      "patientName": "carla",
+      "message": "hola\n\nhola",
+      "scheduledAt": "2026-05-28T17:53:00.000Z",
+      "status": "programado",
+      "error": "",
+      "createdAt": "2026-05-27T17:53:44.156Z",
+      "sentAt": null
+    }
+  ]
+}

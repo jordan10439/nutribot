@@ -336,6 +336,27 @@ app.post("/api/tips/:id/send", auth, async (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
+app.put("/api/tip-sends/:id", auth, async (req, res) => {
+  try {
+    const send = tips.updateScheduledSend(req.params.id, req.body || {});
+    console.log("Tip programado actualizado", JSON.stringify({ id: send.id, scheduledAt: send.scheduledAt }));
+    await revisarTipsProgramados();
+    res.json({ ok: true, send });
+  } catch (e) {
+    console.error("Error al actualizar tip programado", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+app.post("/api/tip-sends/:id/cancel", auth, (req, res) => {
+  try {
+    const send = tips.cancelScheduledSend(req.params.id);
+    console.log("Tip programado cancelado", JSON.stringify({ id: send.id }));
+    res.json({ ok: true, send });
+  } catch (e) {
+    console.error("Error al cancelar tip programado", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
 
 // ── Webhook Meta ───────────────────────────────────────────────────────────────
 app.get("/webhook", (req, res) => {

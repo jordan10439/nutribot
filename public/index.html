@@ -323,6 +323,19 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   </div>
 </div>
 
+<!-- Modal Editar Envio Programado -->
+<div class="mo" id="tipScheduledModal">
+  <div class="modal">
+    <h2>Editar envio programado</h2>
+    <input type="hidden" id="tip_scheduled_id" />
+    <div class="fg"><label>Paciente</label><input id="tip_scheduled_patient" disabled /></div>
+    <div class="fg"><label>Mensaje editable</label><textarea id="tip_scheduled_message" rows="5"></textarea></div>
+    <div class="fg"><label>Fecha</label><input type="date" id="tip_scheduled_date" /></div>
+    <div class="fg"><label>Hora</label><input type="time" id="tip_scheduled_time" /></div>
+    <div class="ma"><button class="bc" onclick="closeM('tipScheduledModal')">Cerrar</button><button class="bsv" onclick="saveScheduledTip()">Guardar cambios</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -741,7 +754,7 @@ function renderTipHistory(){
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
     <div>${new Date(r.scheduledAt||r.when||r.createdAt).toLocaleString('es-CL')}</div>
     <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span></div>
-    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}</div>
+    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
   </div>`).join('');
 }
 function toggleTipType(){
@@ -883,6 +896,45 @@ function confirmSendTip(){
     tipSending=false;
     if(sendBtn)sendBtn.disabled=false;
   });
+}
+function localScheduledValues(iso){
+  const d=new Date(iso);
+  if(Number.isNaN(d.getTime()))return {date:'',time:''};
+  const pad=n=>String(n).padStart(2,'0');
+  return {
+    date:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,
+    time:`${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+function openScheduledTip(sendId){
+  const send=(window._nutri_tip_history||[]).find(r=>r.id===sendId);
+  if(!send||!['programado','pendiente'].includes(send.status)){showToast('Este envio ya no se puede editar');return}
+  const values=localScheduledValues(send.scheduledAt);
+  I('tip_scheduled_id').value=send.id;
+  I('tip_scheduled_patient').value=`${send.patientName||'Paciente'} - +${send.phone||''}`;
+  I('tip_scheduled_message').value=send.message||'';
+  I('tip_scheduled_date').value=values.date;
+  I('tip_scheduled_time').value=values.time;
+  I('tipScheduledModal').classList.add('open');
+}
+async function saveScheduledTip(){
+  const id=I('tip_scheduled_id').value;
+  const date=I('tip_scheduled_date').value;
+  const time=I('tip_scheduled_time').value||'09:00';
+  const when=new Date(`${date}T${time}:00`);
+  if(!id||!date||Number.isNaN(when.getTime())){showToast('Selecciona una fecha y hora validas');return}
+  const res=await api('PUT',`/tip-sends/${id}`,{message:I('tip_scheduled_message').value.trim(),scheduledAt:when.toISOString()});
+  if(res.error){showToast(res.error);return}
+  closeM('tipScheduledModal');
+  await loadTips();
+  showToast('Tip programado actualizado');
+}
+async function cancelScheduledTip(id){
+  if(!confirm('Cancelar este envio programado?'))return;
+  const res=await api('POST',`/tip-sends/${id}/cancel`);
+  if(res.error){showToast(res.error);return}
+  await loadTips();
+  showToast('Tip programado cancelado');
 }
 window.addEventListener('load',()=>{if(document.querySelectorAll('.tab').length)loadTips()});
 
@@ -1043,6 +1095,13 @@ function closeM(id){
     const smsg = I('tip_send_message'); if(smsg) smsg.value = '';
     const sphr = I('tip_send_phrase'); if(sphr) sphr.value = '';
     const sprev = I('tip_preview'); if(sprev) sprev.textContent = '';
+  } else if(id==='tipScheduledModal'){
+    I(id).classList.remove('open');
+    I('tip_scheduled_id').value = '';
+    I('tip_scheduled_patient').value = '';
+    I('tip_scheduled_message').value = '';
+    I('tip_scheduled_date').value = '';
+    I('tip_scheduled_time').value = '';
   } else { I(id).classList.remove("open") }
 }
 function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}
