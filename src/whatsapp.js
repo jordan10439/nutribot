@@ -1,5 +1,6 @@
 // src/whatsapp.js — Meta WhatsApp Cloud API
 const conversations = require("./conversations");
+const utilityTemplates = require("./utilityTemplates");
 
 function formatWhatsAppError(data, status, context) {
   const err = data?.error || {};
@@ -191,4 +192,20 @@ async function enviarPlantilla(phone, nombrePlantilla, variables = []) {
   }
 }
 
-module.exports = { enviar, enviarPlantilla, enviarBotones, enviarTip };
+async function enviarPlantillaUtilidad(phone, template, nombre = "") {
+  const metaName = utilityTemplates.configuredName(template);
+  const languageCode = utilityTemplates.configuredLanguage();
+  console.log("Enviando plantilla previa", JSON.stringify({ phone, templateId: template.id, metaName }));
+  const data = await postWhatsApp({
+    to: phone,
+    type: "template",
+    template: {
+      name: metaName,
+      language: { code: languageCode },
+    },
+  });
+  conversations.registrar(phone, "enviado", `[Plantilla previa: ${template.label}]`, { nombre });
+  return { ok: true, data };
+}
+
+module.exports = { enviar, enviarPlantilla, enviarPlantillaUtilidad, enviarBotones, enviarTip };

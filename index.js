@@ -7,7 +7,8 @@ const db         = require("./src/db");
 const history    = require("./src/history");
 const messages   = require("./src/messages");
 const tips       = require("./src/tips");
-const { enviarTip } = require("./src/whatsapp");
+const utilityTemplates = require("./src/utilityTemplates");
+const { enviarTip, enviarPlantillaUtilidad } = require("./src/whatsapp");
 const { procesarMensaje, enviarMeta, enviarBienvenida } = require("./src/bot");
 const { recargarTodos } = require("./src/scheduler");
 
@@ -61,7 +62,7 @@ app.post("/api/clients/:id/goals", auth, (req, res) => {
   const client = db.getById(req.params.id);
   if (!client) return res.status(404).json({ error: "No encontrado" });
   // Accept additional per-goal settings: requiereFoto, repetirSiNo, repetirFreq
-  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq } = req.body;
+  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq, utilityTemplateId } = req.body;
   const goal = {
     id: Date.now().toString(),
     titulo,
@@ -71,7 +72,8 @@ app.post("/api/clients/:id/goals", auth, (req, res) => {
     dias: dias || [1,2,3,4,5],
     requiereFoto: !!requiereFoto,
     repetirSiNo: !!repetirSiNo,
-    repetirFreq: repetirFreq || { unit: "hours", value: 24 }
+    repetirFreq: repetirFreq || { unit: "hours", value: 24 },
+    utilityTemplateId: utilityTemplates.validateId(utilityTemplateId),
   };
   client.goals = client.goals || [];
   client.goals.push(goal);
@@ -86,7 +88,7 @@ app.put("/api/clients/:id/goals/:goalId", auth, (req, res) => {
   if (!client) return res.status(404).json({ error: "No encontrado" });
   const goal = client.goals?.find(g => g.id === req.params.goalId);
   if (!goal) return res.status(404).json({ error: "Meta no encontrada" });
-  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq } = req.body;
+  const { titulo, descripcion, emoji, hora, dias, requiereFoto, repetirSiNo, repetirFreq, utilityTemplateId } = req.body;
   if (titulo) goal.titulo = titulo;
   if (descripcion) goal.descripcion = descripcion;
   if (emoji) goal.emoji = emoji;
@@ -95,6 +97,7 @@ app.put("/api/clients/:id/goals/:goalId", auth, (req, res) => {
   if (typeof requiereFoto !== 'undefined') goal.requiereFoto = !!requiereFoto;
   if (typeof repetirSiNo !== 'undefined') goal.repetirSiNo = !!repetirSiNo;
   if (repetirFreq) goal.repetirFreq = repetirFreq;
+  if (typeof utilityTemplateId !== "undefined") goal.utilityTemplateId = utilityTemplates.validateId(utilityTemplateId);
   db.upsert(client);
   recargarTodos();
   res.json({ ok: true, goal });
@@ -110,13 +113,21 @@ app.delete("/api/clients/:id/goals/:goalId", auth, (req, res) => {
 });
 
 app.post("/api/clients/:id/send", auth, async (req, res) => {
-  const client = db.getById(req.params.id);
-  if (!client) return res.status(404).json({ error: "No encontrado" });
-  const goalId = req.body.goalId;
-  const meta = goalId ? client.goals?.find(g => g.id === goalId) : client.goals?.[0];
-  if (!meta) return res.status(400).json({ error: "Sin metas" });
-  await enviarMeta(client.id, meta);
-  res.json({ ok: true });
+  try {
+    const client = db.getById(req.params.id);
+    if (!client) return res.status(404).json({ error: "No encontrado" });
+    const goalId = req.body.goalId;
+    const meta = goalId ? client.goals?.find(g => g.id === goalId) : client.goals?.[0];
+    if (!meta) return res.status(400).json({ error: "Sin metas" });
+    const options = Object.prototype.hasOwnProperty.call(req.body, "utilityTemplateId")
+      ? { utilityTemplateId: utilityTemplates.validateId(req.body.utilityTemplateId) }
+      : {};
+    await enviarMeta(client.id, meta, options);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Error al enviar meta", e.message);
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.post("/api/clients/:id/welcome", auth, async (req, res) => {
@@ -173,6 +184,7 @@ app.post("/api/messages/:key/reset", auth, (req, res) => {
   res.json({ ok: true });
 });
 app.get("/api/messages/labels", auth, (req, res) => res.json(messages.LABELS));
+app.get("/api/utility-templates", auth, (req, res) => res.json(utilityTemplates.list()));
 
 // ── Tips programables ─────────────────────────────────────────────────────────
 function nombreCliente(client, phone) {
@@ -219,7 +231,13 @@ function recipientsFromTipBody(body = {}) {
 async function createAndReviewTipSends(tip, body = {}) {
   const recipients = recipientsFromTipBody(body);
   if (!recipients.length) throw new Error("Selecciona al menos un paciente válido");
-  const sends = tips.createSends(tip, recipients, body.message || "", body.scheduledAt);
+  const sends = tips.createSends(
+    tip,
+    recipients,
+    body.message || "",
+    body.scheduledAt,
+    utilityTemplates.validateId(body.utilityTemplateId)
+  );
   await revisarTipsProgramados();
   return sends;
 }
@@ -242,6 +260,10 @@ async function sendTipRecord(send) {
     if (tip.type === "phrase") console.log("Enviando tip tipo Frase");
     console.log("Función de WhatsApp utilizada", "enviarTip -> enviar");
     console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
+    const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
+    if (utilityTemplate) {
+      await enviarPlantillaUtilidad(send.phone, utilityTemplate, send.patientName);
+    }
     const result = await enviarTip(send.phone, tip, send.message, send.patientName);
     console.log("Respuesta de WhatsApp", JSON.stringify(result));
     tips.updateSend(send.id, {
@@ -256,6 +278,8 @@ async function sendTipRecord(send) {
       comentario: send.message,
       direccion: "saliente",
       tipType: tip.type,
+      utilityTemplateId: send.utilityTemplateId || "",
+      utilityTemplateLabel: utilityTemplate?.label || "",
     });
     console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, warning: result.warning || "" }));
   } catch (e) {
@@ -338,7 +362,10 @@ app.post("/api/tips/:id/send", auth, async (req, res) => {
 });
 app.put("/api/tip-sends/:id", auth, async (req, res) => {
   try {
-    const send = tips.updateScheduledSend(req.params.id, req.body || {});
+    const send = tips.updateScheduledSend(req.params.id, {
+      ...(req.body || {}),
+      utilityTemplateId: utilityTemplates.validateId(req.body.utilityTemplateId),
+    });
     console.log("Tip programado actualizado", JSON.stringify({ id: send.id, scheduledAt: send.scheduledAt }));
     await revisarTipsProgramados();
     res.json({ ok: true, send });

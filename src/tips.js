@@ -139,7 +139,7 @@ function pendingSends() {
   return load().sends.filter(s => ["programado", "pendiente"].includes(s.status));
 }
 
-function createSends(tip, recipients, message, scheduledAt) {
+function createSends(tip, recipients, message, scheduledAt, utilityTemplateId = "") {
   const data = load();
   const when = normalizeScheduledAt(scheduledAt);
   const status = new Date(when).getTime() > Date.now() ? "programado" : "pendiente";
@@ -153,6 +153,7 @@ function createSends(tip, recipients, message, scheduledAt) {
     phone: r.phone,
     patientName: r.name || "Paciente",
     message,
+    utilityTemplateId,
     scheduledAt: when,
     status,
     error: "",
@@ -183,6 +184,7 @@ function updateScheduledSend(id, payload) {
   const scheduledAt = normalizeScheduledAt(payload.scheduledAt || send.scheduledAt);
   Object.assign(send, {
     message: typeof payload.message === "string" ? payload.message : send.message,
+    utilityTemplateId: typeof payload.utilityTemplateId === "string" ? payload.utilityTemplateId : (send.utilityTemplateId || ""),
     scheduledAt,
     status: new Date(scheduledAt).getTime() > Date.now() ? "programado" : "pendiente",
     error: "",

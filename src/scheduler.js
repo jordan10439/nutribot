@@ -15,7 +15,11 @@ function programarMeta(client, meta) {
 
   const job = cron.schedule(expr, async () => {
     console.log(`🔔 Meta: "${meta.titulo}" → ${client.nombres.join(" & ")}`);
-    await enviarMeta(client.id, meta);
+    try {
+      await enviarMeta(client.id, meta);
+    } catch (e) {
+      console.error(`Error real al enviar meta programada "${meta.titulo}":`, e.message);
+    }
   }, { timezone: client.timezone || "America/Santiago" });
 
   jobs.set(key, job);

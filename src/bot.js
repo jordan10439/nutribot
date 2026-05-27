@@ -1,11 +1,12 @@
 // src/bot.js
 const db      = require("./db");
 const state   = require("./state");
-const { enviar, enviarBotones } = require("./whatsapp");
+const { enviar, enviarBotones, enviarPlantillaUtilidad } = require("./whatsapp");
 const { respuestaIA } = require("./ai");
 const points  = require("./points");
 const history = require("./history");
 const msg     = require("./messages");
+const utilityTemplates = require("./utilityTemplates");
 
 const TEMPLATE_NAME = process.env.META_TEMPLATE_NAME || "m_ensaje_inicial_nutrigo";
 
@@ -69,9 +70,13 @@ async function enviarBienvenida(clientId, phone) {
 }
 
 // ── Enviar meta ───────────────────────────────────────────────────────────────
-async function enviarMeta(clientId, meta) {
+async function enviarMeta(clientId, meta, options = {}) {
   const client = db.getById(clientId);
   if (!client) return;
+  const utilityTemplateId = Object.prototype.hasOwnProperty.call(options, "utilityTemplateId")
+    ? utilityTemplates.validateId(options.utilityTemplateId)
+    : utilityTemplates.validateId(meta.utilityTemplateId);
+  const utilityTemplate = utilityTemplates.get(utilityTemplateId);
 
   for (const phone of client.phones) {
     const nombre = nombreDe(client, phone);
@@ -89,6 +94,9 @@ async function enviarMeta(clientId, meta) {
       { id: `meta_si`, title: "Sí" },
       { id: `meta_no`, title: "No" }
     ];
+    if (utilityTemplate) {
+      await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
+    }
     await enviar(phone, texto);
     await enviarBotones(phone, msg.get("pedir_listo"), botones);
 
@@ -97,6 +105,8 @@ async function enviarMeta(clientId, meta) {
       meta: meta.titulo,
       metaEmoji: meta.emoji,
       direccion: "saliente",
+      utilityTemplateId,
+      utilityTemplateLabel: utilityTemplate?.label || "",
     });
   }
   console.log(`📤 Meta "${meta.titulo}" enviada a ${client.nombres.join(" & ")}`);

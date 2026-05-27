@@ -278,7 +278,19 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Frecuencia de repetición</label>
       <div style="display:flex;gap:8px"><input id="m_repetir_val" type="number" min="1" value="24" style="width:100px" /><select id="m_repetir_unit"><option value="hours">Horas</option><option value="days">Días</option></select></div>
     </div>
+    <div class="fg"><label>Plantilla previa para envíos programados</label><select id="m_utility_template" onchange="updateUtilityPreview('m_utility_template','m_utility_preview')"></select><div class="tip-note" id="m_utility_preview"></div></div>
     <div class="ma"><button class="bc" onclick="closeM('mm')">Cancelar</button><button class="bc" onclick="saveMeta(false)">Guardar</button><button class="bsv" onclick="saveMeta(true)">Guardar y enviar</button></div>
+  </div>
+</div>
+
+<!-- Modal Enviar Meta -->
+<div class="mo" id="metaSendModal">
+  <div class="modal">
+    <h2>Enviar meta</h2>
+    <input type="hidden" id="meta_send_client_id" />
+    <input type="hidden" id="meta_send_goal_id" />
+    <div class="fg"><label>Plantilla previa opcional</label><select id="meta_send_utility_template" onchange="updateUtilityPreview('meta_send_utility_template','meta_send_utility_preview')"></select><div class="tip-note" id="meta_send_utility_preview"></div></div>
+    <div class="ma"><button class="bc" onclick="closeM('metaSendModal')">Cancelar</button><button class="bsv" onclick="confirmSendMeta()">Enviar</button></div>
   </div>
 </div>
 
@@ -317,6 +329,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg" id="tip_send_phrase_box"><label>Frase editable</label><textarea id="tip_send_phrase" rows="4" oninput="previewTipSend()"></textarea></div>
     <div class="fg"><label>Fecha</label><input type="date" id="tip_send_date" onchange="previewTipSend()" /></div>
     <div class="fg"><label>Hora</label><input type="time" id="tip_send_time" value="09:00" onchange="previewTipSend()"/></div>
+    <div class="fg"><label>Plantilla previa opcional</label><select id="tip_send_utility_template" onchange="previewTipSend()"></select><div class="tip-note" id="tip_send_utility_preview"></div></div>
     <div class="fg"><label>Previsualización</label><div class="tip-preview" id="tip_preview"></div></div>
     <div class="tip-note">Los envíos se preparan como mensajes individuales por paciente. Para imágenes y PDF se conserva el archivo en la biblioteca y el mensaje editable como acompañamiento.</div>
     <div class="ma"><button class="bc" onclick="closeM('tipSendModal')">Cancelar</button><button class="bc" onclick="previewTipSend()">Previsualizar</button><button class="bsv" onclick="confirmSendTip()">Enviar / programar</button></div>
@@ -332,6 +345,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Mensaje editable</label><textarea id="tip_scheduled_message" rows="5"></textarea></div>
     <div class="fg"><label>Fecha</label><input type="date" id="tip_scheduled_date" /></div>
     <div class="fg"><label>Hora</label><input type="time" id="tip_scheduled_time" /></div>
+    <div class="fg"><label>Plantilla previa opcional</label><select id="tip_scheduled_utility_template" onchange="updateUtilityPreview('tip_scheduled_utility_template','tip_scheduled_utility_preview')"></select><div class="tip-note" id="tip_scheduled_utility_preview"></div></div>
     <div class="ma"><button class="bc" onclick="closeM('tipScheduledModal')">Cerrar</button><button class="bsv" onclick="saveScheduledTip()">Guardar cambios</button></div>
   </div>
 </div>
@@ -339,9 +353,29 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={};
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[];
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
+
+async function loadUtilityTemplates(){
+  if(utilityTemplates.length)return;
+  const templates=await api("GET","/utility-templates");
+  utilityTemplates=Array.isArray(templates)?templates:[];
+}
+function utilityTemplateLabel(id){
+  return utilityTemplates.find(t=>t.id===id)?.label||"Sin plantilla previa";
+}
+function fillUtilitySelect(id,selected=""){
+  const el=I(id); if(!el)return;
+  el.innerHTML=`<option value="">No enviar plantilla previa</option>`+utilityTemplates.map(t=>`<option value="${t.id}">${escapeHtml(t.label)}</option>`).join("");
+  el.value=selected||"";
+  updateUtilityPreview(id,id.replace("_template","_preview"));
+}
+function updateUtilityPreview(selectId,previewId){
+  const el=I(previewId); if(!el)return;
+  const template=utilityTemplates.find(t=>t.id===I(selectId)?.value);
+  el.textContent=template?template.body:"Se enviará solamente el contenido principal.";
+}
 
 async function login(){
   const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password:I("pw").value})});
@@ -364,6 +398,7 @@ function showTab(t){
 }
 
 async function loadAll(){
+  await loadUtilityTemplates();
   clients=await api("GET","/clients");
   renderClients();
   I("s1").textContent=clients.length;
@@ -407,7 +442,7 @@ function renderClients(){
     const metas=(c.goals||[]).map(m=>`
       <div class="mi2">
         <span class="me2">${m.emoji||"🎯"}</span>
-        <div class="mif"><strong>${m.titulo}</strong><span>${m.hora} · ${diasL(m.dias)}</span></div>
+        <div class="mif"><strong>${m.titulo}</strong><span>${m.hora} · ${diasL(m.dias)} · ${m.utilityTemplateId?utilityTemplateLabel(m.utilityTemplateId):'Sin plantilla previa'}</span></div>
         <button class="bi" onclick="openMM('${c.id}','${m.id}')" title="Editar meta">✏️</button>
         <button class="bi" onclick="sendMeta('${c.id}','${m.id}')" title="Enviar ahora">📤</button>
         <button class="md2" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>
@@ -491,6 +526,7 @@ function renderEntries(elId,entries,showClient=false){
             }
             if(dificultadLabel) d+=` <span class="tag tg">${dificultadLabel}</span>`;
             if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+            if(['meta_enviada','tip_enviado'].includes(e.tipo)) d+=` <span class="tag">${e.utilityTemplateLabel?`Plantilla previa: ${escapeHtml(e.utilityTemplateLabel)}`:'Sin plantilla previa'}</span>`;
             const comentario = (e.comentario && !/^estrellas_\d+$/.test(e.comentario) && !/^dificultad_\d+$/.test(e.comentario)) ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
             const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
             // Add automatic motivational message for completed entries based on response
@@ -530,6 +566,7 @@ function renderEntries(elId,entries,showClient=false){
       if(e.estrellas) d+=` <span style="color:#f0a030">${"⭐".repeat(e.estrellas)}</span>`;
       if(e.dificultad) d+=` <span class="tag tg">${e.dificultad}</span>`;
       if(e.puntos) d+=` <span class="tag tg">+${e.puntos} pts</span>`;
+      if(['meta_enviada','tip_enviado'].includes(e.tipo)) d+=` <span class="tag">${e.utilityTemplateLabel?`Plantilla previa: ${escapeHtml(e.utilityTemplateLabel)}`:'Sin plantilla previa'}</span>`;
       const comentario = e.comentario ? `<div class="ecom">💬 "${e.comentario}"</div>` : '';
       const media = e.media && e.media.id ? `<div style="margin-top:8px"><img src="/api/media/${e.media.id}?token=${TOKEN}" style="max-width:100%;border-radius:8px"/></div>` : '';
       // Add automatic motivational message for completed entries based on response (copied from global view)
@@ -618,13 +655,17 @@ async function loadChat(){
 
 // ── MENSAJES CONFIG ──────────────────────────────────────────────────────────
 async function loadMessages(){
+  await loadUtilityTemplates();
   if(!Object.keys(msgLabels).length){
     const r=await api("GET","/messages/labels");
     msgLabels=r;
   }
   const msgs=await api("GET","/messages");
   const el=I("msg-list");
-  el.innerHTML=Object.entries(msgLabels).map(([key,label])=>`
+  el.innerHTML=`<div class="msg-card"><div class="msg-label">Plantillas de utilidad / mensajes previos</div>
+    <div class="msg-hint">Se envían como plantillas aprobadas de WhatsApp antes de una meta o un tip, solo cuando las seleccionas.</div>
+    ${utilityTemplates.map(t=>`<div style="padding:8px 0;border-top:1px solid #e8f0e8"><strong style="font-size:12px">${escapeHtml(t.label)}</strong><div class="tip-note" style="white-space:pre-wrap">${escapeHtml(t.body)}</div></div>`).join('')}
+  </div>`+Object.entries(msgLabels).map(([key,label])=>`
     <div class="msg-card">
       <div class="msg-label">${label}</div>
       ${key==="meta_completada"?'<div class="msg-hint">Puedes usar {ia} para el mensaje de IA y {resumen} para los puntos</div>':''}
@@ -753,7 +794,7 @@ function renderTipHistory(){
   el.innerHTML=rows.map(r=>`<div class="tip-history-row">
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
     <div>${new Date(r.scheduledAt||r.when||r.createdAt).toLocaleString('es-CL')}</div>
-    <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span></div>
+    <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span><br><span style="color:#7a9a7a">${r.utilityTemplateId?`Previo: ${escapeHtml(utilityTemplateLabel(r.utilityTemplateId))}`:'Sin plantilla previa'}</span></div>
     <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
   </div>`).join('');
 }
@@ -849,6 +890,7 @@ function openSendModal(tipId){
   I('tip_send_message').value=tip.desc||'';
   I('tip_send_phrase').value=tip.phrase||'';
   I('tip_send_phrase_box').style.display=tip.type==='phrase'?'block':'none';
+  fillUtilitySelect('tip_send_utility_template','');
   const box=I('tip_send_clients'); box.innerHTML='';
   (clients||[]).forEach(c=>{
     const row=document.createElement('div'); row.className='tip-client-row';
@@ -867,7 +909,9 @@ function previewTipSend(){
   if(!tip){return}
   const rec=selectedTipRecipients();
   const file=tip.type==='phrase'?'':`\n\nArchivo: ${tip.filename||tipLabel(tip.type)}`;
-  I('tip_preview').textContent=`Para: ${rec.length?rec.map(r=>r.name).join(', '):'Selecciona pacientes'}\nTipo: ${tipLabel(tip.type)}${file}\n\n${buildTipMessage(tip)||'Mensaje vacío'}`;
+  const utilityId=I('tip_send_utility_template')?.value||'';
+  updateUtilityPreview('tip_send_utility_template','tip_send_utility_preview');
+  I('tip_preview').textContent=`Para: ${rec.length?rec.map(r=>r.name).join(', '):'Selecciona pacientes'}\nTipo: ${tipLabel(tip.type)}\nPrevio: ${utilityId?utilityTemplateLabel(utilityId):'No enviar plantilla previa'}${file}\n\n${buildTipMessage(tip)||'Mensaje vacío'}`;
 }
 function confirmSendTip(){
   if(tipSending)return;
@@ -887,7 +931,7 @@ function confirmSendTip(){
   tipSending=true;
   const sendBtn=document.querySelector('#tipSendModal .bsv');
   if(sendBtn)sendBtn.disabled=true;
-  api('POST','/tips/send',{tipId:tip.id,clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString()}).then(async res=>{
+  api('POST','/tips/send',{tipId:tip.id,clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString(),utilityTemplateId:I('tip_send_utility_template').value}).then(async res=>{
     if(res.error){showToast(`⚠️ ${res.error}`);return}
     closeM('tipSendModal');
     await loadTips();
@@ -915,6 +959,7 @@ function openScheduledTip(sendId){
   I('tip_scheduled_message').value=send.message||'';
   I('tip_scheduled_date').value=values.date;
   I('tip_scheduled_time').value=values.time;
+  fillUtilitySelect('tip_scheduled_utility_template',send.utilityTemplateId||'');
   I('tipScheduledModal').classList.add('open');
 }
 async function saveScheduledTip(){
@@ -923,7 +968,7 @@ async function saveScheduledTip(){
   const time=I('tip_scheduled_time').value||'09:00';
   const when=new Date(`${date}T${time}:00`);
   if(!id||!date||Number.isNaN(when.getTime())){showToast('Selecciona una fecha y hora validas');return}
-  const res=await api('PUT',`/tip-sends/${id}`,{message:I('tip_scheduled_message').value.trim(),scheduledAt:when.toISOString()});
+  const res=await api('PUT',`/tip-sends/${id}`,{message:I('tip_scheduled_message').value.trim(),scheduledAt:when.toISOString(),utilityTemplateId:I('tip_scheduled_utility_template').value});
   if(res.error){showToast(res.error);return}
   closeM('tipScheduledModal');
   await loadTips();
@@ -990,6 +1035,7 @@ function openMM(clientId, goalId){
   I("m_repetir_si_no").checked = false;
   I("m_repetir_val").value = 24;
   I("m_repetir_unit").value = 'hours';
+  fillUtilitySelect("m_utility_template","");
   // schedule defaults: show weekdays by default
   I("m_mode_dias").checked = true; I("m_mode_date").checked = false;
   I("m_days_selector").style.display = '';
@@ -1019,6 +1065,7 @@ function openMM(clientId, goalId){
       I("m_repetir_si_no").checked = !!goal.repetirSiNo;
       I("m_repetir_val").value = goal.repetirFreq?.value || 24;
       I("m_repetir_unit").value = goal.repetirFreq?.unit || 'hours';
+      fillUtilitySelect("m_utility_template",goal.utilityTemplateId||"");
     }
   }
   I("mm").classList.add("open")
@@ -1047,7 +1094,8 @@ async function saveMeta(sendNow=false){
     hora:I("mh").value,
     requiereFoto: !!I("m_requiere_foto").checked,
     repetirSiNo: !!I("m_repetir_si_no").checked,
-    repetirFreq: { unit: I("m_repetir_unit").value, value: Number(I("m_repetir_val").value) }
+    repetirFreq: { unit: I("m_repetir_unit").value, value: Number(I("m_repetir_val").value) },
+    utilityTemplateId: I("m_utility_template").value
   };
   if(scheduleMode === 'dias') payload.dias = dias;
   else payload.specificDate = specificDate;
@@ -1061,7 +1109,7 @@ async function saveMeta(sendNow=false){
   }
   if(sendNow){
     const goalToSend = mid || (res && res.goal && res.goal.id) || null;
-    await fetch(`/api/clients/${clientId}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify({goalId: goalToSend})});
+    await fetch(`/api/clients/${clientId}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify({goalId: goalToSend,utilityTemplateId:payload.utilityTemplateId})});
   }
   closeM("mm");loadAll();
 }
@@ -1069,8 +1117,18 @@ async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;a
 async function sendMeta(cid,gid){
   const c=clients.find(x=>x.id===cid);
   const m=c?.goals?.find(g=>g.id===gid);
-  if(!confirm(`¿Enviar meta "${m?.titulo}" a ${c?.nombres?.join(" & ")} ahora?`))return;
-  await api("POST",`/clients/${cid}/send`,{goalId:gid});
+  if(!m)return;
+  I("meta_send_client_id").value=cid;
+  I("meta_send_goal_id").value=gid;
+  fillUtilitySelect("meta_send_utility_template","");
+  I("metaSendModal").classList.add("open");
+}
+async function confirmSendMeta(){
+  const cid=I("meta_send_client_id").value, gid=I("meta_send_goal_id").value;
+  const c=clients.find(x=>x.id===cid);
+  const res=await api("POST",`/clients/${cid}/send`,{goalId:gid,utilityTemplateId:I("meta_send_utility_template").value});
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  closeM("metaSendModal");
   showToast(`📤 Meta enviada a ${c?.nombres?.join(" & ")}`);
 }
 
@@ -1095,6 +1153,7 @@ function closeM(id){
     const smsg = I('tip_send_message'); if(smsg) smsg.value = '';
     const sphr = I('tip_send_phrase'); if(sphr) sphr.value = '';
     const sprev = I('tip_preview'); if(sprev) sprev.textContent = '';
+    const sut = I('tip_send_utility_template'); if(sut) sut.value = '';
   } else if(id==='tipScheduledModal'){
     I(id).classList.remove('open');
     I('tip_scheduled_id').value = '';
@@ -1102,6 +1161,12 @@ function closeM(id){
     I('tip_scheduled_message').value = '';
     I('tip_scheduled_date').value = '';
     I('tip_scheduled_time').value = '';
+    I('tip_scheduled_utility_template').value = '';
+  } else if(id==='metaSendModal'){
+    I(id).classList.remove('open');
+    I('meta_send_client_id').value = '';
+    I('meta_send_goal_id').value = '';
+    I('meta_send_utility_template').value = '';
   } else { I(id).classList.remove("open") }
 }
 function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}
