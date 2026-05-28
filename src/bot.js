@@ -199,8 +199,9 @@ async function enviarMeta(clientId, meta, options = {}) {
   const recipients = metaRecipients(client);
   const results = [];
   console.log("Destinatarios finales del envío", JSON.stringify({ clientId, metaId: meta.id, recipients: recipients.map(r => ({ phone: r.phone, nombre: r.nombre, role: r.role })) }));
+  console.log("Cantidad de destinatarios", recipients.length);
 
-  for (const recipient of recipients) {
+  for (const [index, recipient] of recipients.entries()) {
     const { phone, nombre, role } = recipient;
     let utilityTemplateSent = false;
     let contentStarted = false;
@@ -219,10 +220,13 @@ async function enviarMeta(clientId, meta, options = {}) {
       { id: `meta_no`, title: "No" }
     ];
     try {
+      console.log(`Procesando destinatario ${index + 1}`, JSON.stringify({ total: recipients.length, clientId, phone, nombre, role, meta: meta.titulo }));
       console.log(role === "pareja" ? "Enviando a pareja" : "Enviando a paciente principal", JSON.stringify({ clientId, phone, nombre, meta: meta.titulo }));
       if (utilityTemplate) {
+        console.log(`Enviando plantilla previa a ${nombre}/${phone}`, JSON.stringify({ role, utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
         const templateResult = await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
         utilityTemplateSent = true;
+        console.log("Resultado plantilla previa destinatario", JSON.stringify({ phone, nombre, role, ok: true, messageId: templateResult.messageId }));
         history.registrar(clientId, phone, nombre, {
           tipo: "plantilla_previa_enviada",
           meta: utilityTemplate.label,
@@ -235,11 +239,13 @@ async function enviarMeta(clientId, meta, options = {}) {
         });
       }
       console.log("Continuando con envío de contenido principal");
+      console.log(`Enviando contenido principal a ${nombre}/${phone}`, JSON.stringify({ role, tipo: "meta", meta: meta.titulo }));
       console.log("Enviando meta", JSON.stringify({ clientId, phone, goalId: meta.id, titulo: meta.titulo }));
       contentStarted = true;
       const textResult = await enviar(phone, texto, nombre, { throwOnError: true, context: "meta" });
       mainMessageId = textResult.messageId;
       const buttonResult = await enviarBotones(phone, msg.get("pedir_listo"), botones, { throwOnError: true, context: "botones de meta" });
+      console.log("Resultado contenido principal destinatario", JSON.stringify({ phone, nombre, role, ok: true, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId }));
       state.set(phone, { flow: state.FLOW.META_ENVIADA, clientId, meta });
       history.registrar(clientId, phone, nombre, {
         tipo: "meta_enviada",
@@ -264,6 +270,11 @@ async function enviarMeta(clientId, meta, options = {}) {
         : utilityTemplateSent
           ? `Plantilla previa enviada correctamente, pero falló el envío de la meta: ${realError}`
           : `Error al enviar meta: ${realError}`;
+      if (templateFailed) {
+        console.error("Resultado plantilla previa destinatario", JSON.stringify({ phone, nombre, role, ok: false, error: detail }));
+      } else {
+        console.error("Resultado contenido principal destinatario", JSON.stringify({ phone, nombre, role, ok: false, error: detail, plantillaPreviaEnviada: utilityTemplateSent }));
+      }
       console.error("Error individual de destinatario", JSON.stringify({ clientId, phone, nombre, role, error: detail }));
       console.error(templateFailed ? "Error al enviar plantilla previa" : "Error al enviar contenido principal", detail);
       history.registrar(clientId, phone, nombre, {
@@ -287,7 +298,7 @@ async function enviarMeta(clientId, meta, options = {}) {
     ok: results.filter(r => r.ok).length,
     error: results.filter(r => !r.ok).length,
   };
-  console.log("Resumen final del envío a pareja", JSON.stringify({ clientId, ...summary, results }));
+  console.log("Resumen final de envío a pareja", JSON.stringify({ clientId, ...summary, results }));
   if (!results.some(r => r.ok)) {
     const message = results.map(r => `${r.nombre}: ${r.error}`).join(" | ") || `No se pudo enviar la meta "${meta.titulo}"`;
     throw new Error(message);
