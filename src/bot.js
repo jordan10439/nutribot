@@ -204,8 +204,11 @@ async function enviarMeta(clientId, meta, options = {}) {
   for (const [index, recipient] of recipients.entries()) {
     const { phone, nombre, role } = recipient;
     let utilityTemplateSent = false;
+    let utilityTemplateMessageId = "";
     let contentStarted = false;
     let mainMessageId = "";
+    let interactionMessageId = "";
+    const trace = { clientId, role, nombre, phone, goalId: meta.id, meta: meta.titulo, destinatarioIndex: index + 1, totalDestinatarios: recipients.length };
 
     const texto =
       `🎯 *¡Nueva Meta!*\n\n` +
@@ -221,11 +224,17 @@ async function enviarMeta(clientId, meta, options = {}) {
     ];
     try {
       console.log(`Procesando destinatario ${index + 1}`, JSON.stringify({ total: recipients.length, clientId, phone, nombre, role, meta: meta.titulo }));
+      console.log("Destinatario actual del loop", JSON.stringify(trace));
+      console.log("Nombre destinatario", nombre);
+      console.log("Phone destinatario", phone);
+      console.log("ClientId destinatario", clientId);
+      console.log("Role destinatario", role);
       console.log(role === "pareja" ? "Enviando a pareja" : "Enviando a paciente principal", JSON.stringify({ clientId, phone, nombre, meta: meta.titulo }));
       if (utilityTemplate) {
         console.log(`Enviando plantilla previa a ${nombre}/${phone}`, JSON.stringify({ role, utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
-        const templateResult = await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
+        const templateResult = await enviarPlantillaUtilidad(phone, utilityTemplate, nombre, { trace });
         utilityTemplateSent = true;
+        utilityTemplateMessageId = templateResult.messageId;
         console.log("Resultado plantilla previa destinatario", JSON.stringify({ phone, nombre, role, ok: true, messageId: templateResult.messageId }));
         history.registrar(clientId, phone, nombre, {
           tipo: "plantilla_previa_enviada",
@@ -242,9 +251,10 @@ async function enviarMeta(clientId, meta, options = {}) {
       console.log(`Enviando contenido principal a ${nombre}/${phone}`, JSON.stringify({ role, tipo: "meta", meta: meta.titulo }));
       console.log("Enviando meta", JSON.stringify({ clientId, phone, goalId: meta.id, titulo: meta.titulo }));
       contentStarted = true;
-      const textResult = await enviar(phone, texto, nombre, { throwOnError: true, context: "meta" });
+      const textResult = await enviar(phone, texto, nombre, { throwOnError: true, context: "meta", trace });
       mainMessageId = textResult.messageId;
-      const buttonResult = await enviarBotones(phone, msg.get("pedir_listo"), botones, { throwOnError: true, context: "botones de meta" });
+      const buttonResult = await enviarBotones(phone, msg.get("pedir_listo"), botones, { throwOnError: true, context: "botones de meta", trace });
+      interactionMessageId = buttonResult.messageId;
       console.log("Resultado contenido principal destinatario", JSON.stringify({ phone, nombre, role, ok: true, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId }));
       state.set(phone, { flow: state.FLOW.META_ENVIADA, clientId, meta });
       history.registrar(clientId, phone, nombre, {
@@ -261,7 +271,9 @@ async function enviarMeta(clientId, meta, options = {}) {
       });
       console.log("Meta enviada correctamente", JSON.stringify({ clientId, phone, goalId: meta.id, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId }));
       console.log(role === "pareja" ? "Resultado envío pareja" : "Resultado envío paciente principal", JSON.stringify({ phone, ok: true, meta: meta.titulo }));
-      results.push({ phone, nombre, role, ok: true, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId });
+      const individualResult = { nombre, phone, clientId, role, plantillaPrevia: utilityTemplate ? "enviada" : "no seleccionada", contenidoPrincipal: "enviado", messageId: textResult.messageId, interactionMessageId: buttonResult.messageId, templateMessageId: utilityTemplateMessageId, ok: true };
+      console.log("Resultado final individual", JSON.stringify(individualResult));
+      results.push(individualResult);
     } catch (e) {
       const realError = explainMetaError(e.message);
       const templateFailed = utilityTemplate && !utilityTemplateSent && !contentStarted;
@@ -289,7 +301,9 @@ async function enviarMeta(clientId, meta, options = {}) {
         metaMessageId: mainMessageId,
       });
       console.log("Continuando con siguiente destinatario", JSON.stringify({ clientId, phone, meta: meta.titulo }));
-      results.push({ phone, nombre, role, ok: false, error: detail, templateSent: utilityTemplateSent });
+      const individualResult = { nombre, phone, clientId, role, plantillaPrevia: utilityTemplate ? (utilityTemplateSent ? "enviada" : "error") : "no seleccionada", contenidoPrincipal: contentStarted ? "error" : "no intentado", messageId: mainMessageId, interactionMessageId, templateMessageId: utilityTemplateMessageId, ok: false, error: detail };
+      console.log("Resultado final individual", JSON.stringify(individualResult));
+      results.push(individualResult);
     }
   }
   const summary = {

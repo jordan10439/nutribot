@@ -263,6 +263,16 @@ async function createAndReviewTipSends(tip, body = {}) {
     ok: reviewed.filter(send => send.status === "enviado").length,
     error: reviewed.filter(send => send.status === "error").length,
     pending: reviewed.filter(send => ["programado", "pendiente"].includes(send.status)).length,
+    results: reviewed.map(send => ({
+      nombre: send.patientName,
+      phone: send.phone,
+      clientId: send.clientId,
+      role: send.recipientRole,
+      plantillaPrevia: send.utilityTemplateId ? (send.utilityTemplateMessageId ? "enviada" : send.status === "error" ? "error o no confirmada" : "pendiente") : "no seleccionada",
+      contenidoPrincipal: send.status === "enviado" ? "enviado" : send.status === "error" ? "error" : "pendiente",
+      messageId: send.metaMessageId || "",
+      error: send.error || "",
+    })),
   }));
   return reviewed;
 }
@@ -277,10 +287,18 @@ async function sendTipRecord(send, position = null, total = null) {
     return;
   }
   let utilityTemplateSent = false;
+  let utilityTemplateMessageId = "";
   let contentStarted = false;
+  let mainMessageId = "";
+  const trace = { clientId: send.clientId, role: send.recipientRole, nombre: send.patientName, phone: send.phone, tipId: send.tipId, tipTitle: send.tipTitle, sendId: send.id, destinatarioIndex: position, totalDestinatarios: total };
   try {
     tips.updateSend(send.id, { status: "enviando", error: "" });
     if (position !== null) console.log(`Procesando destinatario ${position}`, JSON.stringify({ total, id: send.id, phone: send.phone, patientName: send.patientName, role: send.recipientRole, tipTitle: send.tipTitle }));
+    console.log("Destinatario actual del loop", JSON.stringify(trace));
+    console.log("Nombre destinatario", send.patientName);
+    console.log("Phone destinatario", send.phone);
+    console.log("ClientId destinatario", send.clientId);
+    console.log("Role destinatario", send.recipientRole);
     console.log(send.recipientRole === "pareja" ? "Enviando a pareja" : "Enviando a paciente principal", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, tipTitle: send.tipTitle }));
     console.log("Tip listo para enviar", JSON.stringify({ id: send.id, tipo: tip.type }));
     console.log("Fecha programada", send.scheduledAt);
@@ -289,8 +307,9 @@ async function sendTipRecord(send, position = null, total = null) {
     const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
     if (utilityTemplate) {
       console.log(`Enviando plantilla previa a ${send.patientName}/${send.phone}`, JSON.stringify({ role: send.recipientRole, utilityTemplateId: send.utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
-      const templateResult = await enviarPlantillaUtilidad(send.phone, utilityTemplate, send.patientName);
+      const templateResult = await enviarPlantillaUtilidad(send.phone, utilityTemplate, send.patientName, { trace });
       utilityTemplateSent = true;
+      utilityTemplateMessageId = templateResult.messageId;
       console.log("Resultado plantilla previa destinatario", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, role: send.recipientRole, ok: true, messageId: templateResult.messageId }));
       tips.updateSend(send.id, { utilityTemplateMessageId: templateResult.messageId });
       history.registrar(send.clientId, send.phone, send.patientName, {
@@ -310,7 +329,8 @@ async function sendTipRecord(send, position = null, total = null) {
     console.log("Función de WhatsApp utilizada", "enviarTip -> enviar");
     console.log(`Enviando tip a ${send.patientName} (+${send.phone})`);
     contentStarted = true;
-    const result = await enviarTip(send.phone, tip, send.message, send.patientName);
+    const result = await enviarTip(send.phone, tip, send.message, send.patientName, { trace });
+    mainMessageId = result.primaryMessageId;
     console.log("Resultado contenido principal destinatario", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, role: send.recipientRole, ok: true, metaMessageId: result.primaryMessageId, textMessageId: result.textMessageId || "" }));
     console.log("Confirmación interna de envío de tip", JSON.stringify(result));
     tips.updateSend(send.id, {
@@ -335,6 +355,7 @@ async function sendTipRecord(send, position = null, total = null) {
     });
     console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, metaMessageId: result.primaryMessageId }));
     console.log(send.recipientRole === "pareja" ? "Resultado envío pareja" : "Resultado envío paciente principal", JSON.stringify({ id: send.id, phone: send.phone, ok: true }));
+    console.log("Resultado final individual", JSON.stringify({ nombre: send.patientName, phone: send.phone, clientId: send.clientId, role: send.recipientRole, plantillaPrevia: utilityTemplate ? "enviada" : "no seleccionada", contenidoPrincipal: "enviado", messageId: result.primaryMessageId, templateMessageId: utilityTemplateMessageId }));
   } catch (e) {
     const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
     const realError = explainMetaError(e.message);
@@ -361,6 +382,7 @@ async function sendTipRecord(send, position = null, total = null) {
       utilityTemplateId: send.utilityTemplateId || "",
       utilityTemplateLabel: utilityTemplate?.label || "",
     });
+    console.log("Resultado final individual", JSON.stringify({ nombre: send.patientName, phone: send.phone, clientId: send.clientId, role: send.recipientRole, plantillaPrevia: utilityTemplate ? (utilityTemplateSent ? "enviada" : "error") : "no seleccionada", contenidoPrincipal: contentStarted ? "error" : "no intentado", messageId: mainMessageId, templateMessageId: utilityTemplateMessageId, error: detail }));
     console.log("Continuando con siguiente destinatario", JSON.stringify({ id: send.id, phone: send.phone, tipTitle: send.tipTitle }));
   }
 }
