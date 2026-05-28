@@ -321,6 +321,7 @@ async function sendTipRecord(send, position = null, total = null) {
         utilityTemplateLabel: utilityTemplate.label,
         metaMessageId: templateResult.messageId,
         deliveryStatus: "accepted",
+        deliveryStage: "plantilla_previa",
       });
     }
     console.log("Continuando con envío de contenido principal");
@@ -352,6 +353,7 @@ async function sendTipRecord(send, position = null, total = null) {
       utilityTemplateLabel: utilityTemplate?.label || "",
       metaMessageId: result.primaryMessageId,
       deliveryStatus: "accepted",
+      deliveryStage: "contenido_principal",
     });
     console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, metaMessageId: result.primaryMessageId }));
     console.log(send.recipientRole === "pareja" ? "Resultado envío pareja" : "Resultado envío paciente principal", JSON.stringify({ id: send.id, phone: send.phone, ok: true }));
@@ -381,6 +383,8 @@ async function sendTipRecord(send, position = null, total = null) {
       direccion: "saliente",
       utilityTemplateId: send.utilityTemplateId || "",
       utilityTemplateLabel: utilityTemplate?.label || "",
+      deliveryStage: templateFailed ? "plantilla_previa" : "contenido_principal",
+      templateWasSent: utilityTemplateSent,
     });
     console.log("Resultado final individual", JSON.stringify({ nombre: send.patientName, phone: send.phone, clientId: send.clientId, role: send.recipientRole, plantillaPrevia: utilityTemplate ? (utilityTemplateSent ? "enviada" : "error") : "no seleccionada", contenidoPrincipal: contentStarted ? "error" : "no intentado", messageId: mainMessageId, templateMessageId: utilityTemplateMessageId, error: detail }));
     console.log("Continuando con siguiente destinatario", JSON.stringify({ id: send.id, phone: send.phone, tipTitle: send.tipTitle }));

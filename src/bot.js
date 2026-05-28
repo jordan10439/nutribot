@@ -245,6 +245,7 @@ async function enviarMeta(clientId, meta, options = {}) {
           utilityTemplateLabel: utilityTemplate.label,
           metaMessageId: templateResult.messageId,
           deliveryStatus: "accepted",
+          deliveryStage: "plantilla_previa",
         });
       }
       console.log("Continuando con envío de contenido principal");
@@ -268,6 +269,7 @@ async function enviarMeta(clientId, meta, options = {}) {
         metaMessageId: textResult.messageId,
         interactionMessageId: buttonResult.messageId,
         deliveryStatus: "accepted",
+        deliveryStage: "contenido_principal",
       });
       console.log("Meta enviada correctamente", JSON.stringify({ clientId, phone, goalId: meta.id, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId }));
       console.log(role === "pareja" ? "Resultado envío pareja" : "Resultado envío paciente principal", JSON.stringify({ phone, ok: true, meta: meta.titulo }));
@@ -299,6 +301,8 @@ async function enviarMeta(clientId, meta, options = {}) {
         utilityTemplateId,
         utilityTemplateLabel: utilityTemplate?.label || "",
         metaMessageId: mainMessageId,
+        deliveryStage: templateFailed ? "plantilla_previa" : "contenido_principal",
+        templateWasSent: utilityTemplateSent,
       });
       console.log("Continuando con siguiente destinatario", JSON.stringify({ clientId, phone, meta: meta.titulo }));
       const individualResult = { nombre, phone, clientId, role, plantillaPrevia: utilityTemplate ? (utilityTemplateSent ? "enviada" : "error") : "no seleccionada", contenidoPrincipal: contentStarted ? "error" : "no intentado", messageId: mainMessageId, interactionMessageId, templateMessageId: utilityTemplateMessageId, ok: false, error: detail };

@@ -894,13 +894,37 @@ function activityMessageInfo(entry){
     return { kind:"Bienvenida enviada", description:`Bienvenida enviada: ${name}`, detail:entry.templateLanguage?`Idioma de plantilla: ${entry.templateLanguage}`:"" };
   }
   if(entry.tipo==="plantilla_previa_enviada"){
-    return { kind:"Plantilla enviada", description:`Plantilla previa enviada: ${entry.utilityTemplateLabel||title}` };
+    return {
+      kind:"Plantilla enviada",
+      description:`Plantilla previa enviada: ${entry.utilityTemplateLabel||title}`,
+      detail:[`Teléfono: ${entry.phone||"Sin registro"}`,entry.deliveryStatus?`Estado Meta: ${entry.deliveryStatus}`:"",entry.metaMessageId?`Message ID plantilla: ${entry.metaMessageId}`:""].filter(Boolean).join("\n"),
+    };
   }
   if(entry.tipo==="meta_enviada"){
-    return { kind:"Meta enviada", description:`Meta enviada: ${title}`, detail:entry.utilityTemplateLabel?`Con plantilla previa: ${entry.utilityTemplateLabel}`:"Sin plantilla previa" };
+    return {
+      kind:"Meta enviada",
+      description:`Meta enviada: ${title}`,
+      detail:[
+        `Teléfono: ${entry.phone||"Sin registro"}`,
+        entry.utilityTemplateLabel?`Con plantilla previa: ${entry.utilityTemplateLabel}`:"Sin plantilla previa",
+        `Estado contenido principal: ${entry.deliveryStatus||"accepted"}`,
+        entry.metaMessageId?`Message ID contenido: ${entry.metaMessageId}`:"",
+        entry.interactionMessageId?`Message ID botones: ${entry.interactionMessageId}`:"",
+      ].filter(Boolean).join("\n"),
+    };
   }
   if(entry.tipo==="tip_enviado"){
-    return { kind:"Tip enviado", description:`Tip enviado: ${title}`, detail:[entry.tipType?`Tipo: ${entry.tipType}`:"",entry.utilityTemplateLabel?`Con plantilla previa: ${entry.utilityTemplateLabel}`:"Sin plantilla previa"].filter(Boolean).join(" · ") };
+    return {
+      kind:"Tip enviado",
+      description:`Tip enviado: ${title}`,
+      detail:[
+        `Teléfono: ${entry.phone||"Sin registro"}`,
+        entry.tipType?`Tipo: ${entry.tipType}`:"",
+        entry.utilityTemplateLabel?`Con plantilla previa: ${entry.utilityTemplateLabel}`:"Sin plantilla previa",
+        `Estado contenido principal: ${entry.deliveryStatus||"accepted"}`,
+        entry.metaMessageId?`Message ID contenido: ${entry.metaMessageId}`:"",
+      ].filter(Boolean).join("\n"),
+    };
   }
   if(entry.tipo==="completada"){
     return {
@@ -925,7 +949,17 @@ function activityMessageInfo(entry){
   }
   if(["meta_error","tip_error","plantilla_previa_error"].includes(entry.tipo)){
     const kind=entry.tipo==="meta_error"?"Error al enviar meta":entry.tipo==="tip_error"?"Error al enviar tip":"Error al enviar plantilla";
-    return { kind:"Error de envío", description:`${kind}: ${title}`, detail:entry.comentario||"No se registró el motivo del error." };
+    return {
+      kind:"Error de envío",
+      description:`${kind}: ${title}`,
+      detail:[
+        `Teléfono: ${entry.phone||"Sin registro"}`,
+        `Etapa: ${entry.deliveryStage==="plantilla_previa"?"Plantilla previa":"Contenido principal"}`,
+        entry.templateWasSent?"Plantilla previa: enviada":"",
+        entry.metaMessageId?`Message ID asociado: ${entry.metaMessageId}`:"",
+        entry.comentario||"No se registró el motivo del error.",
+      ].filter(Boolean).join("\n"),
+    };
   }
   if(entry.tipo==="mensaje_recibido"){
     if(entry.media?.id){
@@ -1299,8 +1333,8 @@ function renderTipHistory(){
     return `<div class="tip-history-row">
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
     <div><span style="color:#7a9a7a">${eventLabel}</span><br>${new Date(eventDate).toLocaleString('es-CL')}</div>
-    <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span><br><span style="color:#7a9a7a">${r.utilityTemplateId?`Previo: ${escapeHtml(utilityTemplateLabel(r.utilityTemplateId))}`:'Sin plantilla previa'}</span></div>
-    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Meta: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID: ${escapeHtml(r.metaMessageId)}</span>`:''}${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
+    <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span><br><span style="color:#7a9a7a">${r.utilityTemplateId?`Previo: ${escapeHtml(utilityTemplateLabel(r.utilityTemplateId))}`:'Sin plantilla previa'}</span><br><span style="color:#7a9a7a">Tel: ${escapeHtml(r.phone||'Sin registro')}</span></div>
+    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Contenido: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.utilityTemplateMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID plantilla: ${escapeHtml(r.utilityTemplateMessageId)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID contenido: ${escapeHtml(r.metaMessageId)}</span>`:''}${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
   </div>`}).join('');
 }
 function toggleTipType(){
