@@ -1126,7 +1126,7 @@ function buildChatTimeline(historyEntries,client){
     }
     if(entry.tipo==="meta_enviada"){
       timeline.push(chatEvent(entry.fecha,"out","Meta enviada",`🎯 Meta enviada: ${entry.meta||"Meta"}`,entry));
-      timeline.push(chatEvent(entry.fecha,"out","Mensaje automático del bot","¿Has completado la meta? 🌱",entry));
+      timeline.push(chatEvent(entry.fecha,"out","Mensaje automático del bot","*¿Has completado la meta?* 🌱",entry));
       return;
     }
     if(entry.tipo==="plantilla_previa_enviada"||entry.tipo==="bienvenida_enviada"){
@@ -1617,7 +1617,8 @@ function previewMetaMessage(){
   const emoji=I("me")?.value?.trim()||"";
   const title=I("mt")?.value?.trim()||"Título de la meta";
   const description=I("md")?.value?.trim()||"Descripción de la meta";
-  el.innerHTML=`<div>🌱 <strong>¡Nueva meta!</strong></div>${emoji?`<div class="meta-preview-emoji">${escapeHtml(emoji)}</div>`:""}<div class="meta-preview-title">${escapeHtml(title)}</div><div style="margin-top:8px">${escapeHtml(description)}</div><div style="margin-top:10px">¿Has completado la meta? 🌱</div><div class="meta-preview-buttons"><span class="meta-preview-button">Sí, la cumplí</span><span class="meta-preview-button">Aún no</span></div>`;
+  const titleLine = `${emoji ? `${escapeHtml(emoji)} ` : ""}<strong>${escapeHtml(title)}</strong>`;
+  el.innerHTML=`<div><strong>✨¡Nueva meta!✨</strong></div><div class="meta-preview-title">${titleLine}</div><div style="margin-top:8px">${escapeHtml(description)}</div><div style="margin-top:10px"><strong>¿Has completado la meta?</strong> 🌱</div><div class="meta-preview-buttons"><span class="meta-preview-button">Sí, la cumplí</span><span class="meta-preview-button">Aún no</span></div>`;
 }
 document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.classList.toggle("active")));
 // Toggle schedule mode UI (weekdays vs specific date)

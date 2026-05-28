@@ -7,7 +7,7 @@ const FILE = path.join(__dirname, "../data/config.json");
 const DEFAULTS = {
   mensajes: {
     bienvenida:      "¡Hola! 👋 Soy tu Coach Nutricional 🌱\n\n{resumen}\n\n¡Sigue así! 💚",
-    meta_enviada:    "🌱 *¡Nueva meta!*\n\n{emoji}\n\n*{titulo}*\n\n{descripcion}",
+    meta_enviada:    "✨*¡Nueva meta!*✨\n\n{emoji} *{titulo}*\n\n{descripcion}",
     pedir_foto:      "¡Genial {nombre}! 👏\n\nEnvíame una *foto* como evidencia de tu meta completada 📸",
     pedir_estrellas: "📸 ¡Increíble {nombre}! 🤩\n\n¿Cómo te sientes después de completar la meta?\n\n1️⃣ - Mal\n2️⃣ - Regular\n3️⃣ - Bien\n4️⃣ - Muy bien\n5️⃣ - ¡Excelente!\n\nResponde del 1 al 5",
     pedir_dificultad:"Anotado! ✨\n\n¿Qué tan difícil fue cumplirla?\n\n1️⃣ - Muy fácil\n2️⃣ - Fácil\n3️⃣ - Normal\n4️⃣ - Difícil\n5️⃣ - Muy difícil\n\nResponde del 1 al 5",

@@ -39,9 +39,9 @@ function formatMetaTitle(meta) {
 function formatMetaMessage(nombre, meta) {
   const description = String(meta?.descripcion || meta?.titulo || "").trim();
   const emoji = String(meta?.emoji || "").trim();
-  const lines = ["🌱 *¡Nueva meta!*", ""];
-  if (emoji) lines.push(emoji, "");
-  lines.push(`*${String(meta?.titulo || "Meta").trim()}*`);
+  const title = String(meta?.titulo || "Meta").trim();
+  const titleLine = `${emoji ? `${emoji} ` : ""}*${title}*`;
+  const lines = ["✨*¡Nueva meta!*✨", "", titleLine];
   if (description) lines.push("", description);
   return lines.join("\n");
 }
