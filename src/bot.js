@@ -7,6 +7,7 @@ const points  = require("./points");
 const history = require("./history");
 const msg     = require("./messages");
 const utilityTemplates = require("./utilityTemplates");
+const { explainMetaError } = require("./metaErrors");
 
 const WELCOME_TEMPLATE_NAME = process.env.META_WELCOME_TEMPLATE_NAME || process.env.META_TEMPLATE_NAME || "";
 const WELCOME_TEMPLATE_LANGUAGE = process.env.META_WELCOME_TEMPLATE_LANGUAGE || "";
@@ -28,6 +29,19 @@ function nombreDe(client, phone) {
 }
 function esIndividual(client) { return client.phones.length === 1; }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
+
+function metaRecipients(client) {
+  const seen = new Set();
+  return (client.phones || []).map((phone, index) => ({
+    phone,
+    nombre: client.nombres?.[index] || client.nombres?.[0] || "Paciente",
+    role: index === 0 ? "paciente principal" : "pareja",
+  })).filter(recipient => {
+    if (!recipient.phone || seen.has(recipient.phone)) return false;
+    seen.add(recipient.phone);
+    return true;
+  });
+}
 
 function calcularProgresoMeta(client, phone, currentMeta) {
   const totalMetas = Math.max((client.goals || []).length, 1);
@@ -182,8 +196,12 @@ async function enviarMeta(clientId, meta, options = {}) {
     : utilityTemplates.validateId(meta.utilityTemplateId);
   const utilityTemplate = utilityTemplates.get(utilityTemplateId);
 
-  for (const phone of client.phones) {
-    const nombre = nombreDe(client, phone);
+  const recipients = metaRecipients(client);
+  const results = [];
+  console.log("Destinatarios finales del envío", JSON.stringify({ clientId, metaId: meta.id, recipients: recipients.map(r => ({ phone: r.phone, nombre: r.nombre, role: r.role })) }));
+
+  for (const recipient of recipients) {
+    const { phone, nombre, role } = recipient;
     let utilityTemplateSent = false;
     let contentStarted = false;
     let mainMessageId = "";
@@ -201,6 +219,7 @@ async function enviarMeta(clientId, meta, options = {}) {
       { id: `meta_no`, title: "No" }
     ];
     try {
+      console.log(role === "pareja" ? "Enviando a pareja" : "Enviando a paciente principal", JSON.stringify({ clientId, phone, nombre, meta: meta.titulo }));
       if (utilityTemplate) {
         const templateResult = await enviarPlantillaUtilidad(phone, utilityTemplate, nombre);
         utilityTemplateSent = true;
@@ -235,13 +254,17 @@ async function enviarMeta(clientId, meta, options = {}) {
         deliveryStatus: "accepted",
       });
       console.log("Meta enviada correctamente", JSON.stringify({ clientId, phone, goalId: meta.id, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId }));
+      console.log(role === "pareja" ? "Resultado envío pareja" : "Resultado envío paciente principal", JSON.stringify({ phone, ok: true, meta: meta.titulo }));
+      results.push({ phone, nombre, role, ok: true, metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId });
     } catch (e) {
+      const realError = explainMetaError(e.message);
       const templateFailed = utilityTemplate && !utilityTemplateSent && !contentStarted;
       const detail = templateFailed
-        ? `Error al enviar plantilla previa: ${e.message}`
+        ? `Error al enviar plantilla previa: ${realError}`
         : utilityTemplateSent
-          ? `Plantilla previa enviada correctamente, pero falló el envío de la meta: ${e.message}`
-          : `Error al enviar meta: ${e.message}`;
+          ? `Plantilla previa enviada correctamente, pero falló el envío de la meta: ${realError}`
+          : `Error al enviar meta: ${realError}`;
+      console.error("Error individual de destinatario", JSON.stringify({ clientId, phone, nombre, role, error: detail }));
       console.error(templateFailed ? "Error al enviar plantilla previa" : "Error al enviar contenido principal", detail);
       history.registrar(clientId, phone, nombre, {
         tipo: templateFailed ? "plantilla_previa_error" : "meta_error",
@@ -254,10 +277,23 @@ async function enviarMeta(clientId, meta, options = {}) {
         utilityTemplateLabel: utilityTemplate?.label || "",
         metaMessageId: mainMessageId,
       });
-      throw new Error(detail);
+      console.log("Continuando con siguiente destinatario", JSON.stringify({ clientId, phone, meta: meta.titulo }));
+      results.push({ phone, nombre, role, ok: false, error: detail, templateSent: utilityTemplateSent });
     }
   }
-  console.log(`📤 Meta "${meta.titulo}" enviada a ${client.nombres.join(" & ")}`);
+  const summary = {
+    meta: meta.titulo,
+    total: results.length,
+    ok: results.filter(r => r.ok).length,
+    error: results.filter(r => !r.ok).length,
+  };
+  console.log("Resumen final del envío a pareja", JSON.stringify({ clientId, ...summary, results }));
+  if (!results.some(r => r.ok)) {
+    const message = results.map(r => `${r.nombre}: ${r.error}`).join(" | ") || `No se pudo enviar la meta "${meta.titulo}"`;
+    throw new Error(message);
+  }
+  console.log(`📤 Meta "${meta.titulo}" enviada/procesada para ${client.nombres.join(" & ")}`);
+  return { ok: results.every(r => r.ok), partial: results.some(r => r.ok) && results.some(r => !r.ok), results };
 }
 
 // ── Procesar mensajes entrantes ───────────────────────────────────────────────

@@ -11,6 +11,7 @@ const utilityTemplates = require("./src/utilityTemplates");
 const { enviarTip, enviarPlantillaUtilidad } = require("./src/whatsapp");
 const { procesarMensaje, enviarMeta, enviarBienvenida } = require("./src/bot");
 const { recargarTodos } = require("./src/scheduler");
+const { explainMetaError } = require("./src/metaErrors");
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -128,8 +129,8 @@ app.post("/api/clients/:id/send", auth, async (req, res) => {
     const options = Object.prototype.hasOwnProperty.call(req.body, "utilityTemplateId")
       ? { utilityTemplateId: utilityTemplates.validateId(req.body.utilityTemplateId) }
       : {};
-    await enviarMeta(client.id, meta, options);
-    res.json({ ok: true });
+    const result = await enviarMeta(client.id, meta, options);
+    res.json({ ok: result?.ok !== false, partial: !!result?.partial, results: result?.results || [] });
   } catch (e) {
     console.error("Error al enviar meta", e.message);
     res.status(400).json({ error: e.message });
@@ -210,7 +211,8 @@ function recipientsFromClientIds(clientIds = [], includePairs = {}) {
     if (!client) continue;
     const phones = includePairs[clientId] ? (client.phones || []) : [client.phones?.[0]].filter(Boolean);
     for (const phone of phones) {
-      recipients.push({ clientId, phone, name: nombreCliente(client, phone) });
+      const index = (client.phones || []).indexOf(phone);
+      recipients.push({ clientId, phone, name: nombreCliente(client, phone), role: index > 0 ? "pareja" : "paciente principal" });
     }
   }
   return recipients;
@@ -227,16 +229,19 @@ function recipientsFromTipBody(body = {}) {
       clientId: client?.id || "directo",
       phone,
       name: body.patientName || (client ? nombreCliente(client, phone) : "Paciente"),
+      role: "paciente principal",
     });
   }
 
   const seen = new Set();
-  return recipients.filter(r => {
-    const key = `${r.clientId}:${r.phone}`;
+  const finalRecipients = recipients.filter(r => {
+    const key = r.phone;
     if (!r.phone || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+  console.log("Destinatarios finales del envío", JSON.stringify(finalRecipients.map(r => ({ clientId: r.clientId, phone: r.phone, name: r.name, role: r.role }))));
+  return finalRecipients;
 }
 
 async function createAndReviewTipSends(tip, body = {}) {
@@ -250,7 +255,15 @@ async function createAndReviewTipSends(tip, body = {}) {
     utilityTemplates.validateId(body.utilityTemplateId)
   );
   await revisarTipsProgramados();
-  return sends.map(send => tips.getSend(send.id) || send);
+  const reviewed = sends.map(send => tips.getSend(send.id) || send);
+  console.log("Resumen final del envío a pareja", JSON.stringify({
+    tipId: tip.id,
+    total: reviewed.length,
+    ok: reviewed.filter(send => send.status === "enviado").length,
+    error: reviewed.filter(send => send.status === "error").length,
+    pending: reviewed.filter(send => ["programado", "pendiente"].includes(send.status)).length,
+  }));
+  return reviewed;
 }
 
 async function sendTipRecord(send) {
@@ -266,6 +279,7 @@ async function sendTipRecord(send) {
   let contentStarted = false;
   try {
     tips.updateSend(send.id, { status: "enviando", error: "" });
+    console.log(send.recipientRole === "pareja" ? "Enviando a pareja" : "Enviando a paciente principal", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, tipTitle: send.tipTitle }));
     console.log("Tip listo para enviar", JSON.stringify({ id: send.id, tipo: tip.type }));
     console.log("Fecha programada", send.scheduledAt);
     console.log("Fecha actual", new Date().toISOString());
@@ -314,14 +328,17 @@ async function sendTipRecord(send) {
       deliveryStatus: "accepted",
     });
     console.log("Tip enviado correctamente", JSON.stringify({ id: send.id, phone: send.phone, metaMessageId: result.primaryMessageId }));
+    console.log(send.recipientRole === "pareja" ? "Resultado envío pareja" : "Resultado envío paciente principal", JSON.stringify({ id: send.id, phone: send.phone, ok: true }));
   } catch (e) {
     const utilityTemplate = utilityTemplates.get(send.utilityTemplateId);
+    const realError = explainMetaError(e.message);
     const templateFailed = utilityTemplate && !utilityTemplateSent && !contentStarted;
     const detail = templateFailed
-      ? `Error al enviar plantilla previa: ${e.message}`
+      ? `Error al enviar plantilla previa: ${realError}`
       : utilityTemplateSent
-        ? `Plantilla previa enviada correctamente, pero falló el envío del tip: ${e.message}`
-        : `Error al enviar tip: ${e.message}`;
+        ? `Plantilla previa enviada correctamente, pero falló el envío del tip: ${realError}`
+        : `Error al enviar tip: ${realError}`;
+    console.error("Error individual de destinatario", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, role: send.recipientRole, error: detail }));
     console.error(templateFailed ? "Error al enviar plantilla previa" : "Error al enviar contenido principal", JSON.stringify({ id: send.id, phone: send.phone, error: detail }));
     tips.updateSend(send.id, { status: "error", error: detail });
     history.registrar(send.clientId, send.phone, send.patientName, {
@@ -333,6 +350,7 @@ async function sendTipRecord(send) {
       utilityTemplateId: send.utilityTemplateId || "",
       utilityTemplateLabel: utilityTemplate?.label || "",
     });
+    console.log("Continuando con siguiente destinatario", JSON.stringify({ id: send.id, phone: send.phone, tipTitle: send.tipTitle }));
   }
 }
 
@@ -457,7 +475,7 @@ app.post("/webhook", async (req, res) => {
           if (status.status === "failed") {
             const knownTip = tips.findByMetaMessageId(status.id);
             const isTipTemplate = knownTip?.utilityTemplateMessageId === status.id;
-            const detail = `${isTipTemplate ? "Meta reportó fallo de entrega de la plantilla previa" : "Meta reportó fallo de entrega del contenido principal"}: ${errorText || "sin detalle"}`;
+            const detail = `${isTipTemplate ? "Meta reportó fallo de entrega de la plantilla previa" : "Meta reportó fallo de entrega del contenido principal"}: ${explainMetaError(errorText || "sin detalle")}`;
             tips.updateByMetaMessageId(status.id, { status: "error", deliveryStatus: "failed", error: detail });
             const updatedHistory = history.updateByMetaMessageId(status.id, { deliveryStatus: "failed", comentario: detail });
             if (updatedHistory) {

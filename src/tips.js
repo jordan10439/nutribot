@@ -154,6 +154,7 @@ function createSends(tip, recipients, message, scheduledAt, utilityTemplateId = 
     clientId: r.clientId,
     phone: r.phone,
     patientName: r.name || "Paciente",
+    recipientRole: r.role || "paciente principal",
     message,
     utilityTemplateId,
     scheduledAt: when,

@@ -1436,10 +1436,10 @@ function confirmSendTip(){
   if(sendBtn)sendBtn.disabled=true;
   api('POST','/tips/send',{tipId:tip.id,clientIds:[...new Set(recipients.map(r=>r.clientId))],includePairs,message,scheduledAt:when.toISOString(),utilityTemplateId:I('tip_send_utility_template').value}).then(async res=>{
     if(res.error){showToast(`⚠️ ${res.error}`);return}
-    const failed=(res.sends||[]).find(s=>s.status==='error');
+    const failed=(res.sends||[]).filter(s=>s.status==='error');
     closeM('tipSendModal');
     await loadTips();
-    if(failed){showToast(`⚠️ ${failed.error}`);return}
+    if(failed.length){showToast(`⚠️ ${failed.length} destinatario(s) con error. Revisa Historial de tips.`);return}
     showToast(when>new Date(Date.now()+60000)?'📅 Tip programado':'📤 Tip enviado por WhatsApp');
   }).finally(()=>{
     tipSending=false;
@@ -1616,7 +1616,9 @@ async function saveMeta(sendNow=false){
   }
   if(sendNow){
     const goalToSend = mid || (res && res.goal && res.goal.id) || null;
-    await fetch(`/api/clients/${clientId}/send`,{method:'POST',headers:{'Content-Type':'application/json','x-admin-token':TOKEN},body:JSON.stringify({goalId: goalToSend,utilityTemplateId:payload.utilityTemplateId})});
+    const sendRes=await api("POST",`/clients/${clientId}/send`,{goalId: goalToSend,utilityTemplateId:payload.utilityTemplateId});
+    if(sendRes.error)showToast(`⚠️ ${sendRes.error}`);
+    else if(sendRes.partial)showToast("⚠️ Meta enviada parcialmente. Revisa Actividad para ver el detalle por persona.");
   }
   closeM("mm");loadAll();
 }
@@ -1637,7 +1639,8 @@ async function confirmSendMeta(){
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   closeM("metaSendModal");
   await loadGoalsDashboard();
-  showToast(`📤 Meta enviada a ${c?.nombres?.join(" & ")}`);
+  if(res.partial)showToast("⚠️ Meta enviada parcialmente. Revisa Actividad para ver el detalle por persona.");
+  else showToast(`📤 Meta enviada a ${c?.nombres?.join(" & ")}`);
 }
 
 function closeM(id){
