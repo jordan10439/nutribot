@@ -1120,7 +1120,7 @@ function buildChatTimeline(historyEntries,client){
     }
     if(entry.tipo==="meta_enviada"){
       timeline.push(chatEvent(entry.fecha,"out","Meta enviada",`🎯 Meta enviada: ${entry.meta||"Meta"}`,entry));
-      timeline.push(chatEvent(entry.fecha,"out","Mensaje automático del bot","¿Completaste esta meta?",entry));
+      timeline.push(chatEvent(entry.fecha,"out","Mensaje automático del bot","¿Has completado la meta? 🌱",entry));
       return;
     }
     if(entry.tipo==="plantilla_previa_enviada"||entry.tipo==="bienvenida_enviada"){

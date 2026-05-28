@@ -30,6 +30,27 @@ function nombreDe(client, phone) {
 function esIndividual(client) { return client.phones.length === 1; }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
 
+function formatMetaTitle(meta) {
+  const emoji = String(meta?.emoji || "").trim();
+  const title = String(meta?.titulo || "Meta").trim();
+  return `${emoji ? `${emoji} ` : ""}*${title}*`;
+}
+
+function formatMetaMessage(nombre, meta) {
+  const description = String(meta?.descripcion || meta?.titulo || "").trim();
+  return [
+    "¡Nueva meta!",
+    "",
+    `Hola ${nombre}`,
+    "",
+    formatMetaTitle(meta),
+    "",
+    description,
+    "",
+    msg.get("pedir_listo"),
+  ].filter((line, index, lines) => line || lines[index - 1]).join("\n");
+}
+
 function metaRecipients(client) {
   const seen = new Set();
   return (client.phones || []).map((phone, index) => ({
@@ -210,17 +231,12 @@ async function enviarMeta(clientId, meta, options = {}) {
     let interactionMessageId = "";
     const trace = { clientId, role, nombre, phone, goalId: meta.id, meta: meta.titulo, destinatarioIndex: index + 1, totalDestinatarios: recipients.length };
 
-    const texto =
-      `🎯 *¡Nueva Meta!*\n\n` +
-      `Hola ${nombre}! ${meta.emoji}\n\n` +
-      `*${meta.titulo}*\n\n` +
-      `📋 ${meta.descripcion}\n\n` +
-      msg.get("pedir_listo");
+    const texto = formatMetaMessage(nombre, meta);
 
     // Enviar la pregunta con botones Sí / No
     const botones = [
-      { id: `meta_si`, title: "Sí" },
-      { id: `meta_no`, title: "No" }
+      { id: `meta_si`, title: "Sí, la cumplí" },
+      { id: `meta_no`, title: "Aún no" }
     ];
     try {
       console.log(`Procesando destinatario ${index + 1}`, JSON.stringify({ total: recipients.length, clientId, phone, nombre, role, meta: meta.titulo }));
@@ -381,7 +397,7 @@ async function procesarMensaje(m) {
   // ── Esperando LISTO ──────────────────────────────────────────────────────
   if (s.flow === state.FLOW.META_ENVIADA) {
     // Accept button replies (meta_si / meta_no) or free-text yes/no
-    if (incoming.raw === 'meta_si' || /^(si|sí|s|yes|y)$/i.test(incoming.raw)) {
+    if (incoming.raw === 'meta_si' || /^(si|sí|s|yes|y|si,?\s*la\s*cumpli|sí,?\s*la\s*cumplí|la\s*cumpli|la\s*cumplí)$/i.test(incoming.raw)) {
       // User answered YES
       if (points.yaCompleto(client.id, phone)) {
         await enviar(phone, `¡Ya completaste esta meta! 🎉${solo ? "" : " Espera a tu compañer@. 💪"}`);
@@ -398,7 +414,7 @@ async function procesarMensaje(m) {
         const botonesEst = be.map((t, i) => ({ id: `estrellas_${i}`, title: t }));
         await enviarBotones(phone, msg.get("pedir_estrellas"), botonesEst);
       }
-    } else if (incoming.raw === 'meta_no' || /^(no|n|nah|not)$/i.test(incoming.raw)) {
+    } else if (incoming.raw === 'meta_no' || /^(no|n|nah|not|aun\s*no|aún\s*no)$/i.test(incoming.raw)) {
       // User answered NO
       const meta = s.meta;
       // register as no_completada
@@ -431,7 +447,7 @@ async function procesarMensaje(m) {
       }
     } else {
       // Re-send buttons
-      await enviarBotones(phone, msg.get("pedir_listo"), [{ id: 'meta_si', title: 'Sí' }, { id: 'meta_no', title: 'No' }]);
+      await enviarBotones(phone, msg.get("pedir_listo"), [{ id: 'meta_si', title: 'Sí, la cumplí' }, { id: 'meta_no', title: 'Aún no' }]);
     }
     return;
   }
