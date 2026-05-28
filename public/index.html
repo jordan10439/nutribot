@@ -157,6 +157,11 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .tip-pair-option{margin:5px 0 0 22px;font-size:12px;color:#5a8a5a}
 .tip-preview{background:#f8fcf8;border:1px solid #e0ece0;border-radius:10px;padding:10px;font-size:12px;color:#2a5738;line-height:1.45;white-space:pre-wrap;max-height:180px;overflow:auto}
 .tip-note{font-size:11px;color:#7a9a7a;line-height:1.4}
+.meta-preview{background:#f8fcf8;border:1px solid #e0ece0;border-radius:10px;padding:12px;color:#2a5738;font-size:13px;line-height:1.45;white-space:pre-wrap}
+.meta-preview-emoji{font-size:30px;line-height:1.1;margin:6px 0}
+.meta-preview-title{font-weight:900;font-size:14px;color:#213b26}
+.meta-preview-buttons{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.meta-preview-button{border:1px solid #3d7a4f;border-radius:8px;padding:6px 9px;font-size:11px;font-weight:800;color:#2a5738;background:#fff}
 /* MODAL */
 .mo{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:9999;padding:16px}
 .mo.open{display:flex}
@@ -367,9 +372,10 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   <div class="modal">
     <h2>🎯 Nueva meta</h2>
     <input type="hidden" id="mcid"/>
-    <div class="fg"><label>Emoji</label><input id="me" placeholder="🥦" maxlength="4" style="width:80px"/></div>
-    <div class="fg"><label>Título de la meta</label><input id="mt" placeholder="Ej: Tomar 2 litros de agua"/></div>
-    <div class="fg"><label>Descripción</label><textarea id="md" rows="3" placeholder="Describe qué debe hacer..."></textarea></div>
+    <div class="fg"><label>Emoji</label><input id="me" placeholder="🥦" maxlength="4" style="width:80px" oninput="previewMetaMessage()"/></div>
+    <div class="fg"><label>Título de la meta</label><input id="mt" placeholder="Ej: Tomar 2 litros de agua" oninput="previewMetaMessage()"/></div>
+    <div class="fg"><label>Descripción</label><textarea id="md" rows="3" placeholder="Describe qué debe hacer..." oninput="previewMetaMessage()"></textarea></div>
+    <div class="fg"><label>Vista previa WhatsApp</label><div id="meta_preview" class="meta-preview"></div></div>
     <div class="fg"><label>Hora del recordatorio</label><input type="time" id="mh" value="09:00"/></div>
     <div class="fg"><label>Días</label>
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px">
@@ -1562,7 +1568,7 @@ async function sendWelcome(id){
 function openMM(clientId, goalId){
   I("mcid").value=clientId;
   I("mid").value = goalId || "";
-  I("me").value="🎯";I("mt").value="";I("md").value="";I("mh").value="09:00";
+  I("me").value="";I("mt").value="";I("md").value="";I("mh").value="09:00";
   // reset day buttons
   document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));
   // defaults for new meta
@@ -1580,7 +1586,7 @@ function openMM(clientId, goalId){
     const client = clients.find(c=>c.id===clientId);
     const goal = client?.goals?.find(g=>g.id===goalId);
     if(goal){
-      I("me").value = goal.emoji || "🎯";
+      I("me").value = goal.emoji || "";
       I("mt").value = goal.titulo || "";
       I("md").value = goal.descripcion || "";
       I("mh").value = goal.hora || "09:00";
@@ -1603,7 +1609,15 @@ function openMM(clientId, goalId){
       fillUtilitySelect("m_utility_template",goal.utilityTemplateId||"");
     }
   }
+  previewMetaMessage();
   I("mm").classList.add("open")
+}
+function previewMetaMessage(){
+  const el=I("meta_preview"); if(!el)return;
+  const emoji=I("me")?.value?.trim()||"";
+  const title=I("mt")?.value?.trim()||"Título de la meta";
+  const description=I("md")?.value?.trim()||"Descripción de la meta";
+  el.innerHTML=`<div>🌱 <strong>¡Nueva meta!</strong></div>${emoji?`<div class="meta-preview-emoji">${escapeHtml(emoji)}</div>`:""}<div class="meta-preview-title">${escapeHtml(title)}</div><div style="margin-top:8px">${escapeHtml(description)}</div><div style="margin-top:10px">¿Has completado la meta? 🌱</div><div class="meta-preview-buttons"><span class="meta-preview-button">Sí, la cumplí</span><span class="meta-preview-button">Aún no</span></div>`;
 }
 document.querySelectorAll(".db").forEach(b=>b.addEventListener("click",()=>b.classList.toggle("active")));
 // Toggle schedule mode UI (weekdays vs specific date)
@@ -1626,7 +1640,7 @@ async function saveMeta(sendNow=false){
   const payload = {
     titulo,
     descripcion:I("md").value.trim()||titulo,
-    emoji:I("me").value||"🎯",
+    emoji:I("me").value.trim(),
     hora:I("mh").value,
     requiereFoto: !!I("m_requiere_foto").checked,
     repetirSiNo: !!I("m_repetir_si_no").checked,

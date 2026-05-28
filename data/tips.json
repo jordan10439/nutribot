@@ -34,12 +34,12 @@
       "patientName": "carla",
       "message": "hola\n\nhola",
       "scheduledAt": "2026-05-28T18:44:00.000Z",
-      "status": "programado",
-      "error": "",
+      "status": "error",
+      "error": "Error al enviar tip: WhatsApp/Meta rechazó la solicitud (tip) | HTTP 401 | code=190 | type=OAuthException | fbtrace_id=A7uWt_xHls3a-wa7qWsy4cx | message=\"Invalid OAuth access token - Cannot parse access token\"",
       "createdAt": "2026-05-27T17:53:44.156Z",
       "sentAt": null,
       "utilityTemplateId": "",
-      "updatedAt": "2026-05-27T18:42:30.795Z"
+      "updatedAt": "2026-05-28T19:13:47.460Z"
     }
   ]
 }

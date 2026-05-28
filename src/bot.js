@@ -38,17 +38,12 @@ function formatMetaTitle(meta) {
 
 function formatMetaMessage(nombre, meta) {
   const description = String(meta?.descripcion || meta?.titulo || "").trim();
-  return [
-    "¡Nueva meta!",
-    "",
-    `Hola ${nombre}`,
-    "",
-    formatMetaTitle(meta),
-    "",
-    description,
-    "",
-    msg.get("pedir_listo"),
-  ].filter((line, index, lines) => line || lines[index - 1]).join("\n");
+  const emoji = String(meta?.emoji || "").trim();
+  const lines = ["🌱 *¡Nueva meta!*", ""];
+  if (emoji) lines.push(emoji, "");
+  lines.push(`*${String(meta?.titulo || "Meta").trim()}*`);
+  if (description) lines.push("", description);
+  return lines.join("\n");
 }
 
 function metaRecipients(client) {

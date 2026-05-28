@@ -1,0 +1,19 @@
+{
+  "carla_1779904406115": [
+    {
+      "id": "1779995627461_fg899",
+      "phone": "56962849942",
+      "nombre": "carla",
+      "fecha": "2026-05-28T19:13:47.462Z",
+      "tipo": "tip_error",
+      "meta": "hola",
+      "metaEmoji": "💬",
+      "comentario": "Error al enviar tip: WhatsApp/Meta rechazó la solicitud (tip) | HTTP 401 | code=190 | type=OAuthException | fbtrace_id=A7uWt_xHls3a-wa7qWsy4cx | message=\"Invalid OAuth access token - Cannot parse access token\"",
+      "direccion": "saliente",
+      "utilityTemplateId": "",
+      "utilityTemplateLabel": "",
+      "deliveryStage": "contenido_principal",
+      "templateWasSent": false
+    }
+  ]
+}

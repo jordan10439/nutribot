@@ -72,7 +72,7 @@ app.post("/api/clients/:id/goals", auth, (req, res) => {
     id: Date.now().toString(),
     titulo,
     descripcion: descripcion || titulo,
-    emoji: emoji || "🎯",
+    emoji: emoji || "",
     hora: hora || "09:00",
     dias: specificDate ? [] : (dias || [1,2,3,4,5]),
     specificDate: specificDate || "",
@@ -97,7 +97,7 @@ app.put("/api/clients/:id/goals/:goalId", auth, (req, res) => {
   const { titulo, descripcion, emoji, hora, dias, specificDate, requiereFoto, repetirSiNo, repetirFreq, utilityTemplateId } = req.body;
   if (titulo) goal.titulo = titulo;
   if (descripcion) goal.descripcion = descripcion;
-  if (emoji) goal.emoji = emoji;
+  if (typeof emoji !== "undefined") goal.emoji = emoji || "";
   if (hora) goal.hora = hora;
   if (dias) goal.dias = dias;
   if (typeof specificDate !== "undefined") goal.specificDate = specificDate || "";
