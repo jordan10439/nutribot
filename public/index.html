@@ -575,6 +575,33 @@ function panelDate(value){
   return value?new Date(value).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"Sin registro";
 }
 
+function pad2(value){
+  return String(value).padStart(2,"0");
+}
+
+function localDateInputValue(date=new Date()){
+  return `${date.getFullYear()}-${pad2(date.getMonth()+1)}-${pad2(date.getDate())}`;
+}
+
+function localTimeInputValue(date=new Date()){
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function clientDisplayName(client){
+  return (client?.nombres||[]).filter(Boolean).join(" & ")||"Paciente";
+}
+
+function clientKindLabel(client){
+  return (client?.phones||[]).length>1?"Pareja":"Individual";
+}
+
+function patientChoiceLabel(client,index=null){
+  const names=client?.nombres||[];
+  const name=index===null?clientDisplayName(client):(names[index]||names[0]||"Paciente");
+  const sameNameCount=(clients||[]).filter(item=>clientDisplayName(item).toLowerCase()===clientDisplayName(client).toLowerCase()).length;
+  return sameNameCount>1||((client?.phones||[]).length>1&&index===null)?`${name} · ${clientKindLabel(client)}`:name;
+}
+
 function goalProgramming(goal){
   if(goal.status==="error")return goal.deliveryError?`Error al enviar: ${escapeHtml(goal.deliveryError)}`:"Error al enviar";
   if(goal.sentAt)return `Enviada el ${panelDate(goal.sentAt)}`;
@@ -1030,7 +1057,7 @@ function updateChatSel(){
     const phones=c.phones||[];
     return phones.map((phone,index)=>({
     value:`${c.id}::${phone}`,
-    label:(c.nombres?.[index]||c.nombres?.[0]||"Paciente")+(phones.length>1?` · ${phone}`:""),
+    label:patientChoiceLabel(c,index),
   }));
   });
   sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
@@ -1485,12 +1512,12 @@ function openSendModal(tipId){
   (clients||[]).forEach(c=>{
     const row=document.createElement('div'); row.className='tip-client-row';
     const pair=(c.phones||[]).length>1?`<div class="tip-pair-option"><label><input type="checkbox" id="tip_pair_${c.id}" onchange="previewTipSend()"> Enviar también a la pareja</label></div>`:'';
-    row.innerHTML=`<label><input type="checkbox" data-client="${c.id}" onchange="previewTipSend()"> ${escapeHtml(c.nombres?.join(' & ')||'Paciente')} · ${escapeHtml((c.phones||[]).join(' · '))}</label>${pair}`;
+    row.innerHTML=`<label><input type="checkbox" data-client="${c.id}" onchange="previewTipSend()"> ${escapeHtml(patientChoiceLabel(c))}</label>${pair}`;
     box.appendChild(row);
   });
   const now=new Date();
-  I('tip_send_date').value=now.toISOString().slice(0,10);
-  I('tip_send_time').value=now.toTimeString().slice(0,5);
+  I('tip_send_date').value=localDateInputValue(now);
+  I('tip_send_time').value=localTimeInputValue(now);
   previewTipSend();
   I('tipSendModal').classList.add('open');
 }
@@ -1537,10 +1564,9 @@ function confirmSendTip(){
 function localScheduledValues(iso){
   const d=new Date(iso);
   if(Number.isNaN(d.getTime()))return {date:'',time:''};
-  const pad=n=>String(n).padStart(2,'0');
   return {
-    date:`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`,
-    time:`${pad(d.getHours())}:${pad(d.getMinutes())}`,
+    date:localDateInputValue(d),
+    time:localTimeInputValue(d),
   };
 }
 function openScheduledTip(sendId){
@@ -1548,7 +1574,7 @@ function openScheduledTip(sendId){
   if(!send||!['programado','pendiente'].includes(send.status)){showToast('Este envio ya no se puede editar');return}
   const values=localScheduledValues(send.scheduledAt);
   I('tip_scheduled_id').value=send.id;
-  I('tip_scheduled_patient').value=`${send.patientName||'Paciente'} - +${send.phone||''}`;
+  I('tip_scheduled_patient').value=send.patientName||'Paciente';
   I('tip_scheduled_message').value=send.message||'';
   I('tip_scheduled_date').value=values.date;
   I('tip_scheduled_time').value=values.time;
@@ -1616,7 +1642,8 @@ async function sendWelcome(id){
 function openMM(clientId, goalId){
   I("mcid").value=clientId;
   I("mid").value = goalId || "";
-  I("me").value="";I("mt").value="";I("md").value="";I("mh").value="09:00";
+  const now=new Date();
+  I("me").value="";I("mt").value="";I("md").value="";I("mh").value=localTimeInputValue(now);
   // reset day buttons
   document.querySelectorAll(".db").forEach(b=>b.classList.toggle("active",[1,2,3,4,5].includes(+b.dataset.day)));
   // defaults for new meta
@@ -1629,7 +1656,7 @@ function openMM(clientId, goalId){
   I("m_mode_dias").checked = true; I("m_mode_date").checked = false;
   I("m_days_selector").style.display = '';
   I("m_date_selector").style.display = 'none';
-  I("m_specific_date").value = '';
+  I("m_specific_date").value = localDateInputValue(now);
   if(goalId){
     const client = clients.find(c=>c.id===clientId);
     const goal = client?.goals?.find(g=>g.id===goalId);
