@@ -2,7 +2,7 @@
 // Guarda todos los mensajes enviados y recibidos por paciente
 const fs   = require("fs");
 const path = require("path");
-const FILE = path.join(__dirname, "../data/conversations.json");
+const FILE = path.join(__dirname, "../data/conversaciones.json");
 
 function load() {
   try {

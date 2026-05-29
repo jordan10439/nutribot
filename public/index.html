@@ -1026,10 +1026,13 @@ async function loadGlobal(){
 function updateChatSel(){
   const sel=I("chat-sel");
   const cur=sel.value;
-  const options=clients.flatMap(c=>(c.phones||[]).map((phone,index)=>({
+  const options=(Array.isArray(clients)?clients:[]).flatMap(c=>{
+    const phones=c.phones||[];
+    return phones.map((phone,index)=>({
     value:`${c.id}::${phone}`,
-    label:(c.nombres?.[index]||c.nombres?.[0]||"Paciente")+(c.phones.length>1?` · ${phone}`:""),
-  })));
+    label:(c.nombres?.[index]||c.nombres?.[0]||"Paciente")+(phones.length>1?` · ${phone}`:""),
+  }));
+  });
   sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
   sel.value=cur;
 }
@@ -1080,6 +1083,10 @@ function chatTime(value){
 
 function chatEvent(time,direction,kind,text,entry={},suffix=""){
   return { time, direction, kind, text, media:entry.media||null, suffix, source:entry };
+}
+
+function normalizePhone(value){
+  return String(value||"").replace(/\D/g,"");
 }
 
 function offsetChatTime(value,offset){
@@ -1156,6 +1163,20 @@ function buildChatTimeline(historyEntries,client){
   return timeline.sort((a,b)=>new Date(a.time)-new Date(b.time));
 }
 
+function buildRawConversationTimeline(conversationEntries=[]){
+  return (Array.isArray(conversationEntries)?conversationEntries:[]).map(entry=>{
+    const sent=entry.tipo==="enviado"||entry.direccion==="saliente";
+    const text=friendlyReply(entry.texto||entry.comentario||entry.message||"");
+    let kind=sent?"Mensaje automático del bot":"Respuesta del paciente";
+    if(/^\[Plantilla:/i.test(text))kind="Plantilla enviada";
+    else if(/^\[Botones\]/i.test(text))kind="Mensaje con botones";
+    else if(/^\[Tip\]/i.test(text))kind="Tip enviado";
+    else if(/^Dificultad:/i.test(text))kind="Dificultad seleccionada";
+    else if(/^Sí, completó|^No completó/i.test(text))kind="Respuesta sobre meta";
+    return chatEvent(entry.fecha||new Date().toISOString(),sent?"out":"in",kind,text,entry);
+  });
+}
+
 function renderChatBubble(item,patientName){
   const incoming=item.direction==="in";
   const media=item.media?.id?`<button class="chat-photo-link" onclick="openGoalPhoto('${encodeURIComponent(item.media.id)}')">📷 Ver foto</button><img class="chat-photo" src="/api/media/${encodeURIComponent(item.media.id)}?token=${encodeURIComponent(TOKEN)}" alt="Foto enviada" onclick="openGoalPhoto('${encodeURIComponent(item.media.id)}')"/>`:"";
@@ -1164,24 +1185,51 @@ function renderChatBubble(item,patientName){
 }
 
 async function loadChat(){
-  const selected=I("chat-sel").value;
+  const selected=I("chat-sel")?.value||"";
   const el=I("chat-area");
-  if(!selected){el.innerHTML=`<div class="chat-thread"><div class="empty"><div>💬</div><p>Selecciona un paciente para ver su conversación</p></div></div>`;return}
-  const [id,phone]=selected.split("::");
-  const client=clients.find(item=>item.id===id);
-  const patientName=client?.nombres?.[(client?.phones||[]).indexOf(phone)]||client?.nombres?.[0]||"Paciente";
-  const h=(await api("GET",`/clients/${id}/history`)).filter(entry=>!phone||entry.phone===phone);
-  const timeline=buildChatTimeline(h,client);
-  if(!timeline.length){el.innerHTML=`<div class="chat-thread"><div class="empty"><div>💬</div><p>Aún no hay conversación registrada con este paciente.</p></div></div>`;return}
-
-  let currentDay="";
-  el.innerHTML=`<div class="chat-thread">${timeline.map(item=>{
-    const day=chatDateKey(item.time);
-    const separator=day!==currentDay?`<div class="chat-day"><span>${escapeHtml(chatDayLabel(item.time))}</span></div>`:"";
-    currentDay=day;
-    return separator+renderChatBubble(item,patientName);
-  }).join("")}</div>`;
-  el.scrollTop=el.scrollHeight;
+  console.log("Cargando conversaciones");
+  try{
+    if(!el)return;
+    if(!selected){el.innerHTML=`<div class="chat-thread"><div class="empty"><div>💬</div><p>Selecciona un paciente para ver su conversación</p></div></div>`;return}
+    const [id,phoneRaw]=selected.split("::");
+    const phone=normalizePhone(phoneRaw);
+    console.log("Paciente seleccionado",JSON.stringify({id,phone}));
+    const client=clients.find(item=>item.id===id);
+    if(!client){
+      console.warn("No hay mensajes para este paciente",JSON.stringify({id,reason:"cliente no encontrado"}));
+      el.innerHTML=`<div class="chat-thread"><div class="empty"><div>💬</div><p>Aún no hay conversación registrada con este paciente.</p></div></div>`;
+      return;
+    }
+    const phoneIndex=(client.phones||[]).findIndex(item=>normalizePhone(item)===phone);
+    const patientName=client?.nombres?.[phoneIndex]||client?.nombres?.[0]||"Paciente";
+    const [historyResponse,conversationResponse]=await Promise.all([
+      api("GET",`/clients/${id}/history`),
+      api("GET",`/clients/${id}/conversations?phone=${encodeURIComponent(phone)}`)
+    ]);
+    console.log("Endpoint de conversaciones respondió",JSON.stringify({history:Array.isArray(historyResponse)?historyResponse.length:0,conversations:Array.isArray(conversationResponse)?conversationResponse.length:0}));
+    const h=(Array.isArray(historyResponse)?historyResponse:[]).filter(entry=>!phone||normalizePhone(entry.phone)===phone);
+    const fromHistory=buildChatTimeline(h,client);
+    const fromConversations=buildRawConversationTimeline(conversationResponse);
+    const timeline=[...fromHistory,...fromConversations].sort((a,b)=>new Date(a.time)-new Date(b.time));
+    console.log("Cantidad de mensajes encontrados",timeline.length);
+    if(!timeline.length){
+      console.log("No hay mensajes para este paciente",JSON.stringify({id,phone}));
+      el.innerHTML=`<div class="chat-thread"><div class="empty"><div>💬</div><p>Aún no hay conversación registrada con este paciente.</p></div></div>`;
+      return;
+    }
+    console.log("Renderizando conversación",JSON.stringify({id,phone,total:timeline.length}));
+    let currentDay="";
+    el.innerHTML=`<div class="chat-thread">${timeline.map(item=>{
+      const day=chatDateKey(item.time);
+      const separator=day!==currentDay?`<div class="chat-day"><span>${escapeHtml(chatDayLabel(item.time))}</span></div>`:"";
+      currentDay=day;
+      return separator+renderChatBubble(item,patientName);
+    }).join("")}</div>`;
+    el.scrollTop=el.scrollHeight;
+  }catch(err){
+    console.error("Error al renderizar conversaciones",err);
+    if(el)el.innerHTML=`<div class="chat-thread"><div class="empty"><div>⚠️</div><p>Error al renderizar conversaciones. Revisa la consola para ver el detalle.</p></div></div>`;
+  }
 }
 
 // ── MENSAJES CONFIG ──────────────────────────────────────────────────────────

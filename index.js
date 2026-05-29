@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const path       = require("path");
 const db         = require("./src/db");
 const history    = require("./src/history");
+const conversations = require("./src/conversations");
 const messages   = require("./src/messages");
 const tips       = require("./src/tips");
 const utilityTemplates = require("./src/utilityTemplates");
@@ -150,6 +151,19 @@ app.post("/api/clients/:id/welcome", auth, async (req, res) => {
 
 // ── Historial ──────────────────────────────────────────────────────────────────
 app.get("/api/clients/:id/history", auth, (req, res) => res.json(history.getHistorial(req.params.id)));
+app.get("/api/clients/:id/conversations", auth, (req, res) => {
+  const client = db.getById(req.params.id);
+  if (!client) return res.status(404).json({ error: "No encontrado" });
+  const selectedPhone = String(req.query.phone || "").replace(/\D/g, "");
+  const phones = selectedPhone ? [selectedPhone] : (client.phones || []).map(phone => String(phone).replace(/\D/g, ""));
+  const phoneSet = new Set(phones);
+  const items = conversations.getTodos().filter(entry => {
+    const normalized = String(entry.phone || "").replace(/\D/g, "");
+    return !phoneSet.size || phoneSet.has(normalized);
+  });
+  items.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  res.json(items);
+});
 app.get("/api/clients/:id/resumen", auth, (req, res) => res.json(history.getResumen(req.params.id)));
 app.get("/api/goals/dashboard", auth, (req, res) => res.json(history.getGoalsDashboard(db.getAll())));
 app.get("/api/history/all", auth, (req, res) => {
