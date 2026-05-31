@@ -525,6 +525,26 @@ app.post("/api/tip-sends/:id/cancel", auth, (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
+app.post("/api/tip-sends/:id/review", auth, (req, res) => {
+  try {
+    const send = tips.reviewErrorSend(req.params.id);
+    console.log("Error de tip marcado como revisado", JSON.stringify({ id: send.id }));
+    res.json({ ok: true, send });
+  } catch (e) {
+    console.error("Error al marcar tip como revisado", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+app.post("/api/tip-sends/clean-test-errors", auth, (req, res) => {
+  try {
+    const count = tips.cleanTestErrors();
+    console.log("Errores antiguos de prueba archivados", JSON.stringify({ count }));
+    res.json({ ok: true, count });
+  } catch (e) {
+    console.error("Error al limpiar errores antiguos de prueba", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
 
 // ── Webhook Meta ───────────────────────────────────────────────────────────────
 app.get("/webhook", (req, res) => {

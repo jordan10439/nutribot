@@ -177,7 +177,10 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .tip-history-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .tip-history h3{font-size:14px;color:#2a5738}
 .tip-history-select{min-width:210px;padding:8px 10px;border:1px solid #dbe9db;border-radius:8px;background:#fff;color:#2a5738;font-size:12px;font-weight:700;outline:none}
+.tip-history-filters{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
 .tip-history-row{display:grid;grid-template-columns:1.2fr .8fr .7fr .7fr;gap:8px;align-items:center;padding:8px;border:1px solid #e8f0e8;border-radius:9px;margin-bottom:6px;font-size:12px}
+.tip-error-detail{display:none;margin-top:7px;padding:7px;border-radius:7px;background:#fffafa;border:1px solid #f3d7d7;color:#6f3333;font-size:11px;white-space:pre-wrap;word-break:break-word}
+.tip-error-detail.open{display:block}
 .tip-send-list{max-height:210px;overflow:auto;padding:8px;border:1px solid #e0e8e0;border-radius:8px}
 .tip-client-row{padding:7px;border-bottom:1px solid #eef4ee}
 .tip-client-row:last-child{border-bottom:none}
@@ -393,6 +396,15 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
             <option value="">Todos los pacientes</option>
           </select>
         </div>
+        <div class="tip-history-filters">
+          <button class="tip-tab active" data-tip-history-filter="main" onclick="setTipHistoryFilter('main')">Todos</button>
+          <button class="tip-tab" data-tip-history-filter="programado" onclick="setTipHistoryFilter('programado')">Programados</button>
+          <button class="tip-tab" data-tip-history-filter="enviado" onclick="setTipHistoryFilter('enviado')">Enviados</button>
+          <button class="tip-tab" data-tip-history-filter="cancelado" onclick="setTipHistoryFilter('cancelado')">Cancelados</button>
+          <button class="tip-tab" data-tip-history-filter="error" onclick="setTipHistoryFilter('error')">Errores</button>
+          <button class="tip-tab" data-tip-history-filter="reviewed" onclick="setTipHistoryFilter('reviewed')">Errores revisados</button>
+          <button class="bam" onclick="cleanOldTipErrors()">Limpiar errores antiguos de prueba</button>
+        </div>
         <div id="tips-history"></div>
       </div>
     </div>
@@ -557,7 +569,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:""},patientInfoCache={},selectedInfoClientId="";
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:""},patientInfoCache={},selectedInfoClientId="";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -1671,6 +1683,11 @@ function setTipFolderFilter(folderId){
   renderTipsGallery();
   renderTipHistory();
 }
+function setTipHistoryFilter(filter){
+  tipHistoryFilter=filter;
+  document.querySelectorAll('[data-tip-history-filter]').forEach(b=>b.classList.toggle('active',b.dataset.tipHistoryFilter===filter));
+  renderTipHistory();
+}
 async function createTipFolder(){
   const name=prompt('Nombre de la carpeta');
   if(!name||!name.trim())return;
@@ -1712,6 +1729,28 @@ function folderMatchesType(folderId,type){
   const folder=(window._nutri_tip_folders||[]).find(f=>f.id===folderId);
   return !folder||type==='all'||(folder.type||'all')==='all'||folder.type===type;
 }
+function friendlyTipError(error){
+  const text=String(error||"");
+  if(/Invalid OAuth access token|Cannot parse access token|OAuthException|code=190/i.test(text))return "Error de token Meta";
+  if(/Re-engagement message/i.test(text))return "Fuera de ventana de 24 horas";
+  if(/No se recibió message ID/i.test(text))return "Meta no confirmó el envío";
+  if(/contenido principal/i.test(text))return "Error en contenido principal";
+  if(/plantilla/i.test(text))return "Error de plantilla previa";
+  return text ? "Error de envío" : "Error registrado";
+}
+function tipErrorExplanation(error){
+  const label=friendlyTipError(error);
+  if(label==="Error de token Meta")return "Error de token Meta: el token de acceso no es válido o está mal configurado.";
+  if(label==="Fuera de ventana de 24 horas")return "Meta rechazó el contenido libre porque el paciente podría estar fuera de la ventana de 24 horas.";
+  if(label==="Meta no confirmó el envío")return "WhatsApp/Meta no devolvió un message ID para confirmar el envío.";
+  return label;
+}
+function tipHistoryMatchesFilter(row){
+  if(tipHistoryFilter==="reviewed")return row.status==="error" && row.hidden;
+  if(tipHistoryFilter==="error")return row.status==="error" && !row.hidden;
+  if(tipHistoryFilter==="main")return !row.hidden;
+  return row.status===tipHistoryFilter && !row.hidden;
+}
 function renderTipsGallery(){
   const el = I('tips-gallery');
   const tips = (window._nutri_tips||[]).filter(t=>(tipFilter==='all'||t.type===tipFilter)&&(tipFolderFilter==='all'||(t.folderId||'general')===tipFolderFilter));
@@ -1743,18 +1782,45 @@ function renderTipHistory(){
   const rows=(window._nutri_tip_history||[]).filter(r=>{
     const rowClient=clients.find(c=>c.id===r.clientId);
     const rowText=searchNormalize([r.patientName,r.phone,rowClient?clientSearchText(rowClient):""].join(" "));
-    return (!tipSearch||rowText.includes(tipSearch))&&(!patientId||r.clientId===patientId||(!r.clientId&&patientNames.includes(r.patientName)))&&(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter);
+    return tipHistoryMatchesFilter(r)&&(!tipSearch||rowText.includes(tipSearch))&&(!patientId||r.clientId===patientId||(!r.clientId&&patientNames.includes(r.patientName)))&&(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter);
   }).slice(0,80);
   if(!rows.length){el.innerHTML=`<div class="empty-h">${tipSearch?'No se encontraron pacientes.':patientId?'No hay tips registrados para este paciente.':'Sin tips enviados o programados en esta vista.'}</div>`;return}
   el.innerHTML=rows.map(r=>{
     const eventDate=r.status==='enviado'?(r.sentAt||r.scheduledAt||r.when||r.createdAt):r.status==='cancelado'?(r.cancelledAt||r.scheduledAt||r.when||r.createdAt):(r.scheduledAt||r.when||r.createdAt);
     const eventLabel=r.status==='enviado'?'Enviado':r.status==='cancelado'?'Cancelado':'Programado para';
+    const errorLabel=friendlyTipError(r.error);
+    const errorDetail=[
+      `Error completo: ${r.error||'Sin detalle técnico'}`,
+      `Fecha: ${panelDate(eventDate)}`,
+      `Paciente: ${r.patientName||'Paciente'}`,
+      `Teléfono: ${r.phone||'Sin registro'}`,
+      `Tipo de tip: ${tipLabel(r.tipType)}`,
+      `Plantilla previa: ${r.utilityTemplateId?utilityTemplateLabel(r.utilityTemplateId):'Sin plantilla previa'}`,
+      `Etapa: ${r.deliveryStage==='plantilla_previa'?'Plantilla previa':r.deliveryStage==='contenido_principal'?'Contenido principal':'Sin registro'}`,
+    ].join('\n');
+    const statusLabel=r.status==='error'?(r.hidden?'Error revisado':'Error registrado'):r.status;
     return `<div class="tip-history-row">
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
     <div><span style="color:#7a9a7a">${eventLabel}</span><br>${new Date(eventDate).toLocaleString('es-CL')}</div>
     <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span><br><span style="color:#7a9a7a">${r.utilityTemplateId?`Previo: ${escapeHtml(utilityTemplateLabel(r.utilityTemplateId))}`:'Sin plantilla previa'}</span><br><span style="color:#7a9a7a">Tel: ${escapeHtml(r.phone||'Sin registro')}</span></div>
-    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(r.status)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Contenido: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.utilityTemplateMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID plantilla: ${escapeHtml(r.utilityTemplateMessageId)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID contenido: ${escapeHtml(r.metaMessageId)}</span>`:''}${r.error?`<br><span style="color:#c94040">${escapeHtml(r.error)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
+    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(statusLabel)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Contenido: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.status==='error'?`<br><span style="color:#c94040">${escapeHtml(tipErrorExplanation(r.error))}</span><div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="toggleTipErrorDetail('${r.id}')">Ver detalle</button>${!r.hidden?`<button class="bam" onclick="reviewTipError('${r.id}')">Marcar como revisado</button>`:''}</div><div class="tip-error-detail" id="tip-error-detail-${r.id}">${escapeHtml(errorDetail)}</div>`:''}${r.utilityTemplateMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID plantilla: ${escapeHtml(r.utilityTemplateMessageId)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID contenido: ${escapeHtml(r.metaMessageId)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
   </div>`}).join('');
+}
+function toggleTipErrorDetail(id){
+  I(`tip-error-detail-${id}`)?.classList.toggle('open');
+}
+async function reviewTipError(id){
+  const res=await api('POST',`/tip-sends/${id}/review`);
+  if(res.error){showToast(res.error);return}
+  await loadTips();
+  showToast('Error marcado como revisado');
+}
+async function cleanOldTipErrors(){
+  if(!confirm('¿Limpiar errores antiguos de prueba relacionados con token Meta? No se borrarán tips enviados ni programados.'))return;
+  const res=await api('POST','/tip-sends/clean-test-errors');
+  if(res.error){showToast(res.error);return}
+  await loadTips();
+  showToast(`Errores antiguos archivados: ${res.count||0}`);
 }
 function toggleTipType(){
   const type=I('tip_type').value;

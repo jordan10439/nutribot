@@ -177,6 +177,28 @@ function updateSend(id, patch) {
   return send;
 }
 
+function reviewErrorSend(id) {
+  const send = updateSend(id, { reviewedAt: new Date().toISOString(), hidden: true });
+  if (!send) throw new Error("Envío de tip no encontrado");
+  if (send.status !== "error") throw new Error("Solo puedes marcar como revisados los tips con error");
+  return send;
+}
+
+function cleanTestErrors() {
+  const data = load();
+  const testPattern = /Invalid OAuth access token|Cannot parse access token|OAuthException|code=190/i;
+  let count = 0;
+  data.sends = (data.sends || []).map(send => {
+    if (send.status === "error" && testPattern.test(String(send.error || "")) && !send.hidden) {
+      count += 1;
+      return { ...send, reviewedAt: new Date().toISOString(), hidden: true, updatedAt: new Date().toISOString() };
+    }
+    return send;
+  });
+  save(data);
+  return count;
+}
+
 function updateScheduledSend(id, payload) {
   const data = load();
   const send = data.sends.find(s => s.id === id);
@@ -265,6 +287,8 @@ module.exports = {
   listSends,
   listTips,
   pendingSends,
+  reviewErrorSend,
+  cleanTestErrors,
   updateSend,
   updateByMetaMessageId,
   updateScheduledSend,
