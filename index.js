@@ -41,7 +41,8 @@ app.get("/api/clients", auth, (req, res) => res.json(db.getAll()));
 app.post("/api/clients", auth, async (req, res) => {
   const { nombres, phones, timezone, goals } = req.body;
   if (!nombres?.length || !phones?.length) return res.status(400).json({ error: "Faltan datos" });
-  const client = { id: db.newId(nombres[0]), nombres, phones, timezone: timezone || "America/Santiago", goals: goals || [] };
+  const now = new Date().toISOString();
+  const client = { id: db.newId(nombres[0]), nombres, phones, timezone: timezone || "America/Santiago", goals: goals || [], createdAt: now, updatedAt: now };
   db.upsert(client);
   recargarTodos();
   // Enviar bienvenida solo si el cliente lo solicita (body.sendWelcome === true)

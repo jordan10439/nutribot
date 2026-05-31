@@ -15,7 +15,20 @@ function save(data) {
   fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
 }
 
-function getAll()     { return load().clients; }
+function clientCreatedTime(client) {
+  const explicit = new Date(client?.createdAt || client?.fechaRegistro || client?.registeredAt || 0).getTime();
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const idTime = Number(String(client?.id || "").match(/_(\d{10,})$/)?.[1] || 0);
+  return Number.isFinite(idTime) ? idTime : 0;
+}
+
+function sortClientsNewestFirst(clients) {
+  return [...(clients || [])].map((client, index) => ({ client, index, time: clientCreatedTime(client) }))
+    .sort((a, b) => (b.time - a.time) || (a.index - b.index))
+    .map(item => item.client);
+}
+
+function getAll()     { return sortClientsNewestFirst(load().clients); }
 function getById(id)  { return load().clients.find(c => c.id === id); }
 
 function upsert(client) {
@@ -36,4 +49,4 @@ function newId(name) {
   return name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"") + "_" + Date.now();
 }
 
-module.exports = { getAll, getById, upsert, remove, newId };
+module.exports = { getAll, getById, upsert, remove, newId, sortClientsNewestFirst };

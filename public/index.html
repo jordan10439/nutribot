@@ -545,7 +545,7 @@ function showTab(t){
 
 async function loadAll(){
   await loadUtilityTemplates();
-  clients=await api("GET","/clients");
+  clients=sortClientsNewestFirst(await api("GET","/clients"));
   await loadGoalsDashboard(false);
   renderClients();
   I("s1").textContent=clients.length;
@@ -611,6 +611,19 @@ function patientChoiceLabel(client,index=null){
   return sameNameCount>1||((client?.phones||[]).length>1&&index===null)?`${name} · ${clientKindLabel(client)}`:name;
 }
 
+function clientCreatedTime(client){
+  const explicit=new Date(client?.createdAt||client?.fechaRegistro||client?.registeredAt||0).getTime();
+  if(Number.isFinite(explicit)&&explicit>0)return explicit;
+  const idTime=Number(String(client?.id||"").match(/_(\d{10,})$/)?.[1]||0);
+  return Number.isFinite(idTime)?idTime:0;
+}
+
+function sortClientsNewestFirst(list){
+  return [...(list||[])].map((client,index)=>({client,index,time:clientCreatedTime(client)}))
+    .sort((a,b)=>(b.time-a.time)||(a.index-b.index))
+    .map(item=>item.client);
+}
+
 function searchNormalize(value){
   return String(value||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();
 }
@@ -627,7 +640,11 @@ function clientMatchesSearch(client,scope){
 }
 
 function searchedClients(scope){
-  return (clients||[]).filter(client=>clientMatchesSearch(client,scope));
+  return sortClientsNewestFirst(clients).filter(client=>clientMatchesSearch(client,scope));
+}
+
+function clientOrderIndex(clientId){
+  return sortClientsNewestFirst(clients).findIndex(client=>client.id===clientId);
 }
 
 function fillPatientSelect(id,scope,allLabel){
@@ -696,7 +713,10 @@ function visibleGoals(){
     if(goalFilter==="dificil"&&goal.difficulty!=="Difícil")return false;
     if(goalFilter==="revision"&&!goal.requiresReview)return false;
     return true;
-  }).sort((a,b)=>Number(b.requiresReview)-Number(a.requiresReview)||new Date(b.lastResponseAt||b.sentAt||0)-new Date(a.lastResponseAt||a.sentAt||0));
+  }).sort((a,b)=>{
+    const byClient=clientOrderIndex(a.clientId)-clientOrderIndex(b.clientId);
+    return byClient||Number(b.requiresReview)-Number(a.requiresReview)||new Date(b.lastResponseAt||b.sentAt||0)-new Date(a.lastResponseAt||a.sentAt||0);
+  });
 }
 
 function renderGoalsDashboard(){
