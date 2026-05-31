@@ -29,6 +29,12 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .sh h2{font-size:16px;font-weight:800;color:#2a5738}
 .ba{background:linear-gradient(135deg,#3d7a4f,#2a5738);color:#fff;border:none;padding:9px 18px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer}
+.patient-search{position:relative;min-width:210px;flex:1;max-width:340px}
+.patient-search.full{max-width:none;margin:0 0 14px}
+.patient-search.compact{min-width:190px;max-width:260px}
+.patient-search span{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;color:#6f8b72;pointer-events:none}
+.patient-search input{width:100%;padding:9px 12px 9px 32px;border:1px solid #dbe9db;border-radius:8px;background:#fff;color:#2a5738;font-size:12px;font-weight:700;outline:none}
+.patient-search input:focus{border-color:#3d7a4f;box-shadow:0 0 0 2px rgba(61,122,79,.08)}
 .card{background:#fff;border-radius:14px;padding:18px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.06);border:1px solid #e0ece0}
 .ch{display:flex;align-items:center;gap:10px;margin-bottom:12px}
 .av{width:42px;height:42px;border-radius:21px;background:linear-gradient(135deg,#3d7a4f,#2a5738);display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:800;flex-shrink:0}
@@ -234,6 +240,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
         <div class="sc"><div class="n" id="s4">0</div><div class="l">Mensajes hoy</div></div>
       </div>
       <div class="sh"><h2>👥 Pacientes</h2><button class="ba" onclick="openCM()">+ Agregar</button></div>
+      <div class="patient-search full"><span>🔎</span><input id="patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('patients',this.value)"/></div>
       <div id="clist"></div>
     </div>
   </div>
@@ -251,6 +258,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
           <button class="goal-filter" data-goal-filter="revision" onclick="setGoalFilter('revision')">Requieren revisión</button>
         </div>
         <div class="goal-filters">
+          <div class="patient-search compact"><span>🔎</span><input id="goal_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('goals',this.value)"/></div>
           <select class="goal-select" id="goal_patient_filter" onchange="renderGoalsDashboard()"><option value="">Todos los pacientes</option></select>
           <input class="goal-date" id="goal_date_filter" type="date" onchange="renderGoalsDashboard()" title="Filtrar por fecha de envío"/>
         </div>
@@ -265,6 +273,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="chat-header">
       <div class="chat-header-inner">
         <span style="font-size:13px;font-weight:700;color:#2a5738">💬 Conversación</span>
+        <div class="patient-search compact"><span>🔎</span><input id="chat_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('chat',this.value)"/></div>
         <select class="chat-sel" id="chat-sel" onchange="loadChat()">
           <option value="">Selecciona un paciente...</option>
         </select>
@@ -283,6 +292,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
       </div>
       <div class="activity-toolbar">
         <div class="activity-selects">
+          <div class="patient-search compact"><span>🔎</span><input id="activity_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('activity',this.value)"/></div>
           <select class="activity-select" id="fcli" onchange="loadGlobal()">
             <option value="">Todos los pacientes</option>
           </select>
@@ -337,6 +347,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
       <div class="tip-history">
         <div class="tip-history-head">
           <h3>Historial de tips</h3>
+          <div class="patient-search compact"><span>🔎</span><input id="tip_history_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('tips',this.value)"/></div>
           <select class="tip-history-select" id="tip_history_patient" onchange="renderTipHistory()">
             <option value="">Todos los pacientes</option>
           </select>
@@ -458,7 +469,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   <div class="modal">
     <h2>📤 Enviar tip</h2>
     <input type="hidden" id="tip_send_id" />
-    <div class="fg"><label>Seleccionar pacientes</label><div id="tip_send_clients" class="tip-send-list"></div></div>
+    <div class="fg"><label>Seleccionar pacientes</label><div class="patient-search full" style="margin-bottom:8px"><span>🔎</span><input id="tip_send_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('tipSend',this.value)"/></div><div id="tip_send_clients" class="tip-send-list"></div></div>
     <div class="fg"><label>Título editable</label><input id="tip_send_title" oninput="previewTipSend()" /></div>
     <div class="fg"><label id="tip_send_message_label">Descripción / contenido editable</label><textarea id="tip_send_message" rows="4" oninput="previewTipSend()"></textarea></div>
     <div class="fg"><label>Fecha</label><input type="date" id="tip_send_date" onchange="previewTipSend()" /></div>
@@ -487,7 +498,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all";
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:""};
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -540,7 +551,7 @@ async function loadAll(){
   I("s1").textContent=clients.length;
   I("s2").textContent=clients.reduce((a,c)=>a+(c.goals?.length||0),0);
   I("s3").textContent=clients.filter(c=>c.phones?.length>1).length;
-  I("fcli").innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${c.id}">${c.nombres?.join(" & ")}</option>`).join("");
+  fillActivityPatientSelect();
   updateChatSel();
 }
 
@@ -549,9 +560,7 @@ async function loadGoalsDashboard(refreshPatients=true){
   goalsDashboard=data?.goals&&data?.summaries?data:{goals:[],summaries:[]};
   const select=I("goal_patient_filter");
   if(select){
-    const selected=select.value;
-    select.innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${c.id}">${escapeHtml(c.nombres?.join(" & "))}</option>`).join("");
-    select.value=clients.some(c=>c.id===selected)?selected:"";
+    fillGoalPatientSelect();
   }
   renderGoalsDashboard();
   if(refreshPatients)renderClients();
@@ -602,6 +611,54 @@ function patientChoiceLabel(client,index=null){
   return sameNameCount>1||((client?.phones||[]).length>1&&index===null)?`${name} · ${clientKindLabel(client)}`:name;
 }
 
+function searchNormalize(value){
+  return String(value||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();
+}
+
+function clientSearchText(client){
+  return searchNormalize([...(client?.nombres||[]),...(client?.phones||[]),client?.id||"",clientKindLabel(client)].join(" "));
+}
+
+function clientMatchesSearch(client,scope){
+  const query=searchNormalize(patientSearches[scope]||"");
+  if(!query)return true;
+  if(!client)return false;
+  return clientSearchText(client).includes(query);
+}
+
+function searchedClients(scope){
+  return (clients||[]).filter(client=>clientMatchesSearch(client,scope));
+}
+
+function fillPatientSelect(id,scope,allLabel){
+  const select=I(id); if(!select)return;
+  const selected=select.value;
+  const matches=searchedClients(scope);
+  const selectedClient=clients.find(c=>c.id===selected);
+  const options=[...matches];
+  if(selectedClient&&!options.some(c=>c.id===selectedClient.id))options.unshift(selectedClient);
+  select.innerHTML=`<option value="">${allLabel}</option>`+(options.length?options.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(patientChoiceLabel(c))}</option>`).join(""):`<option value="" disabled>No se encontraron pacientes.</option>`);
+  select.value=clients.some(c=>c.id===selected)?selected:"";
+}
+
+function fillActivityPatientSelect(){
+  fillPatientSelect("fcli","activity","Todos los pacientes");
+}
+
+function fillGoalPatientSelect(){
+  fillPatientSelect("goal_patient_filter","goals","Todos los pacientes");
+}
+
+function setPatientSearch(scope,value){
+  patientSearches[scope]=value||"";
+  if(scope==="patients")renderClients();
+  if(scope==="goals"){fillGoalPatientSelect();renderGoalsDashboard();}
+  if(scope==="tips"){fillTipHistoryPatientSelect();renderTipHistory();}
+  if(scope==="tipSend"){renderTipSendClients();previewTipSend();}
+  if(scope==="chat"){updateChatSel();loadChat();}
+  if(scope==="activity"){fillActivityPatientSelect();renderActivity();}
+}
+
 function goalProgramming(goal){
   if(goal.status==="error")return goal.deliveryError?`Error al enviar: ${escapeHtml(goal.deliveryError)}`:"Error al enviar";
   if(goal.sentAt)return `Enviada el ${panelDate(goal.sentAt)}`;
@@ -630,6 +687,8 @@ function visibleGoals(){
   const patient=I("goal_patient_filter")?.value||"";
   const date=I("goal_date_filter")?.value||"";
   return (goalsDashboard.goals||[]).filter(goal=>{
+    const client=clients.find(c=>c.id===goal.clientId);
+    if(!clientMatchesSearch(client,"goals"))return false;
     if(patient&&goal.clientId!==patient)return false;
     if(date&&panelDateKey(goal.sentAt||goal.scheduledAt)!==date)return false;
     if(goalFilter==="pendiente"&&!["pendiente","programada"].includes(goal.status))return false;
@@ -642,10 +701,15 @@ function visibleGoals(){
 
 function renderGoalsDashboard(){
   const patientFilter=I("goal_patient_filter")?.value||"";
-  const summaries=(goalsDashboard.summaries||[]).filter(summary=>!patientFilter||summary.clientId===patientFilter);
+  const summaries=(goalsDashboard.summaries||[]).filter(summary=>{
+    const client=clients.find(c=>c.id===summary.clientId);
+    if(!clientMatchesSearch(client,"goals"))return false;
+    return !patientFilter||summary.clientId===patientFilter;
+  });
   const summaryEl=I("goal-summary-grid");
   const listEl=I("goal-list");
   if(!summaryEl||!listEl)return;
+  const noGoalPatients=patientSearches.goals?"No se encontraron pacientes.":"No hay pacientes para este filtro.";
   summaryEl.innerHTML=summaries.length?summaries.map(summary=>`<div class="goal-summary">
     <div class="goal-summary-head"><strong>${escapeHtml(summary.patientName)}</strong><span class="goal-state ${summary.requiresReview?'review':''}">${escapeHtml(summary.generalStatus)}</span></div>
     <div class="goal-metrics">
@@ -655,7 +719,7 @@ function renderGoalsDashboard(){
       <div class="goal-metric"><b>${summary.difficult}</b>Difíciles</div>
       <div class="goal-metric"><b>${summary.requiresReview}</b>Revisión</div>
     </div>
-  </div>`).join(""):`<div class="empty-h">No hay pacientes para este filtro.</div>`;
+  </div>`).join(""):`<div class="empty-h">${noGoalPatients}</div>`;
   const goals=visibleGoals();
   listEl.innerHTML=goals.length?`<div class="goal-list-head"><span>Meta / paciente</span><span>Estado de envío</span><span>Programación</span><span>Seguimiento</span><span>Foto</span><span>Última respuesta</span><span>Revisión</span><span></span></div>`+goals.map(goal=>`<div class="goal-row ${goal.requiresReview?'review':''}">
     <div class="goal-title"><strong>${escapeHtml(goal.emoji)} ${escapeHtml(goal.title)}</strong><span>${escapeHtml(goal.patientName)}</span></div>
@@ -707,7 +771,9 @@ function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mi�
 function renderClients(){
   const el=I("clist");
   if(!clients.length){el.innerHTML=`<div class="empty"><div>👥</div><p>No hay pacientes aún.</p></div>`;return}
-  el.innerHTML=clients.map(c=>{
+  const visible=searchedClients("patients");
+  if(!visible.length){el.innerHTML=`<div class="empty"><div>🔎</div><p>No se encontraron pacientes.</p></div>`;return}
+  el.innerHTML=visible.map(c=>{
     const solo=c.phones?.length===1;
     const ini=(c.nombres?.[0]||"?")[0].toUpperCase();
     const summary=(goalsDashboard.summaries||[]).find(item=>item.clientId===c.id)||{total:(c.goals||[]).length,completed:0,points:0,possiblePoints:(c.goals||[]).length*10,pending:(c.goals||[]).length,requiresReview:0,generalStatus:"En progreso"};
@@ -1008,16 +1074,25 @@ function activityMessageInfo(entry){
   return { kind:"Actividad registrada", description:friendlyReply(entry.comentario||title) };
 }
 
+function activityMatchesPatientSearch(entry){
+  const query=searchNormalize(patientSearches.activity||"");
+  if(!query)return true;
+  const client=clients.find(c=>c.id===entry.clientId);
+  const text=searchNormalize([entry.nombre,entry.clientNombre,entry.patientName,entry.phone,client?clientSearchText(client):""].join(" "));
+  return text.includes(query);
+}
+
 function renderActivity(){
   const el=I("hglobal");
   if(!el)return;
   const asc=I("activity_order")?.value==="asc";
   const rows=activityEntries
     .filter(activityMatches)
+    .filter(activityMatchesPatientSearch)
     .slice()
     .sort((a,b)=>(asc?1:-1)*(new Date(a.fecha)-new Date(b.fecha)));
   if(!rows.length){
-    el.innerHTML=`<div class="empty-h">No hay actividad registrada para este filtro.</div>`;
+    el.innerHTML=`<div class="empty-h">${patientSearches.activity?"No se encontraron pacientes.":"No hay actividad registrada para este filtro."}</div>`;
     return;
   }
   el.innerHTML=rows.map(entry=>{
@@ -1053,14 +1128,19 @@ async function loadGlobal(){
 function updateChatSel(){
   const sel=I("chat-sel");
   const cur=sel.value;
-  const options=(Array.isArray(clients)?clients:[]).flatMap(c=>{
+  const [curId]=String(cur||"").split("::");
+  const matches=searchedClients("chat");
+  const selectedClient=clients.find(c=>c.id===curId);
+  const chatClients=[...matches];
+  if(selectedClient&&!chatClients.some(c=>c.id===selectedClient.id))chatClients.unshift(selectedClient);
+  const options=chatClients.flatMap(c=>{
     const phones=c.phones||[];
     return phones.map((phone,index)=>({
     value:`${c.id}::${phone}`,
     label:patientChoiceLabel(c,index),
   }));
   });
-  sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+  sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+(options.length?options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join(""):`<option value="" disabled>No se encontraron pacientes.</option>`);
   sel.value=cur;
 }
 
@@ -1304,10 +1384,7 @@ function uniqueTips(tips){
 }
 
 function fillTipHistoryPatientSelect(){
-  const select=I('tip_history_patient'); if(!select)return;
-  const selected=select.value;
-  select.innerHTML=`<option value="">Todos los pacientes</option>`+clients.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.nombres?.join(' & ')||'Paciente')}</option>`).join('');
-  select.value=clients.some(c=>c.id===selected)?selected:'';
+  fillPatientSelect('tip_history_patient','tips','Todos los pacientes');
 }
 
 async function loadTips(){
@@ -1406,8 +1483,13 @@ function renderTipHistory(){
   const patientId=I('tip_history_patient')?.value||'';
   const selectedClient=clients.find(c=>c.id===patientId);
   const patientNames=selectedClient?.nombres||[];
-  const rows=(window._nutri_tip_history||[]).filter(r=>(!patientId||r.clientId===patientId||(!r.clientId&&patientNames.includes(r.patientName)))&&(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter)).slice(0,80);
-  if(!rows.length){el.innerHTML=`<div class="empty-h">${patientId?'No hay tips registrados para este paciente.':'Sin tips enviados o programados en esta vista.'}</div>`;return}
+  const tipSearch=searchNormalize(patientSearches.tips||"");
+  const rows=(window._nutri_tip_history||[]).filter(r=>{
+    const rowClient=clients.find(c=>c.id===r.clientId);
+    const rowText=searchNormalize([r.patientName,r.phone,rowClient?clientSearchText(rowClient):""].join(" "));
+    return (!tipSearch||rowText.includes(tipSearch))&&(!patientId||r.clientId===patientId||(!r.clientId&&patientNames.includes(r.patientName)))&&(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter);
+  }).slice(0,80);
+  if(!rows.length){el.innerHTML=`<div class="empty-h">${tipSearch?'No se encontraron pacientes.':patientId?'No hay tips registrados para este paciente.':'Sin tips enviados o programados en esta vista.'}</div>`;return}
   el.innerHTML=rows.map(r=>{
     const eventDate=r.status==='enviado'?(r.sentAt||r.scheduledAt||r.when||r.createdAt):r.status==='cancelado'?(r.cancelledAt||r.scheduledAt||r.when||r.createdAt):(r.scheduledAt||r.when||r.createdAt);
     const eventLabel=r.status==='enviado'?'Enviado':r.status==='cancelado'?'Cancelado':'Programado para';
@@ -1500,6 +1582,23 @@ function selectedTipRecipients(){
     return phones.map((phone,idx)=>({clientId:c.id,phone,name:c.nombres?.[idx]||c.nombres?.[0]||'Paciente',patientName:idx>0?`${c.nombres?.[0]} & ${c.nombres?.[idx]}`:c.nombres?.[0]||'Paciente'}));
   });
 }
+function renderTipSendClients(){
+  const box=I('tip_send_clients'); if(!box)return;
+  const previous=new Set([...box.querySelectorAll('input[data-client]:checked')].map(input=>input.dataset.client));
+  const pairPrevious={};
+  [...box.querySelectorAll('input[id^="tip_pair_"]')].forEach(input=>{pairPrevious[input.id.replace('tip_pair_','')]=input.checked});
+  const visible=searchedClients('tipSend');
+  if(!visible.length){box.innerHTML=`<div class="empty-h">No se encontraron pacientes.</div>`;return}
+  box.innerHTML='';
+  visible.forEach(c=>{
+    const row=document.createElement('div'); row.className='tip-client-row';
+    const checked=previous.has(c.id)?' checked':'';
+    const pairChecked=pairPrevious[c.id]?' checked':'';
+    const pair=(c.phones||[]).length>1?`<div class="tip-pair-option"><label><input type="checkbox" id="tip_pair_${c.id}"${pairChecked} onchange="previewTipSend()"> Enviar también a la pareja</label></div>`:'';
+    row.innerHTML=`<label><input type="checkbox" data-client="${c.id}"${checked} onchange="previewTipSend()"> ${escapeHtml(patientChoiceLabel(c))}</label>${pair}`;
+    box.appendChild(row);
+  });
+}
 function openSendModal(tipId){
   const tip=(window._nutri_tips||[]).find(t=>t.id===tipId);
   if(!tip){showToast('⚠️ Tip inválido');return}
@@ -1508,13 +1607,9 @@ function openSendModal(tipId){
   I('tip_send_message').value=tip.type==='phrase'?(tip.phrase||tip.desc||''):(tip.desc||'');
   I('tip_send_message_label').textContent=tip.type==='phrase'?'Descripción / contenido editable':tip.type==='pdf'?'Mensaje de acompañamiento editable':'Pie de imagen / texto de acompañamiento editable';
   fillUtilitySelect('tip_send_utility_template','');
-  const box=I('tip_send_clients'); box.innerHTML='';
-  (clients||[]).forEach(c=>{
-    const row=document.createElement('div'); row.className='tip-client-row';
-    const pair=(c.phones||[]).length>1?`<div class="tip-pair-option"><label><input type="checkbox" id="tip_pair_${c.id}" onchange="previewTipSend()"> Enviar también a la pareja</label></div>`:'';
-    row.innerHTML=`<label><input type="checkbox" data-client="${c.id}" onchange="previewTipSend()"> ${escapeHtml(patientChoiceLabel(c))}</label>${pair}`;
-    box.appendChild(row);
-  });
+  patientSearches.tipSend='';
+  if(I('tip_send_patient_search'))I('tip_send_patient_search').value='';
+  renderTipSendClients();
   const now=new Date();
   I('tip_send_date').value=localDateInputValue(now);
   I('tip_send_time').value=localTimeInputValue(now);
@@ -1786,6 +1881,8 @@ function closeM(id){
     const smsg = I('tip_send_message'); if(smsg) smsg.value = '';
     const sprev = I('tip_preview'); if(sprev) sprev.textContent = '';
     const sut = I('tip_send_utility_template'); if(sut) sut.value = '';
+    const tps = I('tip_send_patient_search'); if(tps) tps.value = '';
+    patientSearches.tipSend = '';
   } else if(id==='tipScheduledModal'){
     I(id).classList.remove('open');
     I('tip_scheduled_id').value = '';
