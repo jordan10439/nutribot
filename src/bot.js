@@ -30,6 +30,26 @@ function nombreDe(client, phone) {
 function esIndividual(client) { return client.phones.length === 1; }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
 
+function isMetaFlowReply(value) {
+  return /^(meta_|estrellas_|dificultad_)/i.test(String(value || "").trim());
+}
+
+function utilityTemplateButtonText(value) {
+  const clean = String(value || "").trim();
+  const normalized = clean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const labels = {
+    "ver seguimiento": "Ver seguimiento",
+    "ver mensaje": "Ver mensaje",
+    "ver recomendacion": "Ver recomendación",
+    "ver recordatorio": "Ver recordatorio",
+  };
+  return labels[normalized] || "";
+}
+
+function isUtilityTemplateButtonInteraction(value) {
+  return /^Paciente tocó:/i.test(String(value || "")) || !!utilityTemplateButtonText(value);
+}
+
 function formatMetaTitle(meta) {
   const emoji = String(meta?.emoji || "").trim();
   const title = String(meta?.titulo || "Meta").trim();
@@ -342,9 +362,17 @@ async function getIncomingText(m) {
   const type = m.type;
   let text = "";
   if (type === 'text') text = m.text?.body || "";
-  else if (type === 'button') text = m.button?.text || m.button?.payload || "";
+  else if (type === 'button') {
+    const payload = m.button?.payload || "";
+    const title = m.button?.text || "";
+    text = isMetaFlowReply(payload) ? payload : (utilityTemplateButtonText(title || payload) ? `Paciente tocó: ${utilityTemplateButtonText(title || payload)}` : (title || payload));
+  }
   else if (type === 'interactive') {
-    if (m.interactive?.type === 'button_reply') text = m.interactive.button_reply?.id || m.interactive.button_reply?.title || "";
+    if (m.interactive?.type === 'button_reply') {
+      const id = m.interactive.button_reply?.id || "";
+      const title = m.interactive.button_reply?.title || "";
+      text = isMetaFlowReply(id) ? id : (utilityTemplateButtonText(title || id) ? `Paciente tocó: ${utilityTemplateButtonText(title || id)}` : (title || id));
+    }
     else if (m.interactive?.type === 'list_reply') text = m.interactive.list_reply?.id || m.interactive.list_reply?.title || "";
   }
   // Los mensajes de media pueden traer un comentario en caption.
@@ -366,7 +394,7 @@ async function procesarMensaje(m) {
     const nombre = nombreDe(client, phone);
     const entry = {
       tipo: "mensaje_recibido",
-      meta: s.meta?.titulo ?? "—",
+      meta: isUtilityTemplateButtonInteraction(incoming.raw) ? "Interacción con plantilla previa" : (s.meta?.titulo ?? "—"),
       goalId: s.meta?.id || "",
       metaEmoji: s.meta?.emoji ?? "💬",
       comentario: incoming.raw,
@@ -382,6 +410,11 @@ async function procesarMensaje(m) {
   if (!client) {
     console.log('[bot] No client for', phone);
     await enviar(phone, msg.get("sin_registro"));
+    return;
+  }
+
+  if (isUtilityTemplateButtonInteraction(incoming.raw)) {
+    console.log("Interacción de botón de plantilla previa registrada", JSON.stringify({ phone, text: incoming.raw }));
     return;
   }
 

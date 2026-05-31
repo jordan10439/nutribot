@@ -1481,6 +1481,8 @@ function buildChatTimeline(historyEntries,client){
       ));
       const kind=entry.media?.id
         ?"Foto enviada"
+        : /^paciente tocó:/i.test(entry.comentario||"")
+          ?"Interacción con plantilla previa"
         : /^meta_/.test(raw)
           ?"Respuesta sobre meta"
           : /^estrellas_/.test(raw)||String(relatedFollowup?.respuestaEmocional||"").toLowerCase()===raw
@@ -1618,7 +1620,7 @@ async function loadMessages(){
   const el=I("msg-list");
   el.innerHTML=`<div class="msg-card"><div class="msg-label">Plantillas de utilidad / mensajes previos</div>
     <div class="msg-hint">Se envían como plantillas aprobadas de WhatsApp antes de una meta o un tip, solo cuando las seleccionas.</div>
-    ${utilityTemplates.map(t=>`<div style="padding:8px 0;border-top:1px solid #e8f0e8"><strong style="font-size:12px">${escapeHtml(t.label)}</strong><div class="tip-note" style="white-space:pre-wrap">${escapeHtml(t.body)}</div></div>`).join('')}
+    ${utilityTemplates.map(t=>`<div style="padding:8px 0;border-top:1px solid #e8f0e8"><strong style="font-size:12px">${escapeHtml(t.label)}</strong><div class="tip-note" style="white-space:pre-wrap">${escapeHtml(t.body)}</div>${t.buttonLabel?`<div class="tip-note">Botón aprobado en Meta: ${escapeHtml(t.buttonLabel)}</div>`:''}</div>`).join('')}
   </div>`+Object.entries(msgLabels).map(([key,label])=>`
     <div class="msg-card">
       <div class="msg-label">${label}</div>
