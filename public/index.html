@@ -123,6 +123,25 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .goal-photo-thumb{width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #dbe9db;display:block;cursor:pointer;margin-top:4px}
 .goal-photo-large{display:block;max-width:100%;max-height:68vh;margin:0 auto;border-radius:8px}
 .goal-photo-link{border:none;background:transparent;color:#2a5738;font-size:11px;font-weight:800;cursor:pointer;text-align:left;padding:0}
+/* INFORMACION DE PACIENTES */
+.patient-info-layout{display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:14px;align-items:start}
+.patient-info-picker,.patient-info-card,.consultation-card{background:#fff;border:1px solid #e0ece0;border-radius:12px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.04)}
+.patient-info-picker select{width:100%;padding:9px 10px;border:1px solid #dbe9db;border-radius:8px;background:#fff;color:#2a5738;font-size:12px;font-weight:700;outline:none}
+.info-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
+.info-metric{border:1px solid #edf3ed;border-radius:8px;padding:10px;background:#f8fcf8;font-size:11px;color:#5a765e}
+.info-metric b{display:block;font-size:14px;color:#2a5738;margin-bottom:2px}
+.info-section-title{font-size:12px;font-weight:900;color:#2a5738;margin:14px 0 8px}
+.info-text{font-size:12px;color:#4a6a4a;line-height:1.48;white-space:pre-wrap}
+.consultation-list{display:flex;flex-direction:column;gap:8px}
+.consultation-card{box-shadow:none}
+.consultation-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px}
+.consultation-head strong{font-size:13px;color:#213b26}.consultation-head span{font-size:11px;color:#7a9a7a}
+.consultation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px;font-size:11px;color:#587158;margin-bottom:8px}
+.consultation-grid b{display:block;color:#2a5738;margin-bottom:2px}
+.consultation-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.consultation-detail{display:none;margin-top:10px;border-top:1px solid #edf3ed;padding-top:10px}
+.consultation-detail.open{display:block}
+@media(max-width:780px){.patient-info-layout{grid-template-columns:1fr}}
 /* MENSAJES CONFIG */
 .msg-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:10px;border:1px solid #e0ece0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
 .msg-label{font-size:12px;font-weight:700;color:#5a6a5a;margin-bottom:6px}
@@ -223,6 +242,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   <div class="topbar"><h1>🌱 NutriGO Admin</h1><button class="logout" onclick="logout()">Salir</button></div>
   <div class="tabs">
     <div class="tab active" data-tab="p" onclick="showTab('p')">👥 Pacientes</div>
+    <div class="tab" data-tab="info" onclick="showTab('info')">🗂️ Información de pacientes</div>
     <div class="tab" data-tab="goals" onclick="showTab('goals')">🎯 Metas</div>
     <div class="tab" data-tab="c" onclick="showTab('c')">💬 Conversaciones</div>
     <div class="tab" data-tab="h" onclick="showTab('h')">📋 Actividad</div>
@@ -242,6 +262,24 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
       <div class="sh"><h2>👥 Pacientes</h2><button class="ba" onclick="openCM()">+ Agregar</button></div>
       <div class="patient-search full"><span>🔎</span><input id="patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('patients',this.value)"/></div>
       <div id="clist"></div>
+    </div>
+  </div>
+
+  <!-- INFORMACION DE PACIENTES -->
+  <div id="tinfo" style="display:none">
+    <div class="content">
+      <div class="sh"><h2>🗂️ Información de pacientes</h2></div>
+      <div class="patient-info-layout">
+        <div class="patient-info-picker">
+          <div class="patient-search full"><span>🔎</span><input id="info_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('info',this.value)"/></div>
+          <select id="info_patient_select" onchange="selectPatientInfo(this.value)">
+            <option value="">Selecciona un paciente...</option>
+          </select>
+        </div>
+        <div id="patient_info_panel">
+          <div class="empty-h">Selecciona un paciente para ver su ficha interna.</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -444,6 +482,24 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   </div>
 </div>
 
+<!-- Modal Consulta Interna -->
+<div class="mo" id="consultationModal">
+  <div class="modal">
+    <h2 id="consultation_modal_title">Registrar consulta</h2>
+    <input type="hidden" id="consultation_client_id" />
+    <input type="hidden" id="consultation_id" />
+    <div class="fg"><label>Número de consulta</label><input id="consultation_number" disabled /></div>
+    <div class="fg"><label>Fecha de la consulta</label><input type="date" id="consultation_date" /></div>
+    <div class="fg"><label>Fecha entrega de pauta</label><input type="date" id="plan_delivered_date" /></div>
+    <div class="fg"><label>Peso</label><input id="consultation_weight" placeholder="Ej: 68 kg" /></div>
+    <div class="fg"><label>Mayores complicaciones con la alimentación</label><textarea id="consultation_complications" rows="4" placeholder="Falta de tiempo, ansiedad por comer, desorden de horarios..."></textarea></div>
+    <div class="fg"><label>Aspectos positivos</label><textarea id="consultation_positives" rows="4" placeholder="Buena disposición, apoyo familiar, cambios logrados..."></textarea></div>
+    <div class="fg"><label>Todas las metas que indicó que va a cambiar</label><textarea id="consultation_goals" rows="4" placeholder="Tomar más agua&#10;Ordenar horarios&#10;Aumentar verduras"></textarea></div>
+    <div class="fg"><label>Observaciones adicionales</label><textarea id="consultation_notes" rows="3" placeholder="Opcional"></textarea></div>
+    <div class="ma"><button class="bc" onclick="closeM('consultationModal')">Cancelar</button><button class="bsv" onclick="saveConsultation()">Guardar consulta</button></div>
+  </div>
+</div>
+
 <!-- Modal Tip -->
 <div class="mo" id="tipModal">
   <div class="modal">
@@ -498,7 +554,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:""};
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:""},patientInfoCache={},selectedInfoClientId="";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -532,11 +588,12 @@ function logout(){TOKEN="";I("ls").style.display="flex";I("app").style.display="
 
 function showTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active', el.getAttribute('data-tab')===t));
-  const map = {p:'tp', goals:'tgoals', c:'tc', h:'th', m:'tm', tips:'ttips'};
+  const map = {p:'tp', info:'tinfo', goals:'tgoals', c:'tc', h:'th', m:'tm', tips:'ttips'};
   Object.values(map).forEach(id=>{ const el=I(id); if(el) el.style.display='none'; });
   const target = map[t] || map.p;
   if(target){ I(target).style.display = (t==='c') ? 'flex' : 'block'; }
   if(t==='h') loadGlobal();
+  if(t==='info') loadPatientInfoSection();
   if(t==='goals') loadGoalsDashboard();
   if(t==='m') loadMessages();
   if(t==='c') updateChatSel();
@@ -552,6 +609,7 @@ async function loadAll(){
   I("s2").textContent=clients.reduce((a,c)=>a+(c.goals?.length||0),0);
   I("s3").textContent=clients.filter(c=>c.phones?.length>1).length;
   fillActivityPatientSelect();
+  fillInfoPatientSelect();
   updateChatSel();
 }
 
@@ -582,6 +640,13 @@ function goalDeliveryLabel(status){
 
 function panelDate(value){
   return value?new Date(value).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"Sin registro";
+}
+
+function panelDateOnly(value){
+  const raw=String(value||"");
+  const match=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(match)return `${match[3]}-${match[2]}-${match[1]}`;
+  return value?new Date(value).toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric"}):"Sin registro";
 }
 
 function pad2(value){
@@ -666,6 +731,17 @@ function fillGoalPatientSelect(){
   fillPatientSelect("goal_patient_filter","goals","Todos los pacientes");
 }
 
+function fillInfoPatientSelect(){
+  const select=I("info_patient_select"); if(!select)return;
+  const selected=select.value||selectedInfoClientId;
+  const matches=searchedClients("info");
+  const selectedClient=clients.find(c=>c.id===selected);
+  const options=[...matches];
+  if(selectedClient&&!options.some(c=>c.id===selectedClient.id))options.unshift(selectedClient);
+  select.innerHTML=`<option value="">Selecciona un paciente...</option>`+(options.length?options.map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(patientChoiceLabel(c))}</option>`).join(""):`<option value="" disabled>No se encontraron pacientes.</option>`);
+  select.value=clients.some(c=>c.id===selected)?selected:"";
+}
+
 function setPatientSearch(scope,value){
   patientSearches[scope]=value||"";
   if(scope==="patients")renderClients();
@@ -674,6 +750,156 @@ function setPatientSearch(scope,value){
   if(scope==="tipSend"){renderTipSendClients();previewTipSend();}
   if(scope==="chat"){updateChatSel();loadChat();}
   if(scope==="activity"){fillActivityPatientSelect();renderActivity();}
+  if(scope==="info"){fillInfoPatientSelect();renderPatientInfoPanel();}
+}
+
+async function loadPatientInfoSection(){
+  fillInfoPatientSelect();
+  if(selectedInfoClientId) await selectPatientInfo(selectedInfoClientId);
+  else renderPatientInfoPanel();
+}
+
+async function selectPatientInfo(clientId){
+  selectedInfoClientId=clientId||"";
+  const select=I("info_patient_select"); if(select)select.value=selectedInfoClientId;
+  if(!selectedInfoClientId){renderPatientInfoPanel();return}
+  const data=await api("GET",`/patient-info/${selectedInfoClientId}`);
+  patientInfoCache[selectedInfoClientId]=data?.consultations?data:{consultations:[]};
+  renderPatientInfoPanel();
+}
+
+function consultationSummary(value,empty="Sin registro"){
+  const text=String(value||"").trim();
+  if(!text)return empty;
+  return text.length>130?`${text.slice(0,130)}...`:text;
+}
+
+function latestConsultation(info){
+  return [...(info?.consultations||[])].sort((a,b)=>(Number(b.number)||0)-(Number(a.number)||0))[0]||null;
+}
+
+function renderPatientInfoPanel(){
+  const el=I("patient_info_panel"); if(!el)return;
+  if(!selectedInfoClientId){
+    el.innerHTML=`<div class="empty-h">Selecciona un paciente para ver su ficha interna.</div>`;
+    return;
+  }
+  const client=clients.find(c=>c.id===selectedInfoClientId);
+  if(!client){
+    el.innerHTML=`<div class="empty-h">No se encontraron pacientes.</div>`;
+    return;
+  }
+  const info=patientInfoCache[selectedInfoClientId]||{consultations:[]};
+  const consultations=[...(info.consultations||[])].sort((a,b)=>(Number(b.number)||0)-(Number(a.number)||0));
+  const latest=latestConsultation(info);
+  const created=client.createdAt?panelDate(client.createdAt):clientCreatedTime(client)?panelDate(clientCreatedTime(client)):"Sin registro";
+  el.innerHTML=`<div class="patient-info-card">
+    <div class="sh" style="margin-bottom:8px"><h2>${escapeHtml(clientDisplayName(client))}</h2><button class="ba" onclick="openConsultationModal('${client.id}')">+ Registrar consulta</button></div>
+    <div><span class="badge ${(client.phones||[]).length>1?'bp2':'bs2'}">${escapeHtml(clientKindLabel(client))}</span></div>
+    <div class="info-summary-grid">
+      <div class="info-metric"><b>${escapeHtml(created)}</b>Fecha de creación</div>
+      <div class="info-metric"><b>${latest?.consultationDate?panelDateOnly(latest.consultationDate):"Sin registro"}</b>Última consulta</div>
+      <div class="info-metric"><b>${consultations.length}</b>Consultas registradas</div>
+      <div class="info-metric"><b>${escapeHtml(latest?.weight||"Sin registro")}</b>Último peso</div>
+    </div>
+    <div class="info-section-title">Resumen de principales complicaciones</div>
+    <div class="info-text">${escapeHtml(consultationSummary(latest?.complications))}</div>
+    <div class="info-section-title">Resumen de aspectos positivos</div>
+    <div class="info-text">${escapeHtml(consultationSummary(latest?.positives))}</div>
+    <div class="info-section-title">Metas declaradas por el paciente</div>
+    <div class="info-text">${escapeHtml(consultationSummary(latest?.declaredGoals))}</div>
+  </div>
+  <div class="info-section-title">Historial de consultas</div>
+  <div class="consultation-list">
+    ${consultations.length?consultations.map(item=>renderConsultationCard(client.id,item)).join(""):`<div class="empty-h">Aún no hay consultas registradas para este paciente.</div>`}
+  </div>`;
+}
+
+function renderConsultationCard(clientId,item){
+  return `<div class="consultation-card">
+    <div class="consultation-head"><div><strong>Consulta ${Number(item.number)||""}</strong><br><span>${item.consultationDate?panelDateOnly(item.consultationDate):"Sin fecha de consulta"}</span></div><span>${item.planDeliveredDate?`Pauta: ${panelDateOnly(item.planDeliveredDate)}`:"Sin pauta"}</span></div>
+    <div class="consultation-grid">
+      <div><b>Peso</b>${escapeHtml(item.weight||"Sin registro")}</div>
+      <div><b>Complicaciones</b>${escapeHtml(consultationSummary(item.complications))}</div>
+      <div><b>Aspectos positivos</b>${escapeHtml(consultationSummary(item.positives))}</div>
+    </div>
+    <div class="consultation-actions">
+      <button class="bam" onclick="toggleConsultationDetail('${item.id}')">Ver detalle</button>
+      <button class="bam" onclick="openConsultationModal('${clientId}','${item.id}')">Editar</button>
+      <button class="bam" onclick="createGoalFromConsultation('${clientId}','${item.id}')">Crear meta desde esta consulta</button>
+    </div>
+    <div class="consultation-detail" id="consultation-detail-${item.id}">
+      <div class="info-text"><strong>Consulta ${Number(item.number)||""}</strong>
+Fecha de consulta: ${item.consultationDate?panelDateOnly(item.consultationDate):"Sin registro"}
+Fecha entrega pauta: ${item.planDeliveredDate?panelDateOnly(item.planDeliveredDate):"Sin registro"}
+Peso: ${escapeHtml(item.weight||"Sin registro")}
+
+Mayores complicaciones:
+${escapeHtml(item.complications||"Sin registro")}
+
+Aspectos positivos:
+${escapeHtml(item.positives||"Sin registro")}
+
+Metas que indicó que va a cambiar:
+${escapeHtml(item.declaredGoals||"Sin registro")}
+
+Observaciones adicionales:
+${escapeHtml(item.notes||"Sin registro")}</div>
+    </div>
+  </div>`;
+}
+
+function toggleConsultationDetail(id){
+  I(`consultation-detail-${id}`)?.classList.toggle("open");
+}
+
+function openConsultationModal(clientId,consultationId=""){
+  const info=patientInfoCache[clientId]||{consultations:[]};
+  const item=(info.consultations||[]).find(entry=>entry.id===consultationId);
+  const nextNumber=item?.number||((info.consultations||[]).reduce((max,entry)=>Math.max(max,Number(entry.number)||0),0)+1);
+  I("consultation_modal_title").textContent=item?`Editar consulta ${nextNumber}`:`Registrar consulta ${nextNumber}`;
+  I("consultation_client_id").value=clientId;
+  I("consultation_id").value=consultationId||"";
+  I("consultation_number").value=`Consulta ${nextNumber}`;
+  I("consultation_date").value=item?.consultationDate||localDateInputValue();
+  I("plan_delivered_date").value=item?.planDeliveredDate||"";
+  I("consultation_weight").value=item?.weight||"";
+  I("consultation_complications").value=item?.complications||"";
+  I("consultation_positives").value=item?.positives||"";
+  I("consultation_goals").value=item?.declaredGoals||"";
+  I("consultation_notes").value=item?.notes||"";
+  I("consultationModal").classList.add("open");
+}
+
+async function saveConsultation(){
+  const clientId=I("consultation_client_id").value;
+  const consultationId=I("consultation_id").value;
+  if(!clientId){showToast("Selecciona un paciente");return}
+  const payload={
+    consultationDate:I("consultation_date").value,
+    planDeliveredDate:I("plan_delivered_date").value,
+    weight:I("consultation_weight").value,
+    complications:I("consultation_complications").value,
+    positives:I("consultation_positives").value,
+    declaredGoals:I("consultation_goals").value,
+    notes:I("consultation_notes").value,
+  };
+  const path=consultationId?`/patient-info/${clientId}/consultations/${consultationId}`:`/patient-info/${clientId}/consultations`;
+  const res=await api(consultationId?"PUT":"POST",path,payload);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  patientInfoCache[clientId]=res.info||{consultations:[]};
+  closeM("consultationModal");
+  renderPatientInfoPanel();
+  showToast("✅ Consulta guardada");
+}
+
+function createGoalFromConsultation(clientId,consultationId){
+  const info=patientInfoCache[clientId]||{consultations:[]};
+  const item=(info.consultations||[]).find(entry=>entry.id===consultationId);
+  openMM(clientId);
+  I("mt").value=`Meta desde consulta ${item?.number||""}`.trim();
+  I("md").value=item?.declaredGoals||"";
+  previewMetaMessage();
 }
 
 function goalProgramming(goal){
@@ -1916,6 +2142,9 @@ function closeM(id){
     I('meta_send_client_id').value = '';
     I('meta_send_goal_id').value = '';
     I('meta_send_utility_template').value = '';
+  } else if(id==='consultationModal'){
+    I(id).classList.remove('open');
+    ["consultation_client_id","consultation_id","consultation_number","consultation_date","plan_delivered_date","consultation_weight","consultation_complications","consultation_positives","consultation_goals","consultation_notes"].forEach(field=>{const el=I(field); if(el)el.value=""});
   } else { I(id).classList.remove("open") }
 }
 function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}

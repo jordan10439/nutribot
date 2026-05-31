@@ -8,6 +8,7 @@ const history    = require("./src/history");
 const conversations = require("./src/conversations");
 const messages   = require("./src/messages");
 const tips       = require("./src/tips");
+const patientInfo = require("./src/patientInfo");
 const utilityTemplates = require("./src/utilityTemplates");
 const { enviarTip, enviarPlantillaUtilidad } = require("./src/whatsapp");
 const { procesarMensaje, enviarMeta, enviarBienvenida } = require("./src/bot");
@@ -176,6 +177,28 @@ app.get("/api/history/all", auth, (req, res) => {
   }
   todo.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
   res.json(todo);
+});
+
+// ── Información interna de pacientes ─────────────────────────────────────────
+app.get("/api/patient-info/:clientId", auth, (req, res) => {
+  const client = db.getById(req.params.clientId);
+  if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
+  res.json(patientInfo.getInfo(req.params.clientId));
+});
+
+app.post("/api/patient-info/:clientId/consultations", auth, (req, res) => {
+  const client = db.getById(req.params.clientId);
+  if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
+  const consultation = patientInfo.addConsultation(req.params.clientId, req.body || {});
+  res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId) });
+});
+
+app.put("/api/patient-info/:clientId/consultations/:consultationId", auth, (req, res) => {
+  const client = db.getById(req.params.clientId);
+  if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
+  const consultation = patientInfo.updateConsultation(req.params.clientId, req.params.consultationId, req.body || {});
+  if (!consultation) return res.status(404).json({ error: "Consulta no encontrada" });
+  res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId) });
 });
 
 // Proxy para descargar medios desde WhatsApp Graph API (requiere token env META_TOKEN)
