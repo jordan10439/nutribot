@@ -9,8 +9,10 @@ const msg     = require("./messages");
 const utilityTemplates = require("./utilityTemplates");
 const { explainMetaError } = require("./metaErrors");
 
-const WELCOME_TEMPLATE_NAME = process.env.META_WELCOME_TEMPLATE_NAME || process.env.META_TEMPLATE_NAME || "";
-const WELCOME_TEMPLATE_LANGUAGE = process.env.META_WELCOME_TEMPLATE_LANGUAGE || "";
+const WELCOME_TEMPLATE_WITH_BUTTON_NAME = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_NAME || process.env.META_WELCOME_TEMPLATE_NAME || process.env.META_TEMPLATE_NAME || "";
+const WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE || process.env.META_WELCOME_TEMPLATE_LANGUAGE || "";
+const WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME = process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME || "";
+const WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE = process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE || "";
 
 function configuredWelcomeValue(value, variable, field) {
   const clean = String(value || "").trim();
@@ -19,6 +21,42 @@ function configuredWelcomeValue(value, variable, field) {
     throw new Error(`Falta configurar ${field} de la plantilla de bienvenida aprobada en Meta (${variable})`);
   }
   return clean;
+}
+
+function welcomeTemplateConfig(type = "with_button") {
+  const cleanType = type === "without_button" ? "without_button" : "with_button";
+  if (cleanType === "without_button") {
+    return {
+      type: cleanType,
+      label: "Bienvenida sin botón",
+      name: configuredWelcomeValue(WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME", "el nombre técnico real de la plantilla de bienvenida sin botón"),
+      languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE", "el idioma de la plantilla de bienvenida sin botón"),
+    };
+  }
+  return {
+    type: cleanType,
+    label: "Bienvenida con botón",
+    name: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITH_BUTTON_NAME o META_WELCOME_TEMPLATE_NAME", "el nombre técnico real de la plantilla de bienvenida con botón"),
+    languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE o META_WELCOME_TEMPLATE_LANGUAGE", "el idioma de la plantilla de bienvenida con botón"),
+  };
+}
+
+function welcomeTemplateOptions() {
+  const options = [];
+  for (const type of ["with_button", "without_button"]) {
+    try {
+      const config = welcomeTemplateConfig(type);
+      options.push({
+        type: config.type,
+        label: config.label,
+        templateName: config.name,
+        languageCode: config.languageCode,
+      });
+    } catch (e) {
+      console.log("Plantilla de bienvenida no disponible", JSON.stringify({ type, error: e.message }));
+    }
+  }
+  return options;
 }
 
 function findClientByPhone(phone) {
@@ -192,26 +230,28 @@ function detectarDificultad(incoming, buttons) {
 }
 
 // ── Enviar bienvenida con plantilla Meta ────────────────────────────────────
-async function enviarBienvenida(clientId, phone) {
+async function enviarBienvenida(clientId, phone, templateType = "with_button") {
   const client = db.getById(clientId);
   if (!client) return;
   const nombre = nombreDe(client, phone);
 
   try {
-    const templateName = configuredWelcomeValue(WELCOME_TEMPLATE_NAME, "META_WELCOME_TEMPLATE_NAME", "el nombre técnico real");
-    const languageCode = configuredWelcomeValue(WELCOME_TEMPLATE_LANGUAGE, "META_WELCOME_TEMPLATE_LANGUAGE", "el idioma");
-    console.log("Plantilla de bienvenida seleccionada", JSON.stringify({ name: templateName, languageCode, phone }));
+    const config = welcomeTemplateConfig(templateType);
+    const templateName = config.name;
+    const languageCode = config.languageCode;
+    console.log("Plantilla de bienvenida seleccionada", JSON.stringify({ type: config.type, label: config.label, name: templateName, languageCode, phone }));
     console.log("Template enviado a Meta", JSON.stringify({ name: templateName, languageCode }));
-    await enviarPlantillaOficial(phone, templateName, languageCode, "Bienvenida", nombre);
+    await enviarPlantillaOficial(phone, templateName, languageCode, config.label, nombre);
     console.log(`✅ Bienvenida enviada a +${phone}`);
 
     history.registrar(clientId, phone, nombre, {
       tipo: "bienvenida_enviada",
-      meta: "Mensaje de bienvenida",
+      meta: config.label,
       metaEmoji: "👋",
       direccion: "saliente",
       templateName,
       templateLanguage: languageCode,
+      templateType: config.type,
     });
     // Después de la bienvenida, enviar la primera meta si existe
     if (client.goals && client.goals.length > 0) {
@@ -660,4 +700,4 @@ async function procesarMensaje(m) {
   );
 }
 
-module.exports = { enviarMeta, enviarBienvenida, procesarMensaje, detectarEstadoEmocional, detectarDificultad, calcularProgresoMeta, resumenProgresoPaciente };
+module.exports = { enviarMeta, enviarBienvenida, welcomeTemplateOptions, procesarMensaje, detectarEstadoEmocional, detectarDificultad, calcularProgresoMeta, resumenProgresoPaciente };

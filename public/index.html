@@ -427,7 +427,17 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Zona horaria</label>
       <select id="tz"><option value="America/Santiago">Chile (Santiago)</option><option value="America/Argentina/Buenos_Aires">Argentina</option><option value="America/Bogota">Colombia</option><option value="America/Lima">Perú</option><option value="America/Mexico_City">México</option></select>
     </div>
+    <div class="fg"><label>Tipo de bienvenida</label><select id="welcome_template_type"></select><div class="tip-note" id="welcome_template_hint"></div></div>
     <div class="ma"><button class="bc" onclick="closeM('cm')">Cancelar</button><button class="bc" onclick="saveClient(false)">Guardar</button><button class="bsv" onclick="saveClient(true)">Guardar y enviar bienvenida</button></div>
+  </div>
+</div>
+
+<div class="mo" id="welcomeModal">
+  <div class="modal">
+    <h2>Reenviar bienvenida</h2>
+    <input type="hidden" id="welcome_client_id" />
+    <div class="fg"><label>Tipo de bienvenida</label><select id="welcome_resend_type"></select><div class="tip-note" id="welcome_resend_hint"></div></div>
+    <div class="ma"><button class="bc" onclick="closeM('welcomeModal')">Cancelar</button><button class="bsv" onclick="confirmSendWelcome()">Enviar bienvenida</button></div>
   </div>
 </div>
 
@@ -569,7 +579,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:""},patientInfoCache={},selectedInfoClientId="";
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:""},patientInfoCache={},selectedInfoClientId="";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -577,6 +587,31 @@ async function loadUtilityTemplates(){
   const templates=await api("GET","/utility-templates");
   utilityTemplates=Array.isArray(templates)?templates:[];
   console.log("Plantillas previas recibidas", utilityTemplates.map(t=>({id:t.id,label:t.label,metaTemplateName:t.metaTemplateName,metaLanguageCode:t.metaLanguageCode})));
+}
+async function loadWelcomeTemplates(){
+  const templates=await api("GET","/welcome-templates");
+  welcomeTemplates=Array.isArray(templates)?templates:[];
+  console.log("Plantillas de bienvenida recibidas", welcomeTemplates.map(t=>({type:t.type,label:t.label,templateName:t.templateName,languageCode:t.languageCode})));
+}
+function fillWelcomeSelect(selectId,hintId,selected="with_button"){
+  const select=I(selectId); if(!select)return;
+  if(!welcomeTemplates.length){
+    select.innerHTML='<option value="">No hay plantillas configuradas</option>';
+  } else {
+    select.innerHTML=welcomeTemplates.map(t=>`<option value="${escapeHtml(t.type)}">${escapeHtml(t.label)}</option>`).join("");
+  }
+  select.value=welcomeTemplates.some(t=>t.type===selected)?selected:(welcomeTemplates[0]?.type||"");
+  updateWelcomeHint(selectId,hintId);
+  select.onchange=()=>updateWelcomeHint(selectId,hintId);
+}
+function updateWelcomeHint(selectId,hintId){
+  const hint=I(hintId); if(!hint)return;
+  const value=I(selectId)?.value||"";
+  const template=welcomeTemplates.find(t=>t.type===value);
+  hint.textContent=template?`Plantilla Meta: ${template.templateName} · ${template.languageCode}`:"Falta configurar una plantilla de bienvenida aprobada en Meta.";
+}
+function selectedWelcomeType(selectId){
+  return I(selectId)?.value||"";
 }
 function utilityTemplateLabel(id){
   return utilityTemplates.find(t=>t.id===id)?.label||"Sin plantilla previa";
@@ -617,6 +652,7 @@ function showTab(t){
 
 async function loadAll(){
   await loadUtilityTemplates();
+  await loadWelcomeTemplates();
   clients=sortClientsNewestFirst(await api("GET","/clients"));
   await loadGoalsDashboard(false);
   renderClients();
@@ -2036,14 +2072,21 @@ async function resetMsg(key){
 }
 
 // ── CLIENTES ─────────────────────────────────────────────────────────────────
-function openCM(){setMode("s");["n1","p1","n2","p2"].forEach(id=>I(id).value="");I("cm").classList.add("open")}
+function openCM(){
+  setMode("s");
+  ["n1","p1","n2","p2"].forEach(id=>I(id).value="");
+  fillWelcomeSelect("welcome_template_type","welcome_template_hint","with_button");
+  I("cm").classList.add("open");
+}
 function setMode(m){mode=m;I("ts").classList.toggle("active",m==="s");I("tpr").classList.toggle("active",m==="p");I("pf").style.display=m==="p"?"block":"none";I("nl1").textContent=m==="s"?"Nombre del paciente":"Nombre (integrante 1)"}
 async function saveClient(sendWelcome=false){
   const nombres=[I("n1").value.trim()],phones=[I("p1").value.trim()];
   if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
   if(!nombres[0]||!phones[0]){showToast("⚠️ Completa nombre y teléfono");return}
+  const welcomeTemplateType=sendWelcome?selectedWelcomeType("welcome_template_type"):"";
+  if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
-  const res=await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!!sendWelcome});
+  const res=await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!!sendWelcome,welcomeTemplateType});
   closeM("cm");
   if(res.error){showToast(`⚠️ Paciente guardado, pero no se envió la bienvenida: ${res.error}`);loadAll();return}
   showToast(sendWelcome?"✅ Paciente guardado — bienvenida enviada":"✅ Paciente guardado");loadAll();
@@ -2051,9 +2094,20 @@ async function saveClient(sendWelcome=false){
 async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadAll()}
 async function sendWelcome(id){
   const c=clients.find(x=>x.id===id);
-  if(!confirm(`¿Enviar mensaje de bienvenida a ${c?.nombres?.join(" & ")}?`))return;
-  const res=await api("POST",`/clients/${id}/welcome`);
+  if(!c)return;
+  I("welcome_client_id").value=id;
+  fillWelcomeSelect("welcome_resend_type","welcome_resend_hint","with_button");
+  I("welcomeModal").classList.add("open");
+}
+async function confirmSendWelcome(){
+  const id=I("welcome_client_id").value;
+  const c=clients.find(x=>x.id===id);
+  const welcomeTemplateType=selectedWelcomeType("welcome_resend_type");
+  if(!id||!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
+  showToast(`⏳ Enviando bienvenida a ${c?.nombres?.join(" & ")||"paciente"}...`);
+  const res=await api("POST",`/clients/${id}/welcome`,{welcomeTemplateType});
   if(res.error){showToast(`⚠️ ${res.error}`);return}
+  closeM("welcomeModal");
   showToast("👋 Bienvenida enviada");
 }
 
@@ -2223,6 +2277,11 @@ function closeM(id){
   } else if(id==='consultationModal'){
     I(id).classList.remove('open');
     ["consultation_client_id","consultation_id","consultation_number","consultation_date","plan_delivered_date","consultation_weight","consultation_complications","consultation_positives","consultation_goals","consultation_notes"].forEach(field=>{const el=I(field); if(el)el.value=""});
+  } else if(id==='welcomeModal'){
+    I(id).classList.remove('open');
+    I('welcome_client_id').value='';
+    I('welcome_resend_type').innerHTML='';
+    I('welcome_resend_hint').textContent='';
   } else { I(id).classList.remove("open") }
 }
 function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}

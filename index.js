@@ -11,7 +11,7 @@ const tips       = require("./src/tips");
 const patientInfo = require("./src/patientInfo");
 const utilityTemplates = require("./src/utilityTemplates");
 const { enviarTip, enviarPlantillaUtilidad } = require("./src/whatsapp");
-const { procesarMensaje, enviarMeta, enviarBienvenida } = require("./src/bot");
+const { procesarMensaje, enviarMeta, enviarBienvenida, welcomeTemplateOptions } = require("./src/bot");
 const { recargarTodos } = require("./src/scheduler");
 const { explainMetaError } = require("./src/metaErrors");
 
@@ -38,6 +38,11 @@ app.post("/api/login", (req, res) => {
 
 // ── Clientes ───────────────────────────────────────────────────────────────────
 app.get("/api/clients", auth, (req, res) => res.json(db.getAll()));
+app.get("/api/welcome-templates", auth, (req, res) => {
+  const options = welcomeTemplateOptions();
+  console.log("Plantillas de bienvenida disponibles", JSON.stringify(options.map(t => ({ type: t.type, label: t.label, templateName: t.templateName, languageCode: t.languageCode }))));
+  res.json(options);
+});
 
 app.post("/api/clients", auth, async (req, res) => {
   const { nombres, phones, timezone, goals } = req.body;
@@ -50,7 +55,7 @@ app.post("/api/clients", auth, async (req, res) => {
   if (req.body.sendWelcome) {
     try {
       for (const phone of phones) {
-        await enviarBienvenida(client.id, phone);
+        await enviarBienvenida(client.id, phone, req.body.welcomeTemplateType || "with_button");
       }
     } catch (e) {
       return res.status(502).json({ error: e.message, client, welcomeSent: false });
@@ -144,7 +149,7 @@ app.post("/api/clients/:id/welcome", auth, async (req, res) => {
   try {
     const client = db.getById(req.params.id);
     if (!client) return res.status(404).json({ error: "No encontrado" });
-    for (const phone of client.phones) await enviarBienvenida(client.id, phone);
+    for (const phone of client.phones) await enviarBienvenida(client.id, phone, req.body.welcomeTemplateType || "with_button");
     res.json({ ok: true });
   } catch (e) {
     res.status(502).json({ error: e.message });
