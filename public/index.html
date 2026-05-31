@@ -130,6 +130,9 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .info-summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
 .info-metric{border:1px solid #edf3ed;border-radius:8px;padding:10px;background:#f8fcf8;font-size:11px;color:#5a765e}
 .info-metric b{display:block;font-size:14px;color:#2a5738;margin-bottom:2px}
+.info-metric.primary{background:#1f5a36;border-color:#16462a;color:#eaf6ec;box-shadow:0 6px 16px rgba(31,90,54,.18)}
+.info-metric.primary b{color:#fff;font-size:18px}
+.info-metric.primary span{display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.02em;color:#cfe8d4;margin-bottom:3px}
 .info-section-title{font-size:12px;font-weight:900;color:#2a5738;margin:14px 0 8px}
 .info-text{font-size:12px;color:#4a6a4a;line-height:1.48;white-space:pre-wrap}
 .consultation-list{display:flex;flex-direction:column;gap:8px}
@@ -778,6 +781,12 @@ function latestConsultation(info){
   return [...(info?.consultations||[])].sort((a,b)=>(Number(b.number)||0)-(Number(a.number)||0))[0]||null;
 }
 
+function latestPlanDelivery(consultations){
+  return [...(consultations||[])]
+    .filter(item=>item.planDeliveredDate)
+    .sort((a,b)=>new Date(b.planDeliveredDate)-new Date(a.planDeliveredDate))[0]||null;
+}
+
 function renderPatientInfoPanel(){
   const el=I("patient_info_panel"); if(!el)return;
   if(!selectedInfoClientId){
@@ -792,12 +801,13 @@ function renderPatientInfoPanel(){
   const info=patientInfoCache[selectedInfoClientId]||{consultations:[]};
   const consultations=[...(info.consultations||[])].sort((a,b)=>(Number(b.number)||0)-(Number(a.number)||0));
   const latest=latestConsultation(info);
+  const latestPlan=latestPlanDelivery(consultations);
   const created=client.createdAt?panelDate(client.createdAt):clientCreatedTime(client)?panelDate(clientCreatedTime(client)):"Sin registro";
   el.innerHTML=`<div class="patient-info-card">
     <div class="sh" style="margin-bottom:8px"><h2>${escapeHtml(clientDisplayName(client))}</h2><button class="ba" onclick="openConsultationModal('${client.id}')">+ Registrar consulta</button></div>
-    <div><span class="badge ${(client.phones||[]).length>1?'bp2':'bs2'}">${escapeHtml(clientKindLabel(client))}</span></div>
+    <div><span class="badge ${(client.phones||[]).length>1?'bp2':'bs2'}">${escapeHtml(clientKindLabel(client))}</span><span style="font-size:11px;color:#7a9a7a;margin-left:6px">Creado: ${escapeHtml(created)}</span></div>
     <div class="info-summary-grid">
-      <div class="info-metric"><b>${escapeHtml(created)}</b>Fecha de creación</div>
+      <div class="info-metric primary"><span>Última pauta entregada</span><b>${latestPlan?.planDeliveredDate?panelDateOnly(latestPlan.planDeliveredDate):"Sin registro"}</b>Entrega de pauta</div>
       <div class="info-metric"><b>${latest?.consultationDate?panelDateOnly(latest.consultationDate):"Sin registro"}</b>Última consulta</div>
       <div class="info-metric"><b>${consultations.length}</b>Consultas registradas</div>
       <div class="info-metric"><b>${escapeHtml(latest?.weight||"Sin registro")}</b>Último peso</div>
