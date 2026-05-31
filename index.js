@@ -234,7 +234,27 @@ app.post("/api/messages/:key/reset", auth, (req, res) => {
   res.json({ ok: true });
 });
 app.get("/api/messages/labels", auth, (req, res) => res.json(messages.LABELS));
-app.get("/api/utility-templates", auth, (req, res) => res.json(utilityTemplates.list()));
+app.get("/api/utility-templates", auth, (req, res) => {
+  const templates = utilityTemplates.list();
+  console.log("Endpoint /api/utility-templates respondió", JSON.stringify({
+    count: templates.length,
+    templates: templates.map(template => ({
+      id: template.id,
+      label: template.label,
+      metaTemplateName: template.metaTemplateName,
+      metaLanguageCode: template.metaLanguageCode,
+    })),
+    diagnostics: utilityTemplates.diagnostics().map(item => ({
+      id: item.id,
+      configured: item.configured,
+      hasName: item.hasName,
+      hasLanguage: item.hasLanguage,
+      envKey: item.envKey,
+      languageEnvKey: item.languageEnvKey,
+    })),
+  }));
+  res.json(templates);
+});
 
 // ── Tips programables ─────────────────────────────────────────────────────────
 function nombreCliente(client, phone) {

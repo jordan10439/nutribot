@@ -574,9 +574,9 @@ const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
 async function loadUtilityTemplates(){
-  if(utilityTemplates.length)return;
   const templates=await api("GET","/utility-templates");
   utilityTemplates=Array.isArray(templates)?templates:[];
+  console.log("Plantillas previas recibidas", utilityTemplates.map(t=>({id:t.id,label:t.label,metaTemplateName:t.metaTemplateName,metaLanguageCode:t.metaLanguageCode})));
 }
 function utilityTemplateLabel(id){
   return utilityTemplates.find(t=>t.id===id)?.label||"Sin plantilla previa";

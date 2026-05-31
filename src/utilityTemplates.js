@@ -74,7 +74,25 @@ function isConfigured(template) {
 }
 
 function list() {
-  return TEMPLATES.filter(isConfigured).map(template => ({ ...template }));
+  return TEMPLATES.filter(isConfigured).map(template => ({
+    ...template,
+    metaTemplateName: configuredName(template),
+    metaLanguageCode: configuredLanguage(template),
+  }));
+}
+
+function diagnostics() {
+  return TEMPLATES.map(template => ({
+    id: template.id,
+    label: template.label,
+    envKey: template.envKey,
+    languageEnvKey: template.languageEnvKey,
+    configured: isConfigured(template),
+    hasName: !!configuredValue(template.metaName),
+    hasLanguage: !!configuredValue(template.languageCode),
+    metaTemplateName: configuredValue(template.metaName),
+    metaLanguageCode: configuredValue(template.languageCode),
+  }));
 }
 
 function get(id) {
@@ -90,4 +108,4 @@ function validateId(id) {
   return id;
 }
 
-module.exports = { configuredLanguage, configuredName, get, list, validateId };
+module.exports = { configuredLanguage, configuredName, diagnostics, get, list, validateId };
