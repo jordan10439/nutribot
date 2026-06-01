@@ -44,6 +44,7 @@ function welcomeTemplateConfig(type = "with_button") {
 function welcomeTemplateOptions() {
   const options = [];
   for (const type of ["with_button", "without_button"]) {
+    const label = type === "with_button" ? "Bienvenida con botón" : "Bienvenida sin botón";
     try {
       const config = welcomeTemplateConfig(type);
       options.push({
@@ -51,9 +52,18 @@ function welcomeTemplateOptions() {
         label: config.label,
         templateName: config.name,
         languageCode: config.languageCode,
+        available: true,
       });
     } catch (e) {
       console.log("Plantilla de bienvenida no disponible", JSON.stringify({ type, error: e.message }));
+      options.push({
+        type,
+        label,
+        templateName: "",
+        languageCode: "",
+        available: false,
+        error: e.message,
+      });
     }
   }
   return options;

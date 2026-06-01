@@ -40,7 +40,7 @@ app.post("/api/login", (req, res) => {
 app.get("/api/clients", auth, (req, res) => res.json(db.getAll()));
 app.get("/api/welcome-templates", auth, (req, res) => {
   const options = welcomeTemplateOptions();
-  console.log("Plantillas de bienvenida disponibles", JSON.stringify(options.map(t => ({ type: t.type, label: t.label, templateName: t.templateName, languageCode: t.languageCode }))));
+  console.log("Plantillas de bienvenida disponibles", JSON.stringify(options.map(t => ({ type: t.type, label: t.label, available: t.available !== false, templateName: t.templateName, languageCode: t.languageCode, error: t.error }))));
   res.json(options);
 });
 
