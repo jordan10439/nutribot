@@ -53,6 +53,10 @@ function getResumen(clientId) {
   return { completadas, noCompletadas, total: h.length, promEstrellas: promEstrellas.toFixed(1) };
 }
 
+function normalizePhone(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
+
 function datePartsInTimezone(date, timezone) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone || "America/Santiago",
@@ -92,7 +96,7 @@ function nextScheduledLocal(goal, timezone, now = new Date()) {
 
 function getGoalsDashboard(clients, sourceHistory) {
   const allHistory = sourceHistory || load();
-  const allowedTypes = new Set(["meta_enviada", "meta_error", "plantilla_previa_error", "no_completada", "seguimiento_meta", "completada", "mensaje_recibido"]);
+  const allowedTypes = new Set(["meta_enviada", "meta_error", "plantilla_previa_error", "contenido_pendiente_interaccion", "no_completada", "seguimiento_meta", "completada", "mensaje_recibido"]);
   const statusLabel = {
     pendiente: "Pendiente",
     enviada: "Enviada",
@@ -116,11 +120,50 @@ function getGoalsDashboard(clients, sourceHistory) {
           entry.goalId ? entry.goalId === goal.id : entry.meta === goal.titulo
         ))
         .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      const sendEvent = events.find(entry => ["meta_enviada", "meta_error", "plantilla_previa_error"].includes(entry.tipo));
+      const sendEvent = events.find(entry => ["meta_enviada", "meta_error", "plantilla_previa_error", "contenido_pendiente_interaccion"].includes(entry.tipo));
       const cycleStartedAt = sendEvent ? new Date(sendEvent.fecha).getTime() : 0;
       const currentEvents = cycleStartedAt
         ? events.filter(entry => new Date(entry.fecha).getTime() >= cycleStartedAt)
         : events;
+      function memberData(phone, index) {
+        const normalized = normalizePhone(phone);
+        const memberEvents = currentEvents.filter(entry => normalizePhone(entry.phone) === normalized);
+        const completed = memberEvents.find(entry => entry.tipo === "completada");
+        const followup = memberEvents.find(entry => entry.tipo === "seguimiento_meta");
+        const declined = memberEvents.find(entry => entry.tipo === "no_completada");
+        const pendingInteraction = memberEvents.find(entry => entry.tipo === "contenido_pendiente_interaccion");
+        const sent = memberEvents.find(entry => entry.tipo === "meta_enviada");
+        const lastResponse = memberEvents.find(entry => ["seguimiento_meta", "completada", "no_completada", "mensaje_recibido"].includes(entry.tipo));
+        const photoEvent = memberEvents.find(entry => entry.media?.id);
+        const difficulty = followup?.dificultad || completed?.dificultad || "";
+        let status = "pendiente";
+        if (completed) status = "completada";
+        else if (followup) status = "en_seguimiento";
+        else if (declined) status = "no_completada";
+        else if (sent) status = "enviada";
+        else if (pendingInteraction) status = "pendiente_interaccion";
+        return {
+          phone: normalized,
+          name: client.nombres?.[index] || client.nombres?.[0] || "Paciente",
+          status,
+          statusLabel: status === "pendiente_interaccion" ? "Pendiente de tocar botón" : statusLabel[status] || "Pendiente",
+          emotionalResponse: followup?.respuestaEmocional || "",
+          emotionalState: followup?.estadoEmocional || completed?.estadoEmocional || "",
+          emotionalReaction: followup?.reaccionEmocional || "",
+          difficultyResponse: followup?.respuestaDificultad || "",
+          difficulty,
+          difficultyReaction: followup?.reaccionDificultad || "",
+          comment: completed?.comentario || "",
+          photo: photoEvent?.media || null,
+          photoAt: photoEvent?.fecha || "",
+          photoComment: photoEvent?.comentario || "",
+          lastResponseAt: lastResponse?.fecha || "",
+          points: completed ? Number(completed.puntos) || 10 : 0,
+          requiresReview: !!(followup?.requiereRevision || completed?.requiereRevision || followup?.estadoEmocional === "negativo" || completed?.estadoEmocional === "negativo" || difficulty === "Difícil" || photoEvent),
+          events: memberEvents,
+        };
+      }
+      const members = (client.phones || []).map(memberData);
       const completed = currentEvents.find(entry => entry.tipo === "completada");
       const followup = currentEvents.find(entry => entry.tipo === "seguimiento_meta");
       const declined = currentEvents.find(entry => entry.tipo === "no_completada");
@@ -135,7 +178,7 @@ function getGoalsDashboard(clients, sourceHistory) {
         difficulty === "Difícil" ? "Dificultad alta" : "",
         photoReviewPending ? "Foto pendiente de revisar" : "",
       ].filter(Boolean);
-      const requiresReview = !!(followup?.requiereRevision || completed?.requiereRevision || reviewReasons.length);
+      const requiresReview = !!(followup?.requiereRevision || completed?.requiereRevision || reviewReasons.length || members.some(member => member.requiresReview));
       let status = scheduledAt ? "programada" : "pendiente";
       if (failed && !completed) status = "error";
       else if (completed) status = "completada";
@@ -173,6 +216,8 @@ function getGoalsDashboard(clients, sourceHistory) {
         reviewReasons,
         lastResponseAt: lastResponse?.fecha || "",
         points: completed ? Number(completed.puntos) || 10 : 0,
+        memberCompletionSummary: `${members.filter(member => member.status === "completada").length}/${members.length} integrantes completaron esta meta`,
+        members,
         events,
       });
     }

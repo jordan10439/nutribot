@@ -630,13 +630,15 @@ async function sendPendingContentAfterInteraction(phone, client, nombre, interac
   }
   const pending = waiting[0];
   console.log("Contenido pendiente encontrado", JSON.stringify({ pendingId: pending.id, phone, type: pending.type }));
+  const pendingClient = db.getById(pending.clientId) || client;
+  const pendingName = nombreDe(pendingClient, phone);
   try {
     console.log("Enviando contenido pendiente", JSON.stringify({ pendingId: pending.id, phone, type: pending.type }));
     const result = pending.type === "tip"
-      ? await sendPendingTipContent(pending, client, phone, nombre)
-      : await sendPendingGoalContent(pending, client, phone, nombre);
+      ? await sendPendingTipContent(pending, pendingClient, phone, pendingName)
+      : await sendPendingGoalContent(pending, pendingClient, phone, pendingName);
     pendingContent.markSent(pending.id, { result });
-    history.registrar(client.id, phone, nombre, {
+    history.registrar(pendingClient.id, phone, pendingName, {
       tipo: "contenido_pendiente_enviado",
       meta: pending.type === "tip" ? "Tip pendiente enviado" : "Meta pendiente enviada",
       metaEmoji: "✅",
@@ -649,7 +651,7 @@ async function sendPendingContentAfterInteraction(phone, client, nombre, interac
     console.log("Contenido pendiente enviado después de interacción del paciente", JSON.stringify({ pendingId: pending.id, phone, type: pending.type, result }));
   } catch (e) {
     pendingContent.markError(pending.id, e.message);
-    history.registrar(client.id, phone, nombre, {
+    history.registrar(pendingClient.id, phone, pendingName, {
       tipo: "contenido_pendiente_error",
       meta: pending.type === "tip" ? "Error al enviar tip pendiente" : "Error al enviar meta pendiente",
       metaEmoji: "⚠️",

@@ -879,23 +879,38 @@ function sortClientsNewestFirst(list){
     .map(item=>item.client);
 }
 
-function searchNormalize(value){
+function normalizeSearchText(value){
   return String(value||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\s+/g," ").trim();
 }
 
+function searchNormalize(value){
+  return normalizeSearchText(value);
+}
+
 function clientSearchText(client){
-  return searchNormalize([...(client?.nombres||[]),...(client?.phones||[]),client?.id||"",clientKindLabel(client)].join(" "));
+  return normalizeSearchText([...(client?.nombres||[]),...(client?.phones||[]),client?.id||"",clientKindLabel(client)].join(" "));
 }
 
 function clientMatchesSearch(client,scope){
-  const query=searchNormalize(patientSearches[scope]||"");
+  const query=normalizeSearchText(patientSearches[scope]||"");
   if(!query)return true;
   if(!client)return false;
-  return clientSearchText(client).includes(query);
+  const haystack=clientSearchText(client);
+  return query.split(" ").every(part=>haystack.includes(part));
+}
+
+function filterClientsBySearch(list,query){
+  const normalized=normalizeSearchText(query);
+  const ordered=sortClientsNewestFirst(list);
+  if(!normalized)return ordered;
+  return ordered.filter(client=>{
+    const haystack=clientSearchText(client);
+    return normalized.split(" ").every(part=>haystack.includes(part));
+  });
 }
 
 function searchedClients(scope){
-  return sortClientsNewestFirst(clients).filter(client=>clientMatchesSearch(client,scope));
+  return filterClientsBySearch(clients,patientSearches[scope]||"");
 }
 
 function clientOrderIndex(clientId){
@@ -1263,6 +1278,35 @@ function goalPhotoSummary(goal){
   return `<button class="goal-photo-link" onclick="openGoalPhoto('${encodeURIComponent(goal.photo.id)}')">📷 Ver foto</button><img class="goal-photo-thumb" src="${url}" alt="Foto del seguimiento" onclick="openGoalPhoto('${encodeURIComponent(goal.photo.id)}')"/>`;
 }
 
+function goalMemberSummary(goal){
+  const members=goal.members||[];
+  if(!members.length)return "";
+  return `<div class="goal-small" style="margin-top:6px">${escapeHtml(goal.memberCompletionSummary||"")}<br>${members.map(member=>`${escapeHtml(member.name)}: ${escapeHtml(member.statusLabel||"Pendiente")}${member.difficulty?` · ${escapeHtml(member.difficulty)}`:""}`).join("<br>")}</div>`;
+}
+
+function memberPhotoSummary(member){
+  if(!member.photo?.id)return "Sin foto";
+  const url=goalPhotoUrl(member.photo);
+  return `<button class="goal-photo-link" onclick="openGoalPhoto('${encodeURIComponent(member.photo.id)}')">📷 Ver foto</button><img class="goal-photo-thumb" src="${url}" alt="Foto del seguimiento" onclick="openGoalPhoto('${encodeURIComponent(member.photo.id)}')"/>`;
+}
+
+function goalMemberDetails(goal){
+  const members=goal.members||[];
+  if(!members.length)return "";
+  return `<div style="font-size:12px;font-weight:800;color:#2a5738;margin:10px 0 5px">Seguimiento por integrante</div>
+  <div class="goal-detail-grid">${members.map(member=>`<div class="goal-detail-field">
+    <strong>${escapeHtml(member.name)}</strong>
+    Estado: ${escapeHtml(member.statusLabel||"Pendiente")}<br>
+    Emoción: ${member.emotionalResponse?`"${escapeHtml(member.emotionalResponse)}"`:"Sin respuesta"}<br>
+    Dificultad: ${escapeHtml(member.difficulty||"Sin respuesta")}<br>
+    Comentario: ${escapeHtml(member.comment||"Sin comentario")}<br>
+    Foto: ${memberPhotoSummary(member)}<br>
+    Última respuesta: ${panelDate(member.lastResponseAt)}<br>
+    Puntaje: ${Number(member.points||0)}/10
+    ${member.requiresReview?`<br><span class="review-chip">Revisión posterior</span>`:""}
+  </div>`).join("")}</div>`;
+}
+
 function panelDateKey(value){
   if(!value)return "";
   const date=new Date(value);
@@ -1312,14 +1356,14 @@ function renderGoalsDashboard(){
   </div>`).join(""):`<div class="empty-h">${noGoalPatients}</div>`;
   const goals=visibleGoals();
   listEl.innerHTML=goals.length?`<div class="goal-list-head"><span>Meta / paciente</span><span>Estado de envío</span><span>Programación</span><span>Seguimiento</span><span>Foto</span><span>Última respuesta</span><span>Revisión</span><span></span></div>`+goals.map(goal=>`<div class="goal-row ${goal.requiresReview?'review':''}">
-    <div class="goal-title"><strong>${escapeHtml(goal.emoji)} ${escapeHtml(goal.title)}</strong><span>${escapeHtml(goal.patientName)}</span></div>
+    <div class="goal-title"><strong>${escapeHtml(goal.emoji)} ${escapeHtml(goal.title)}</strong><span>${escapeHtml(goal.patientName)}</span>${goalMemberSummary(goal)}</div>
     <div>${goalStatusTag(goal)}${goal.deliveryStatus?`<div class="goal-small">${escapeHtml(goalDeliveryLabel(goal.deliveryStatus))}</div>`:""}</div>
     <div class="goal-small">${goalProgramming(goal)}</div>
     <div class="goal-small">${goal.emotionalResponse?`Emoción: "${escapeHtml(goal.emotionalResponse)}"<br>`:""}${goal.difficulty?`Dificultad: ${escapeHtml(goal.difficulty)}`:"Sin respuesta"}${goal.comment?`<br>Comentario: "${escapeHtml(goal.comment)}"`:""}</div>
     <div class="goal-small">${goalPhotoSummary(goal)}</div>
     <div class="goal-small">${panelDate(goal.lastResponseAt)}${goal.points?`<br>+${goal.points} puntos`:""}</div>
     <div class="goal-small">${goal.requiresReview?`<span class="review-chip">👁 Revisar</span>`:"Sin revisión"}</div>
-    <button class="bi" onclick="openGoalDetail('${goal.key}')" title="Ver detalle">👁</button>
+    <div style="display:flex;gap:5px;align-items:center"><button class="bi" onclick="openGoalDetail('${goal.key}')" title="Ver detalle">👁</button>${["pendiente","programada"].includes(goal.status)&&!goal.sentAt?`<button class="md2" onclick="deleteScheduledGoal('${goal.clientId}','${goal.goalId}')">Eliminar</button>`:""}</div>
   </div>`).join(""):`<div class="empty-h">No hay metas que coincidan con estos filtros.</div>`;
 }
 
@@ -1345,6 +1389,7 @@ function openGoalDetail(key){
     <div class="goal-detail-field" style="grid-column:1/-1"><strong>Comentario</strong>${escapeHtml(goal.comment||"Sin comentario")}</div>
     <div class="goal-detail-field" style="grid-column:1/-1"><strong>Foto enviada por el paciente</strong>${goal.photo?.id?`${goalPhotoSummary(goal)}<br><span class="goal-small">Recibida: ${panelDate(goal.photoAt)}${goal.photoComment?` · Comentario: "${escapeHtml(goal.photoComment)}"`:""}</span>`:"Sin foto"}</div>
   </div>
+  ${goalMemberDetails(goal)}
   <div style="font-size:12px;font-weight:800;color:#2a5738;margin-bottom:5px">Historial de eventos</div>
   <div>${events.length?events.map(event=>`<div class="goal-event"><span class="goal-event-time">${panelDate(event.fecha)}</span><strong>${escapeHtml(label[event.tipo]||event.tipo)}</strong>${event.comentario?`<br>${escapeHtml(event.comentario)}`:""}${event.requiereRevision?` <span class="review-chip">Revisión posterior</span>`:""}</div>`).join(""):`<div class="empty-h">Sin eventos registrados.</div>`}</div>`;
   I("goalDetailModal").classList.add("open");
@@ -1365,8 +1410,12 @@ function welcomeStatusLabel(client){
 
 function welcomeStatusDetail(client){
   const w=client?.welcome||{};
-  if(w.status==="sent")return w.sentAt?`Enviada: ${panelDate(w.sentAt)}`:"Enviada";
-  if(w.status==="scheduled")return w.scheduledAt?`Programada para: ${panelDate(w.scheduledAt)}`:"Programada";
+  const template=welcomeTemplates.find(item=>welcomeTemplateId(item)===(w.templateType||""));
+  const typeLabel=w.templateType==="without_button"?"Sin botón":w.templateType==="with_button"?"Con botón":"Sin registro";
+  const templateName=template?welcomeTemplateName(template):(w.templateType==="without_button"?"plantilla_numero_3":w.templateType==="with_button"?"bienvenida_con_boton":"Sin registro");
+  const extra=`Tipo: ${typeLabel} · Plantilla: ${templateName}`;
+  if(w.status==="sent")return `${w.sentAt?`Enviada: ${panelDate(w.sentAt)}`:"Enviada"} · ${extra}`;
+  if(w.status==="scheduled")return `${w.scheduledAt?`Programada para: ${panelDate(w.scheduledAt)}`:"Programada"} · ${extra}`;
   if(w.status==="error")return w.error?`Error: ${w.error}`:"Error";
   if(w.status==="cancelled")return"Cancelada";
   return"Sin bienvenida registrada";
@@ -1404,9 +1453,7 @@ function renderClients(){
         <div style="font-size:11px;color:#6d856d;margin-top:2px">${escapeHtml(welcomeStatusDetail(c))}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
           <button class="bam" onclick="sendWelcome('${c.id}')">Enviar ahora</button>
-          <button class="bam" onclick="openWelcomeSchedule('${c.id}')">Programar</button>
-          <button class="bam" onclick="markWelcome('${c.id}','sent')">Marcar enviada</button>
-          <button class="bam" onclick="markWelcome('${c.id}','not_sent')">Marcar no enviada</button>
+          <button class="bam" onclick="openWelcomeSchedule('${c.id}')">${c.welcome?.status==="scheduled"?"Editar programación":"Programar"}</button>
           ${c.welcome?.scheduledId&&c.welcome?.status==="scheduled"?`<button class="md2" onclick="cancelWelcomeSchedule('${c.welcome.scheduledId}')">Cancelar programación</button>`:""}
         </div>
       </div>
@@ -2615,6 +2662,12 @@ async function saveMeta(sendNow=false){
   closeM("mm");loadAll();
 }
 async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadAll()}
+async function deleteScheduledGoal(cid,gid){
+  if(!confirm("¿Seguro que quieres eliminar esta meta programada?"))return;
+  await api("DELETE",`/clients/${cid}/goals/${gid}`);
+  showToast("Meta programada eliminada");
+  loadAll();
+}
 async function sendMeta(cid,gid){
   const c=clients.find(x=>x.id===cid);
   const m=c?.goals?.find(g=>g.id===gid);
