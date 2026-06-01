@@ -2,6 +2,11 @@ const fs = require("fs");
 const path = require("path");
 
 const FILE = path.join(__dirname, "../data/pendingContent.json");
+const WAITING_STATUS = "waiting_patient_interaction";
+
+function normalizePhone(phone) {
+  return String(phone || "").replace(/\D/g, "");
+}
 
 function load() {
   try {
@@ -24,8 +29,9 @@ function uid() {
 }
 
 function pendingKey(item) {
-  if (item.type === "tip") return `tip:${item.payload?.sendId || ""}:${item.phone}`;
-  return `goal:${item.clientId}:${item.phone}:${item.payload?.goalId || ""}`;
+  const phone = normalizePhone(item.phone);
+  if (item.type === "tip") return `tip:${item.payload?.sendId || ""}:${phone}`;
+  return `goal:${item.clientId}:${phone}:${item.payload?.goalId || ""}`;
 }
 
 function upsertWaiting(input) {
@@ -34,11 +40,12 @@ function upsertWaiting(input) {
   const next = {
     id: input.id || uid(),
     clientId: input.clientId,
-    phone: input.phone,
+    phone: normalizePhone(input.phone),
+    originalPhone: input.originalPhone || input.phone || "",
     patientName: input.patientName || "Paciente",
     type: input.type,
     payload: input.payload || {},
-    status: "waiting_patient_interaction",
+    status: WAITING_STATUS,
     triggerTemplateId: input.triggerTemplateId || "",
     triggerTemplateName: input.triggerTemplateName || "",
     triggerButtonLabels: input.triggerButtonLabels || ["Ver seguimiento", "Ver mensaje", "Ver recomendación", "Ver recordatorio", "Vamos"],
@@ -50,7 +57,7 @@ function upsertWaiting(input) {
     lastError: input.lastError || "",
   };
   const key = pendingKey(next);
-  const index = items.findIndex(item => item.status === "waiting_patient_interaction" && pendingKey(item) === key);
+  const index = items.findIndex(item => item.status === WAITING_STATUS && pendingKey(item) === key);
   if (index >= 0) items[index] = { ...items[index], ...next, id: items[index].id, createdAt: items[index].createdAt || next.createdAt };
   else items.unshift(next);
   save(items);
@@ -58,8 +65,9 @@ function upsertWaiting(input) {
 }
 
 function findWaitingByPhone(phone) {
+  const normalized = normalizePhone(phone);
   return load()
-    .filter(item => item.phone === phone && item.status === "waiting_patient_interaction")
+    .filter(item => normalizePhone(item.phone) === normalized && item.status === WAITING_STATUS)
     .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
 }
 
@@ -81,4 +89,4 @@ function markError(id, error, patch = {}) {
   return update(id, { ...patch, status: "error", error: message, lastError: message });
 }
 
-module.exports = { findWaitingByPhone, markError, markSent, upsertWaiting };
+module.exports = { findWaitingByPhone, markError, markSent, normalizePhone, upsertWaiting };

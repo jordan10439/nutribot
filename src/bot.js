@@ -359,9 +359,9 @@ async function enviarMeta(clientId, meta, options = {}) {
           deliveryStatus: "accepted",
           deliveryStage: "plantilla_previa",
         });
-        if (utilityTemplate.requiresPatientClick || utilityTemplate.hasButton) {
+        if (utilityTemplates.requiresPatientClick(utilityTemplate)) {
           console.log("Plantilla con botón seleccionada", JSON.stringify({ phone, nombre, role, utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
-          console.log("No se enviará contenido principal todavía", JSON.stringify({ phone, type: "goal", goalId: meta.id }));
+          console.log("No se enviará contenido principal todavía", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), type: "goal", goalId: meta.id }));
           console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ phone, type: "goal", goalId: meta.id, templateMessageId: utilityTemplateMessageId }));
           const pending = pendingContent.upsertWaiting({
             clientId,
@@ -567,8 +567,8 @@ async function sendPendingTipContent(pending, client, phone, nombre) {
 
 async function sendPendingContentAfterInteraction(phone, client, nombre, interactionText) {
   const waiting = pendingContent.findWaitingByPhone(phone);
-  console.log("Paciente tocó botón de plantilla", JSON.stringify({ phone, interactionText }));
-  console.log("Buscando contenido pendiente por teléfono", JSON.stringify({ phone, count: waiting.length, interactionText }));
+  console.log("Paciente tocó botón de plantilla", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), interactionText }));
+  console.log("Buscando contenido pendiente por teléfono", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), count: waiting.length, interactionText }));
   if (!waiting.length) {
     console.log("No hay contenido pendiente para este teléfono", JSON.stringify({ phone, interactionText }));
     history.registrar(client.id, phone, nombre, {

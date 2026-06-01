@@ -457,9 +457,9 @@ async function sendTipRecord(send, position = null, total = null) {
         deliveryStatus: "accepted",
         deliveryStage: "plantilla_previa",
       });
-      if (utilityTemplate.requiresPatientClick || utilityTemplate.hasButton) {
+      if (utilityTemplates.requiresPatientClick(utilityTemplate)) {
         console.log("Plantilla con botón seleccionada", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, utilityTemplateId: send.utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
-        console.log("No se enviará contenido principal todavía", JSON.stringify({ id: send.id, phone: send.phone, type: "tip", tipId: send.tipId }));
+        console.log("No se enviará contenido principal todavía", JSON.stringify({ id: send.id, phone: send.phone, normalizedPhone: pendingContent.normalizePhone(send.phone), type: "tip", tipId: send.tipId }));
         console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ id: send.id, phone: send.phone, type: "tip", templateMessageId: utilityTemplateMessageId }));
         const pending = pendingContent.upsertWaiting({
           clientId: send.clientId,

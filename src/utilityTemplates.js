@@ -49,6 +49,13 @@ const TEMPLATES = [
   },
 ];
 
+const CLICK_REQUIRED_TEMPLATE_NAMES = new Set([
+  "te_escribo_por_seguimiento_nutricional",
+  "tienes_un_mensaje_de_seguimiento",
+  "tienes_recomendacion_nutricional_por_carla",
+  "tienes_un_recordatorio_para_hoy",
+]);
+
 function configuredValue(value) {
   const clean = String(value || "").trim();
   const placeholder = /placeholder|ejemplo|example|cambiar|configurar|nombre[_ -]?real/i.test(clean);
@@ -71,6 +78,12 @@ function configuredLanguage(template) {
   return language;
 }
 
+function requiresPatientClick(template) {
+  if (!template) return false;
+  const configuredMetaName = configuredValue(template.metaName);
+  return !!template.requiresPatientClick || !!template.hasButton || CLICK_REQUIRED_TEMPLATE_NAMES.has(configuredMetaName);
+}
+
 function isConfigured(template) {
   try {
     configuredName(template);
@@ -87,7 +100,7 @@ function list() {
     metaTemplateName: configuredName(template),
     metaLanguageCode: configuredLanguage(template),
     hasButton: !!template.hasButton,
-    requiresPatientClick: !!template.requiresPatientClick,
+    requiresPatientClick: requiresPatientClick(template),
   }));
 }
 
@@ -103,7 +116,7 @@ function diagnostics() {
     metaTemplateName: configuredValue(template.metaName),
     metaLanguageCode: configuredValue(template.languageCode),
     hasButton: !!template.hasButton,
-    requiresPatientClick: !!template.requiresPatientClick,
+    requiresPatientClick: requiresPatientClick(template),
   }));
 }
 
@@ -120,4 +133,4 @@ function validateId(id) {
   return id;
 }
 
-module.exports = { configuredLanguage, configuredName, diagnostics, get, list, validateId };
+module.exports = { configuredLanguage, configuredName, diagnostics, get, list, requiresPatientClick, validateId };
