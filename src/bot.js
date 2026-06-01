@@ -140,7 +140,7 @@ function formatMetaMessage(nombre, meta) {
   const emoji = String(meta?.emoji || "").trim();
   const title = String(meta?.titulo || "Meta").trim();
   const titleLine = `${emoji ? `${emoji} ` : ""}*${title}*`;
-  const lines = ["✨*¡Nueva meta!*✨", "", titleLine];
+  const lines = ["✨*Meta*✨", "", titleLine];
   if (description) lines.push("", description);
   return lines.join("\n");
 }
