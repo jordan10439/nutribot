@@ -12,6 +12,7 @@ const patientInfo = require("./src/patientInfo");
 const consultationReminders = require("./src/consultationReminders");
 const utilityTemplates = require("./src/utilityTemplates");
 const pendingContent = require("./src/pendingContent");
+const welcomeSchedules = require("./src/welcomeSchedules");
 const { enviarTip, enviarPlantillaUtilidad } = require("./src/whatsapp");
 const { procesarMensaje, enviarMeta, enviarBienvenida, welcomeTemplateOptions } = require("./src/bot");
 const { recargarTodos } = require("./src/scheduler");
@@ -36,6 +37,78 @@ function auth(req, res, next) {
   next();
 }
 
+function normalizePhone(phone) {
+  return pendingContent.normalizePhone(phone);
+}
+
+function cleanClientPayload(body = {}, existing = null) {
+  const nombres = (body.nombres || []).map(name => String(name || "").trim()).filter(Boolean);
+  const phones = (body.phones || []).map(normalizePhone).filter(Boolean);
+  if (!nombres.length || !phones.length) throw new Error("Completa nombre y teléfono");
+  if (nombres.length !== phones.length) throw new Error("Cada integrante debe tener nombre y teléfono");
+  const seen = new Set();
+  for (const phone of phones) {
+    if (seen.has(phone)) throw new Error(`Teléfono duplicado en este paciente: ${phone}`);
+    seen.add(phone);
+    const duplicate = db.getAll().find(client => client.id !== existing?.id && (client.phones || []).some(p => normalizePhone(p) === phone));
+    if (duplicate) throw new Error(`El teléfono ${phone} ya existe en otro paciente`);
+  }
+  return {
+    ...(existing || {}),
+    nombres,
+    phones,
+    timezone: body.timezone || existing?.timezone || "America/Santiago",
+    goals: existing?.goals || body.goals || [],
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function setWelcomeState(client, patch) {
+  client.welcome = { ...(client.welcome || { status: "not_sent" }), ...patch, updatedAt: new Date().toISOString() };
+  db.upsert(client);
+  return client.welcome;
+}
+
+async function sendWelcomeToClient(client, templateType = "with_button") {
+  for (const phone of client.phones || []) await enviarBienvenida(client.id, normalizePhone(phone), templateType);
+  setWelcomeState(client, { status: "sent", templateType, sentAt: new Date().toISOString(), error: "", scheduledId: "" });
+}
+
+async function revisarBienvenidasProgramadas() {
+  const due = welcomeSchedules.due();
+  if (!due.length) return;
+  console.log("Revisando bienvenidas programadas", JSON.stringify({ count: due.length }));
+  for (const schedule of due) {
+    const client = db.getById(schedule.clientId);
+    if (!client) {
+      welcomeSchedules.update(schedule.id, { status: "error", error: "Paciente no encontrado" });
+      continue;
+    }
+    try {
+      await sendWelcomeToClient(client, schedule.templateType);
+      welcomeSchedules.update(schedule.id, { status: "sent", sentAt: new Date().toISOString(), error: "" });
+      history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
+        tipo: "bienvenida_programada_enviada",
+        meta: "Bienvenida enviada",
+        metaEmoji: "👋",
+        comentario: `Bienvenida programada enviada (${schedule.templateType === "without_button" ? "sin botón" : "con botón"}).`,
+        direccion: "sistema",
+      });
+    } catch (e) {
+      welcomeSchedules.update(schedule.id, { status: "error", error: e.message });
+      setWelcomeState(client, { status: "error", templateType: schedule.templateType, error: e.message, scheduledId: schedule.id });
+      history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
+        tipo: "bienvenida_error",
+        meta: "Error al enviar bienvenida",
+        metaEmoji: "⚠️",
+        comentario: e.message,
+        direccion: "sistema",
+      });
+    }
+  }
+}
+
 // ── Auth ───────────────────────────────────────────────────────────────────────
 app.post("/api/login", (req, res) => {
   if (req.body.password === PASS) res.json({ ok: true });
@@ -55,23 +128,46 @@ app.get("/api/welcome-templates", auth, (req, res) => {
 });
 
 app.post("/api/clients", auth, async (req, res) => {
-  const { nombres, phones, timezone, goals } = req.body;
-  if (!nombres?.length || !phones?.length) return res.status(400).json({ error: "Faltan datos" });
-  const now = new Date().toISOString();
-  const client = { id: db.newId(nombres[0]), nombres, phones, timezone: timezone || "America/Santiago", goals: goals || [], createdAt: now, updatedAt: now };
+  let client;
+  try {
+    client = cleanClientPayload(req.body);
+    client.id = db.newId(client.nombres[0]);
+    client.welcome = { status: "not_sent", updatedAt: new Date().toISOString() };
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
   db.upsert(client);
   recargarTodos();
   // Enviar bienvenida solo si el cliente lo solicita (body.sendWelcome === true)
   if (req.body.sendWelcome) {
     try {
-      for (const phone of phones) {
-        await enviarBienvenida(client.id, phone, req.body.welcomeTemplateType || "with_button");
-      }
+      await sendWelcomeToClient(client, req.body.welcomeTemplateType || "with_button");
     } catch (e) {
+      setWelcomeState(client, { status: "error", templateType: req.body.welcomeTemplateType || "with_button", error: e.message });
       return res.status(502).json({ error: e.message, client, welcomeSent: false });
     }
   }
   res.json({ ok: true, client, welcomeSent: !!req.body.sendWelcome });
+});
+
+app.put("/api/clients/:id", auth, (req, res) => {
+  try {
+    const existing = db.getById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "No encontrado" });
+    const client = cleanClientPayload(req.body, existing);
+    db.upsert(client);
+    history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
+      tipo: "paciente_editado",
+      meta: "Paciente editado",
+      metaEmoji: "✏️",
+      comentario: "Datos básicos del paciente actualizados.",
+      direccion: "sistema",
+    });
+    recargarTodos();
+    res.json({ ok: true, client });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.delete("/api/clients/:id", auth, (req, res) => {
@@ -159,10 +255,83 @@ app.post("/api/clients/:id/welcome", auth, async (req, res) => {
   try {
     const client = db.getById(req.params.id);
     if (!client) return res.status(404).json({ error: "No encontrado" });
-    for (const phone of client.phones) await enviarBienvenida(client.id, phone, req.body.welcomeTemplateType || "with_button");
-    res.json({ ok: true });
+    await sendWelcomeToClient(client, req.body.welcomeTemplateType || "with_button");
+    res.json({ ok: true, welcome: db.getById(req.params.id)?.welcome });
   } catch (e) {
+    const client = db.getById(req.params.id);
+    if (client) setWelcomeState(client, { status: "error", templateType: req.body.welcomeTemplateType || "with_button", error: e.message });
     res.status(502).json({ error: e.message });
+  }
+});
+
+app.patch("/api/clients/:id/welcome-status", auth, (req, res) => {
+  const client = db.getById(req.params.id);
+  if (!client) return res.status(404).json({ error: "No encontrado" });
+  const status = req.body.status === "sent" ? "sent" : "not_sent";
+  const welcome = setWelcomeState(client, { status, error: "", sentAt: status === "sent" ? new Date().toISOString() : "" });
+  history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
+    tipo: status === "sent" ? "bienvenida_marcada_enviada" : "bienvenida_marcada_no_enviada",
+    meta: "Bienvenida",
+    metaEmoji: "👋",
+    comentario: status === "sent" ? "Bienvenida marcada manualmente como enviada." : "Bienvenida marcada manualmente como no enviada.",
+    direccion: "sistema",
+  });
+  res.json({ ok: true, welcome });
+});
+
+app.post("/api/clients/:id/welcome-schedules", auth, (req, res) => {
+  try {
+    const client = db.getById(req.params.id);
+    if (!client) return res.status(404).json({ error: "No encontrado" });
+    const item = welcomeSchedules.create({ clientId: client.id, templateType: req.body.welcomeTemplateType || "with_button", scheduledAt: req.body.scheduledAt });
+    setWelcomeState(client, { status: "scheduled", templateType: item.templateType, scheduledAt: item.scheduledAt, scheduledId: item.id, error: "" });
+    history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
+      tipo: "bienvenida_programada",
+      meta: "Bienvenida programada",
+      metaEmoji: "👋",
+      comentario: `Bienvenida programada para ${item.scheduledAt}.`,
+      direccion: "sistema",
+    });
+    res.json({ ok: true, schedule: item, welcome: db.getById(client.id)?.welcome });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.put("/api/welcome-schedules/:id", auth, (req, res) => {
+  try {
+    const item = welcomeSchedules.update(req.params.id, {
+      templateType: req.body.welcomeTemplateType || req.body.templateType,
+      scheduledAt: req.body.scheduledAt,
+      status: req.body.status || "scheduled",
+      error: "",
+    });
+    if (!item) return res.status(404).json({ error: "Bienvenida programada no encontrada" });
+    const client = db.getById(item.clientId);
+    if (client && item.status === "scheduled") setWelcomeState(client, { status: "scheduled", templateType: item.templateType, scheduledAt: item.scheduledAt, scheduledId: item.id, error: "" });
+    res.json({ ok: true, schedule: item });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/welcome-schedules/:id/cancel", auth, (req, res) => {
+  try {
+    const item = welcomeSchedules.cancel(req.params.id);
+    const client = db.getById(item.clientId);
+    if (client) {
+      setWelcomeState(client, { status: "cancelled", scheduledId: item.id, error: "" });
+      history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
+        tipo: "bienvenida_cancelada",
+        meta: "Bienvenida cancelada",
+        metaEmoji: "👋",
+        comentario: "Bienvenida programada cancelada.",
+        direccion: "sistema",
+      });
+    }
+    res.json({ ok: true, schedule: item });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
   }
 });
 
@@ -780,6 +949,8 @@ app.listen(PORT, () => {
   console.log(`\n🌱 NutriGO Panel v3 — puerto ${PORT}`);
   recargarTodos();
   revisarTipsProgramados();
+  revisarBienvenidasProgramadas();
   consultationReminders.startScheduler();
   setInterval(revisarTipsProgramados, 60 * 1000);
+  setInterval(revisarBienvenidasProgramadas, 60 * 1000);
 });

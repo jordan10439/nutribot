@@ -458,7 +458,8 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <!-- Modal Paciente -->
 <div class="mo" id="cm">
   <div class="modal">
-    <h2>➕ Nuevo paciente</h2>
+    <h2 id="client_modal_title">➕ Nuevo paciente</h2>
+    <input type="hidden" id="client_edit_id" />
     <div class="fg"><label>¿Individual o pareja?</label>
       <div class="tgg"><div class="to active" id="ts" onclick="setMode('s')">👤 Individual</div><div class="to" id="tpr" onclick="setMode('p')">👫 Pareja</div></div>
     </div>
@@ -482,6 +483,18 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <input type="hidden" id="welcome_client_id" />
     <div class="fg"><label>Tipo de bienvenida</label><input type="hidden" id="welcome_resend_type"/><div class="welcome-choice-group" id="welcome_resend_choices"></div><div class="tip-note" id="welcome_resend_hint"></div></div>
     <div class="ma"><button class="bc" onclick="closeM('welcomeModal')">Cancelar</button><button class="bsv" onclick="confirmSendWelcome()">Enviar bienvenida</button></div>
+  </div>
+</div>
+
+<div class="mo" id="welcomeScheduleModal">
+  <div class="modal">
+    <h2>Programar bienvenida</h2>
+    <input type="hidden" id="welcome_schedule_client_id" />
+    <input type="hidden" id="welcome_schedule_id" />
+    <div class="fg"><label>Tipo de bienvenida</label><input type="hidden" id="welcome_schedule_type"/><div class="welcome-choice-group" id="welcome_schedule_choices"></div><div class="tip-note" id="welcome_schedule_hint"></div></div>
+    <div class="fg"><label>Fecha de envío</label><input type="date" id="welcome_schedule_date" /></div>
+    <div class="fg"><label>Hora de envío</label><input type="time" id="welcome_schedule_time" /></div>
+    <div class="ma"><button class="bc" onclick="closeM('welcomeScheduleModal')">Cancelar</button><button class="bsv" onclick="saveWelcomeSchedule()">Guardar programación</button></div>
   </div>
 </div>
 
@@ -653,7 +666,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],consultationReminderFilter="all",goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],consultationReminderFilter="all",goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",tipSend:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -704,6 +717,7 @@ function welcomeCardClass(type){
   return type==="without_button"?"without-button":"with-button";
 }
 function welcomeChoicesId(selectId){
+  if(selectId==="welcome_schedule_type")return"welcome_schedule_choices";
   return selectId==="welcome_resend_type"?"welcome_resend_choices":"welcome_template_choices";
 }
 function renderWelcomeChoices(selectId,hintId){
@@ -1338,6 +1352,20 @@ function openGoalPhoto(encodedId){
 
 function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];return d.map(x=>n[x]).join(", ")}
 
+function welcomeStatusLabel(client){
+  const status=client?.welcome?.status||"not_sent";
+  return ({not_sent:"No enviada",sent:"Enviada",scheduled:"Programada",cancelled:"Cancelada",error:"Error"})[status]||"No enviada";
+}
+
+function welcomeStatusDetail(client){
+  const w=client?.welcome||{};
+  if(w.status==="sent")return w.sentAt?`Enviada: ${panelDate(w.sentAt)}`:"Enviada";
+  if(w.status==="scheduled")return w.scheduledAt?`Programada para: ${panelDate(w.scheduledAt)}`:"Programada";
+  if(w.status==="error")return w.error?`Error: ${w.error}`:"Error";
+  if(w.status==="cancelled")return"Cancelada";
+  return"Sin bienvenida registrada";
+}
+
 function renderClients(){
   const el=I("clist");
   if(!clients.length){el.innerHTML=`<div class="empty"><div>👥</div><p>No hay pacientes aún.</p></div>`;return}
@@ -1359,16 +1387,27 @@ function renderClients(){
     return`<div class="card">
       <div class="ch">
         <div class="av">${ini}</div>
-        <div class="ci"><h3>${c.nombres?.join(" & ")} <span class="badge ${solo?"bs2":"bp2"}">${solo?"Individual":"Pareja"}</span>${reviewBadge}</h3><p>📱 ${c.phones?.join(" · ")}</p></div>
+        <div class="ci"><h3>${escapeHtml(clientDisplayName(c))} <span class="badge ${solo?"bs2":"bp2"}">${solo?"Individual":"Pareja"}</span>${reviewBadge}</h3><p>${escapeHtml(clientKindLabel(c))} · ${c.createdAt?`Creado: ${panelDate(c.createdAt)}`:"Sin fecha de creación"}</p></div>
         <div class="cac">
+          <button class="bi" onclick="openCM('${c.id}')" title="Editar paciente">✏️</button>
           <button class="bi" onclick="delClient('${c.id}')" title="Eliminar">🗑️</button>
+        </div>
+      </div>
+      <div class="welcome-panel" style="border:1px solid #dceadc;background:#fbfdfb;border-radius:8px;padding:9px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:900;color:#2a5738">Bienvenida: ${escapeHtml(welcomeStatusLabel(c))}</div>
+        <div style="font-size:11px;color:#6d856d;margin-top:2px">${escapeHtml(welcomeStatusDetail(c))}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="bam" onclick="sendWelcome('${c.id}')">Enviar ahora</button>
+          <button class="bam" onclick="openWelcomeSchedule('${c.id}')">Programar</button>
+          <button class="bam" onclick="markWelcome('${c.id}','sent')">Marcar enviada</button>
+          <button class="bam" onclick="markWelcome('${c.id}','not_sent')">Marcar no enviada</button>
+          ${c.welcome?.scheduledId&&c.welcome?.status==="scheduled"?`<button class="md2" onclick="cancelWelcomeSchedule('${c.welcome.scheduledId}')">Cancelar programación</button>`:""}
         </div>
       </div>
       <div id="summary-${c.id}" style="margin-bottom:8px;font-size:12px;color:#4a6a4a">${summary.completed}/${summary.total} metas completadas · ${summary.points}/${summary.possiblePoints} puntos · ${summary.pending} pendientes · ${escapeHtml(summary.generalStatus)}</div>
       <div class="ms">
         <div class="mt2"><span>🎯 Metas (${c.goals?.length||0})</span><button class="bam" onclick="openMM('${c.id}')">+ Meta</button></div>
         ${metas||'<p style="font-size:11px;color:#7a9a7a;padding:6px">Sin metas aún.</p>'}
-        <button class="bwelcome" onclick="sendWelcome('${c.id}')">👋 Reenviar mensaje de bienvenida</button>
         <button class="bhist" onclick="openGoalsForPatient('${c.id}')">🎯 Ver resumen de metas</button>
         <button class="bhist" onclick="toggleH('${c.id}')">📋 Ver historial</button>
         <div class="hp" id="h-${c.id}">
@@ -2359,9 +2398,16 @@ async function resetMsg(key){
 }
 
 // ── CLIENTES ─────────────────────────────────────────────────────────────────
-function openCM(){
-  setMode("s");
-  ["n1","p1","n2","p2"].forEach(id=>I(id).value="");
+function openCM(id=""){
+  const client=clients.find(c=>c.id===id);
+  I("client_edit_id").value=client?.id||"";
+  I("client_modal_title").textContent=client?"✏️ Editar paciente":"➕ Nuevo paciente";
+  setMode((client?.phones||[]).length>1?"p":"s");
+  I("n1").value=client?.nombres?.[0]||"";
+  I("p1").value=client?.phones?.[0]||"";
+  I("n2").value=client?.nombres?.[1]||"";
+  I("p2").value=client?.phones?.[1]||"";
+  I("tz").value=client?.timezone||"America/Santiago";
   fillWelcomeSelect("welcome_template_type","welcome_template_hint","with_button");
   I("cm").classList.add("open");
 }
@@ -2370,12 +2416,19 @@ async function saveClient(sendWelcome=false){
   const nombres=[I("n1").value.trim()],phones=[I("p1").value.trim()];
   if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
   if(!nombres[0]||!phones[0]){showToast("⚠️ Completa nombre y teléfono");return}
+  if(mode==="p"&&(!nombres[1]||!phones[1])){showToast("⚠️ Completa nombre y teléfono de ambos integrantes");return}
   const welcomeTemplateType=sendWelcome?selectedWelcomeType("welcome_template_type"):"";
   if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
+  const editId=I("client_edit_id").value;
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
-  const res=await api("POST","/clients",{nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!!sendWelcome,welcomeTemplateType});
+  const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType};
+  const res=await api(editId?"PUT":"POST",editId?`/clients/${editId}`:"/clients",payload);
+  if(editId&&sendWelcome&&!res.error){
+    const welcomeRes=await api("POST",`/clients/${editId}/welcome`,{welcomeTemplateType});
+    if(welcomeRes.error){closeM("cm");showToast(`⚠️ Paciente editado, pero no se envió bienvenida: ${welcomeRes.error}`);loadAll();return}
+  }
   closeM("cm");
-  if(res.error){showToast(`⚠️ Paciente guardado, pero no se envió la bienvenida: ${res.error}`);loadAll();return}
+  if(res.error){showToast(`⚠️ ${res.error}`);loadAll();return}
   showToast(sendWelcome?"✅ Paciente guardado — bienvenida enviada":"✅ Paciente guardado");loadAll();
 }
 async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadAll()}
@@ -2396,6 +2449,49 @@ async function confirmSendWelcome(){
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   closeM("welcomeModal");
   showToast("👋 Bienvenida enviada");
+  loadAll();
+}
+
+async function markWelcome(id,status){
+  const res=await api("PATCH",`/clients/${id}/welcome-status`,{status});
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  showToast(status==="sent"?"✅ Bienvenida marcada como enviada":"↺ Bienvenida marcada como no enviada");
+  loadAll();
+}
+
+function openWelcomeSchedule(id){
+  const c=clients.find(x=>x.id===id); if(!c)return;
+  I("welcome_schedule_client_id").value=id;
+  I("welcome_schedule_id").value=c.welcome?.scheduledId||"";
+  fillWelcomeSelect("welcome_schedule_type","welcome_schedule_hint",c.welcome?.templateType||"with_button");
+  const d=c.welcome?.scheduledAt?new Date(c.welcome.scheduledAt):new Date(Date.now()+10*60*1000);
+  I("welcome_schedule_date").value=localDateInputValue(d);
+  I("welcome_schedule_time").value=localTimeInputValue(d);
+  I("welcomeScheduleModal").classList.add("open");
+}
+
+async function saveWelcomeSchedule(){
+  const clientId=I("welcome_schedule_client_id").value;
+  const scheduleId=I("welcome_schedule_id").value;
+  const date=I("welcome_schedule_date").value;
+  const time=I("welcome_schedule_time").value||"09:00";
+  const welcomeTemplateType=selectedWelcomeType("welcome_schedule_type");
+  const when=new Date(`${date}T${time}:00`);
+  if(!clientId||!date||Number.isNaN(when.getTime())){showToast("⚠️ Selecciona fecha y hora válidas");return}
+  if(!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
+  const res=await api(scheduleId?"PUT":"POST",scheduleId?`/welcome-schedules/${scheduleId}`:`/clients/${clientId}/welcome-schedules`,{welcomeTemplateType,scheduledAt:when.toISOString()});
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  closeM("welcomeScheduleModal");
+  showToast("📅 Bienvenida programada");
+  loadAll();
+}
+
+async function cancelWelcomeSchedule(id){
+  if(!confirm("¿Cancelar esta bienvenida programada?"))return;
+  const res=await api("POST",`/welcome-schedules/${id}/cancel`);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  showToast("Bienvenida programada cancelada");
+  loadAll();
 }
 
 // ── METAS ────────────────────────────────────────────────────────────────────
@@ -2576,6 +2672,15 @@ function closeM(id){
     I('welcome_resend_type').value='';
     I('welcome_resend_choices').innerHTML='';
     I('welcome_resend_hint').textContent='';
+  } else if(id==='welcomeScheduleModal'){
+    I(id).classList.remove('open');
+    ["welcome_schedule_client_id","welcome_schedule_id","welcome_schedule_type","welcome_schedule_date","welcome_schedule_time"].forEach(field=>{const el=I(field); if(el)el.value=""});
+    I('welcome_schedule_choices').innerHTML='';
+    I('welcome_schedule_hint').textContent='';
+  } else if(id==='cm'){
+    I(id).classList.remove('open');
+    I("client_edit_id").value="";
+    I("client_modal_title").textContent="➕ Nuevo paciente";
   } else { I(id).classList.remove("open") }
 }
 function showToast(msg){const t=I("toast");t.textContent=msg;t.style.display="block";setTimeout(()=>t.style.display="none",3000)}
