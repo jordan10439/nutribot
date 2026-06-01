@@ -1,13 +1,15 @@
 // src/bot.js
 const db      = require("./db");
 const state   = require("./state");
-const { enviar, enviarBotones, enviarPlantillaOficial, enviarPlantillaUtilidad } = require("./whatsapp");
+const { enviar, enviarBotones, enviarPlantillaOficial, enviarPlantillaUtilidad, enviarTip } = require("./whatsapp");
 const { respuestaIA } = require("./ai");
 const points  = require("./points");
 const history = require("./history");
 const msg     = require("./messages");
 const utilityTemplates = require("./utilityTemplates");
 const { explainMetaError } = require("./metaErrors");
+const pendingContent = require("./pendingContent");
+const tips = require("./tips");
 
 function cleanEnvValue(value) {
   let clean = String(value || "").trim();
@@ -104,18 +106,27 @@ function isMetaFlowReply(value) {
 
 function utilityTemplateButtonText(value) {
   const clean = String(value || "").trim();
-  const normalized = clean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const normalized = clean.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
   const labels = {
     "ver seguimiento": "Ver seguimiento",
     "ver mensaje": "Ver mensaje",
     "ver recomendacion": "Ver recomendación",
     "ver recordatorio": "Ver recordatorio",
+    "seguimiento": "Ver seguimiento",
+    "mensaje": "Ver mensaje",
+    "recomendacion": "Ver recomendación",
+    "recordatorio": "Ver recordatorio",
+    "vamos": "Vamos",
   };
   return labels[normalized] || "";
 }
 
 function isUtilityTemplateButtonInteraction(value) {
   return /^Paciente tocó:/i.test(String(value || "")) || !!utilityTemplateButtonText(value);
+}
+
+function isReengagementError(error) {
+  return /re-engagement|131047|24\s*horas|24-hour|outside.*window|ventana.*cerrad|fuera de la ventana/i.test(String(error || ""));
 }
 
 function formatMetaTitle(meta) {
@@ -405,6 +416,35 @@ async function enviarMeta(clientId, meta, options = {}) {
         deliveryStage: templateFailed ? "plantilla_previa" : "contenido_principal",
         templateWasSent: utilityTemplateSent,
       });
+      if (utilityTemplateSent && contentStarted && isReengagementError(detail)) {
+        const pending = pendingContent.upsertWaiting({
+          clientId,
+          phone,
+          patientName: nombre,
+          type: "goal",
+          templateMessageId: utilityTemplateMessageId,
+          lastError: detail,
+          payload: {
+            goalId: meta.id,
+            meta,
+            utilityTemplateId,
+            utilityTemplateLabel: utilityTemplate?.label || "",
+          },
+        });
+        history.registrar(clientId, phone, nombre, {
+          tipo: "contenido_pendiente_interaccion",
+          meta: meta.titulo,
+          goalId: meta.id,
+          metaEmoji: meta.emoji || "⏳",
+          comentario: "Contenido principal pendiente: esperando interacción del paciente.",
+          direccion: "sistema",
+          pendingContentId: pending.id,
+          templateMessageId: utilityTemplateMessageId,
+          utilityTemplateId,
+          utilityTemplateLabel: utilityTemplate?.label || "",
+        });
+        console.log("Contenido principal pendiente: esperando interacción del paciente", JSON.stringify({ pendingId: pending.id, clientId, phone, type: "goal", goalId: meta.id, templateMessageId: utilityTemplateMessageId }));
+      }
       console.log("Continuando con siguiente destinatario", JSON.stringify({ clientId, phone, meta: meta.titulo }));
       const individualResult = { nombre, phone, clientId, role, plantillaPrevia: utilityTemplate ? (utilityTemplateSent ? "enviada" : "error") : "no seleccionada", contenidoPrincipal: contentStarted ? "error" : "no intentado", messageId: mainMessageId, interactionMessageId, templateMessageId: utilityTemplateMessageId, ok: false, error: detail };
       console.log("Resultado final individual", JSON.stringify(individualResult));
@@ -424,6 +464,102 @@ async function enviarMeta(clientId, meta, options = {}) {
   }
   console.log(`📤 Meta "${meta.titulo}" enviada/procesada para ${client.nombres.join(" & ")}`);
   return { ok: results.every(r => r.ok), partial: results.some(r => r.ok) && results.some(r => !r.ok), results };
+}
+
+async function sendPendingGoalContent(pending, client, phone, nombre) {
+  const meta = pending.payload?.meta || (client.goals || []).find(goal => goal.id === pending.payload?.goalId);
+  if (!meta) throw new Error("Meta pendiente no encontrada");
+  const trace = { clientId: client.id, phone, nombre, goalId: meta.id, meta: meta.titulo, pendingContentId: pending.id };
+  const texto = formatMetaMessage(nombre, meta);
+  const botones = [
+    { id: "meta_si", title: "Sí, la cumplí" },
+    { id: "meta_no", title: "Aún no" },
+  ];
+  console.log("Enviando meta pendiente después de interacción del paciente", JSON.stringify(trace));
+  const textResult = await enviar(phone, texto, nombre, { throwOnError: true, context: "meta pendiente después de interacción", trace });
+  const buttonResult = await enviarBotones(phone, msg.get("pedir_listo"), botones, { throwOnError: true, context: "botones de meta pendiente", trace });
+  state.set(phone, { flow: state.FLOW.META_ENVIADA, clientId: client.id, meta });
+  history.registrar(client.id, phone, nombre, {
+    tipo: "meta_enviada",
+    meta: meta.titulo,
+    goalId: meta.id,
+    metaEmoji: meta.emoji,
+    direccion: "saliente",
+    utilityTemplateId: pending.payload?.utilityTemplateId || "",
+    utilityTemplateLabel: pending.payload?.utilityTemplateLabel || "",
+    metaMessageId: textResult.messageId,
+    interactionMessageId: buttonResult.messageId,
+    deliveryStatus: "accepted",
+    deliveryStage: "contenido_principal",
+    pendingContentId: pending.id,
+  });
+  return { metaMessageId: textResult.messageId, interactionMessageId: buttonResult.messageId };
+}
+
+async function sendPendingTipContent(pending, client, phone, nombre) {
+  const send = tips.getSend(pending.payload?.sendId);
+  const tip = tips.getTip(pending.payload?.tipId || send?.tipId);
+  if (!send || !tip) throw new Error("Tip pendiente no encontrado");
+  const trace = { clientId: client.id, phone, nombre, tipId: tip.id, sendId: send.id, pendingContentId: pending.id };
+  console.log("Enviando tip pendiente después de interacción del paciente", JSON.stringify(trace));
+  const result = await enviarTip(phone, tip, pending.payload?.message ?? send.message, nombre, { trace });
+  tips.updateSend(send.id, {
+    status: "enviado",
+    sentAt: new Date().toISOString(),
+    error: "",
+    metaMessageId: result.primaryMessageId,
+    textMessageId: result.textMessageId || "",
+    deliveryStatus: "accepted",
+  });
+  history.registrar(client.id, phone, nombre, {
+    tipo: "tip_enviado",
+    meta: send.tipTitle || tip.title,
+    metaEmoji: tip.type === "image" ? "🖼️" : tip.type === "pdf" ? "📄" : "💬",
+    comentario: pending.payload?.message ?? send.message,
+    direccion: "saliente",
+    tipType: tip.type,
+    utilityTemplateId: pending.payload?.utilityTemplateId || send.utilityTemplateId || "",
+    utilityTemplateLabel: pending.payload?.utilityTemplateLabel || "",
+    metaMessageId: result.primaryMessageId,
+    deliveryStatus: "accepted",
+    deliveryStage: "contenido_principal",
+    pendingContentId: pending.id,
+  });
+  return { metaMessageId: result.primaryMessageId, textMessageId: result.textMessageId || "" };
+}
+
+async function sendPendingContentAfterInteraction(phone, client, nombre, interactionText) {
+  const waiting = pendingContent.findWaitingByPhone(phone);
+  console.log("Buscando contenido pendiente para interacción de plantilla", JSON.stringify({ phone, count: waiting.length, interactionText }));
+  if (!waiting.length) return;
+  const pending = waiting[0];
+  try {
+    const result = pending.type === "tip"
+      ? await sendPendingTipContent(pending, client, phone, nombre)
+      : await sendPendingGoalContent(pending, client, phone, nombre);
+    pendingContent.markSent(pending.id, { result });
+    history.registrar(client.id, phone, nombre, {
+      tipo: "contenido_pendiente_enviado",
+      meta: pending.type === "tip" ? "Tip pendiente enviado" : "Meta pendiente enviada",
+      metaEmoji: "✅",
+      comentario: "Contenido pendiente enviado después de interacción del paciente.",
+      direccion: "sistema",
+      pendingContentId: pending.id,
+      metaMessageId: result.metaMessageId || "",
+    });
+    console.log("Contenido pendiente enviado después de interacción del paciente", JSON.stringify({ pendingId: pending.id, phone, type: pending.type, result }));
+  } catch (e) {
+    pendingContent.markError(pending.id, e.message);
+    history.registrar(client.id, phone, nombre, {
+      tipo: "contenido_pendiente_error",
+      meta: pending.type === "tip" ? "Error al enviar tip pendiente" : "Error al enviar meta pendiente",
+      metaEmoji: "⚠️",
+      comentario: e.message,
+      direccion: "sistema",
+      pendingContentId: pending.id,
+    });
+    console.error("Error al enviar contenido pendiente después de interacción", JSON.stringify({ pendingId: pending.id, phone, type: pending.type, error: e.message }));
+  }
 }
 
 // ── Procesar mensajes entrantes ───────────────────────────────────────────────
@@ -485,6 +621,7 @@ async function procesarMensaje(m) {
 
   if (isUtilityTemplateButtonInteraction(incoming.raw)) {
     console.log("Interacción de botón de plantilla previa registrada", JSON.stringify({ phone, text: incoming.raw }));
+    await sendPendingContentAfterInteraction(phone, client, nombreDe(client, phone), incoming.raw);
     return;
   }
 

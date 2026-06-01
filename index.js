@@ -11,10 +11,15 @@ const tips       = require("./src/tips");
 const patientInfo = require("./src/patientInfo");
 const consultationReminders = require("./src/consultationReminders");
 const utilityTemplates = require("./src/utilityTemplates");
+const pendingContent = require("./src/pendingContent");
 const { enviarTip, enviarPlantillaUtilidad } = require("./src/whatsapp");
 const { procesarMensaje, enviarMeta, enviarBienvenida, welcomeTemplateOptions } = require("./src/bot");
 const { recargarTodos } = require("./src/scheduler");
 const { explainMetaError } = require("./src/metaErrors");
+
+function isReengagementError(error) {
+  return /re-engagement|131047|24\s*horas|24-hour|outside.*window|ventana.*cerrad|fuera de la ventana/i.test(String(error || ""));
+}
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -515,6 +520,36 @@ async function sendTipRecord(send, position = null, total = null) {
       deliveryStage: templateFailed ? "plantilla_previa" : "contenido_principal",
       templateWasSent: utilityTemplateSent,
     });
+    if (utilityTemplateSent && contentStarted && isReengagementError(detail)) {
+      const pending = pendingContent.upsertWaiting({
+        clientId: send.clientId,
+        phone: send.phone,
+        patientName: send.patientName,
+        type: "tip",
+        templateMessageId: utilityTemplateMessageId,
+        lastError: detail,
+        payload: {
+          sendId: send.id,
+          tipId: send.tipId,
+          message: send.message,
+          utilityTemplateId: send.utilityTemplateId || "",
+          utilityTemplateLabel: utilityTemplate?.label || "",
+        },
+      });
+      tips.updateSend(send.id, { status: "pendiente_interaccion", error: detail, pendingContentId: pending.id });
+      history.registrar(send.clientId, send.phone, send.patientName, {
+        tipo: "contenido_pendiente_interaccion",
+        meta: send.tipTitle,
+        metaEmoji: "⏳",
+        comentario: "Contenido principal pendiente: esperando interacción del paciente.",
+        direccion: "sistema",
+        pendingContentId: pending.id,
+        templateMessageId: utilityTemplateMessageId,
+        utilityTemplateId: send.utilityTemplateId || "",
+        utilityTemplateLabel: utilityTemplate?.label || "",
+      });
+      console.log("Contenido principal pendiente: esperando interacción del paciente", JSON.stringify({ pendingId: pending.id, sendId: send.id, clientId: send.clientId, phone: send.phone, type: "tip", templateMessageId: utilityTemplateMessageId }));
+    }
     console.log("Resultado final individual", JSON.stringify({ nombre: send.patientName, phone: send.phone, clientId: send.clientId, role: send.recipientRole, plantillaPrevia: utilityTemplate ? (utilityTemplateSent ? "enviada" : "error") : "no seleccionada", contenidoPrincipal: contentStarted ? "error" : "no intentado", messageId: mainMessageId, templateMessageId: utilityTemplateMessageId, error: detail }));
     console.log("Continuando con siguiente destinatario", JSON.stringify({ id: send.id, phone: send.phone, tipTitle: send.tipTitle }));
   }

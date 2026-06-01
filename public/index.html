@@ -1537,20 +1537,20 @@ function activityMatches(entry){
     return (entry.tipo==="mensaje_recibido" && !entry.media?.id && !isTechnicalActivityReply(entry.comentario))
       || (entry.tipo==="completada" && !!entry.comentario);
   }
-  if(activityFilter==="error")return ["meta_error","tip_error","plantilla_previa_error","recordatorio_consulta_error"].includes(entry.tipo);
+  if(activityFilter==="error")return ["meta_error","tip_error","plantilla_previa_error","recordatorio_consulta_error","contenido_pendiente_error"].includes(entry.tipo);
   if(activityFilter==="revision")return !!entry.requiereRevision;
   return entry.tipo===activityFilter;
 }
 
 function activityDeliveryStatus(entry){
-  if(["meta_error","tip_error","plantilla_previa_error","recordatorio_consulta_error"].includes(entry.tipo) || entry.deliveryStatus==="failed"){
+  if(["meta_error","tip_error","plantilla_previa_error","recordatorio_consulta_error","contenido_pendiente_error"].includes(entry.tipo) || entry.deliveryStatus==="failed"){
     return { label:"Error", className:"status-error" };
   }
   if(entry.tipo==="completada")return { label:"Completada", className:"status-completada" };
   if(entry.tipo==="no_completada")return { label:"No completada", className:"status-no_completada" };
   if(entry.deliveryStatus==="read")return { label:"Leído", className:"status-completada" };
   if(entry.deliveryStatus==="delivered")return { label:"Entregado", className:"status-completada" };
-  if(["accepted","sent"].includes(entry.deliveryStatus) || ["bienvenida_enviada","plantilla_previa_enviada","meta_enviada","tip_enviado","recordatorio_consulta_enviado"].includes(entry.tipo)){
+  if(["accepted","sent"].includes(entry.deliveryStatus) || ["bienvenida_enviada","plantilla_previa_enviada","meta_enviada","tip_enviado","recordatorio_consulta_enviado","contenido_pendiente_enviado"].includes(entry.tipo)){
     return { label:"Enviado", className:"status-enviada" };
   }
   return { label:"Registrado", className:"status-pendiente" };
@@ -1568,6 +1568,15 @@ function activityMessageInfo(entry){
       description:`Plantilla previa enviada: ${entry.utilityTemplateLabel||title}`,
       detail:[`Teléfono: ${entry.phone||"Sin registro"}`,entry.deliveryStatus?`Estado Meta: ${entry.deliveryStatus}`:"",entry.metaMessageId?`Message ID plantilla: ${entry.metaMessageId}`:""].filter(Boolean).join("\n"),
     };
+  }
+  if(entry.tipo==="contenido_pendiente_interaccion"){
+    return { kind:"Contenido pendiente", description:"Contenido principal pendiente: esperando interacción del paciente.", detail:[entry.utilityTemplateLabel?`Plantilla previa: ${entry.utilityTemplateLabel}`:"",entry.pendingContentId?`ID pendiente: ${entry.pendingContentId}`:""].filter(Boolean).join("\n") };
+  }
+  if(entry.tipo==="contenido_pendiente_enviado"){
+    return { kind:"Contenido pendiente enviado", description:"Contenido pendiente enviado después de interacción del paciente.", detail:[entry.metaMessageId?`Message ID contenido: ${entry.metaMessageId}`:"",entry.pendingContentId?`ID pendiente: ${entry.pendingContentId}`:""].filter(Boolean).join("\n") };
+  }
+  if(entry.tipo==="contenido_pendiente_error"){
+    return { kind:"Error contenido pendiente", description:"Error al enviar contenido pendiente después de interacción.", detail:entry.comentario||"Sin motivo registrado." };
   }
   if(entry.tipo==="recordatorio_consulta_programado"){
     return { kind:"Recordatorio de consulta", description:"Recordatorio de fin de seguimiento programado.", detail:entry.comentario||"" };
