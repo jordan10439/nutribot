@@ -334,7 +334,8 @@ app.get("/api/utility-templates", auth, (req, res) => {
 
 // ── Tips programables ─────────────────────────────────────────────────────────
 function nombreCliente(client, phone) {
-  const idx = (client.phones || []).indexOf(phone);
+  const normalizedPhone = pendingContent.normalizePhone(phone);
+  const idx = (client.phones || []).findIndex(p => pendingContent.normalizePhone(p) === normalizedPhone);
   return client.nombres?.[idx] || client.nombres?.[0] || "Paciente";
 }
 
@@ -345,8 +346,9 @@ function recipientsFromClientIds(clientIds = [], includePairs = {}) {
     if (!client) continue;
     const phones = includePairs[clientId] ? (client.phones || []) : [client.phones?.[0]].filter(Boolean);
     for (const phone of phones) {
-      const index = (client.phones || []).indexOf(phone);
-      recipients.push({ clientId, phone, name: nombreCliente(client, phone), role: index > 0 ? "pareja" : "paciente principal" });
+      const normalizedPhone = pendingContent.normalizePhone(phone);
+      const index = (client.phones || []).findIndex(p => pendingContent.normalizePhone(p) === normalizedPhone);
+      recipients.push({ clientId, phone: normalizedPhone, originalPhone: phone, name: nombreCliente(client, phone), role: index > 0 ? "pareja" : "paciente principal" });
     }
   }
   return recipients;
@@ -358,10 +360,12 @@ function recipientsFromTipBody(body = {}) {
   const directPhones = body.phone ? [body.phone] : (body.phones || []);
 
   for (const phone of directPhones.filter(Boolean)) {
-    const client = db.getAll().find(c => (c.phones || []).includes(phone));
+    const normalizedPhone = pendingContent.normalizePhone(phone);
+    const client = db.getAll().find(c => (c.phones || []).some(p => pendingContent.normalizePhone(p) === normalizedPhone));
     recipients.push({
       clientId: client?.id || "directo",
-      phone,
+      phone: normalizedPhone,
+      originalPhone: phone,
       name: body.patientName || (client ? nombreCliente(client, phone) : "Paciente"),
       role: "paciente principal",
     });
@@ -369,12 +373,12 @@ function recipientsFromTipBody(body = {}) {
 
   const seen = new Set();
   const finalRecipients = recipients.filter(r => {
-    const key = r.phone;
+    const key = pendingContent.normalizePhone(r.phone);
     if (!r.phone || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
-  console.log("Destinatarios finales del envío", JSON.stringify(finalRecipients.map(r => ({ clientId: r.clientId, phone: r.phone, name: r.name, role: r.role }))));
+  console.log("Destinatarios finales del envío", JSON.stringify(finalRecipients.map(r => ({ clientId: r.clientId, phone: r.phone, normalizedPhone: pendingContent.normalizePhone(r.phone), name: r.name, role: r.role }))));
   console.log("Cantidad de destinatarios", finalRecipients.length);
   return finalRecipients;
 }
@@ -431,6 +435,7 @@ async function sendTipRecord(send, position = null, total = null) {
     console.log("Destinatario actual del loop", JSON.stringify(trace));
     console.log("Nombre destinatario", send.patientName);
     console.log("Phone destinatario", send.phone);
+    console.log("Teléfono normalizado del destinatario", pendingContent.normalizePhone(send.phone));
     console.log("ClientId destinatario", send.clientId);
     console.log("Role destinatario", send.recipientRole);
     console.log(send.recipientRole === "pareja" ? "Enviando a pareja" : "Enviando a paciente principal", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, tipTitle: send.tipTitle }));
@@ -460,7 +465,7 @@ async function sendTipRecord(send, position = null, total = null) {
       if (utilityTemplates.requiresPatientClick(utilityTemplate)) {
         console.log("Plantilla con botón seleccionada", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, utilityTemplateId: send.utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
         console.log("No se enviará contenido principal todavía", JSON.stringify({ id: send.id, phone: send.phone, normalizedPhone: pendingContent.normalizePhone(send.phone), type: "tip", tipId: send.tipId }));
-        console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ id: send.id, phone: send.phone, type: "tip", templateMessageId: utilityTemplateMessageId }));
+        console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ id: send.id, phone: send.phone, normalizedPhone: pendingContent.normalizePhone(send.phone), type: "tip", templateMessageId: utilityTemplateMessageId }));
         const pending = pendingContent.upsertWaiting({
           clientId: send.clientId,
           phone: send.phone,
@@ -478,6 +483,8 @@ async function sendTipRecord(send, position = null, total = null) {
             utilityTemplateLabel: utilityTemplate.label,
           },
         });
+        console.log("Guardando pendiente para teléfono", JSON.stringify({ pendingId: pending.id, phone: send.phone, normalizedPhone: pending.phone, type: pending.type, status: pending.status }));
+        console.log("Pendientes activos para este teléfono", JSON.stringify({ phone: send.phone, normalizedPhone: pending.phone, count: pendingContent.findWaitingByPhone(send.phone).length }));
         tips.updateSend(send.id, {
           status: "pendiente_interaccion",
           error: "",

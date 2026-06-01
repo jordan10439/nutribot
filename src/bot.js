@@ -92,10 +92,13 @@ function welcomeTemplateOptions() {
 }
 
 function findClientByPhone(phone) {
-  return db.getAll().find(c => c.phones.includes(phone));
+  const normalizedPhone = pendingContent.normalizePhone(phone);
+  return db.getAll().find(c => (c.phones || []).some(p => pendingContent.normalizePhone(p) === normalizedPhone));
 }
 function nombreDe(client, phone) {
-  return client.nombres[client.phones.indexOf(phone)] ?? "Amig@";
+  const normalizedPhone = pendingContent.normalizePhone(phone);
+  const index = (client.phones || []).findIndex(p => pendingContent.normalizePhone(p) === normalizedPhone);
+  return client.nombres?.[index] ?? client.nombres?.[0] ?? "Amig@";
 }
 function esIndividual(client) { return client.phones.length === 1; }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
@@ -148,12 +151,14 @@ function formatMetaMessage(nombre, meta) {
 function metaRecipients(client) {
   const seen = new Set();
   return (client.phones || []).map((phone, index) => ({
-    phone,
+    phone: pendingContent.normalizePhone(phone),
+    originalPhone: phone,
     nombre: client.nombres?.[index] || client.nombres?.[0] || "Paciente",
     role: index === 0 ? "paciente principal" : "pareja",
   })).filter(recipient => {
-    if (!recipient.phone || seen.has(recipient.phone)) return false;
-    seen.add(recipient.phone);
+    const normalizedPhone = pendingContent.normalizePhone(recipient.phone);
+    if (!normalizedPhone || seen.has(normalizedPhone)) return false;
+    seen.add(normalizedPhone);
     return true;
   });
 }
@@ -339,6 +344,7 @@ async function enviarMeta(clientId, meta, options = {}) {
       console.log("Destinatario actual del loop", JSON.stringify(trace));
       console.log("Nombre destinatario", nombre);
       console.log("Phone destinatario", phone);
+      console.log("Teléfono normalizado del destinatario", pendingContent.normalizePhone(phone));
       console.log("ClientId destinatario", clientId);
       console.log("Role destinatario", role);
       console.log(role === "pareja" ? "Enviando a pareja" : "Enviando a paciente principal", JSON.stringify({ clientId, phone, nombre, meta: meta.titulo }));
@@ -362,7 +368,7 @@ async function enviarMeta(clientId, meta, options = {}) {
         if (utilityTemplates.requiresPatientClick(utilityTemplate)) {
           console.log("Plantilla con botón seleccionada", JSON.stringify({ phone, nombre, role, utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
           console.log("No se enviará contenido principal todavía", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), type: "goal", goalId: meta.id }));
-          console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ phone, type: "goal", goalId: meta.id, templateMessageId: utilityTemplateMessageId }));
+          console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), type: "goal", goalId: meta.id, templateMessageId: utilityTemplateMessageId }));
           const pending = pendingContent.upsertWaiting({
             clientId,
             phone,
@@ -379,6 +385,8 @@ async function enviarMeta(clientId, meta, options = {}) {
               utilityTemplateLabel: utilityTemplate.label,
             },
           });
+          console.log("Guardando pendiente para teléfono", JSON.stringify({ pendingId: pending.id, phone, normalizedPhone: pending.phone, type: pending.type, status: pending.status }));
+          console.log("Pendientes activos para este teléfono", JSON.stringify({ phone, normalizedPhone: pending.phone, count: pendingContent.findWaitingByPhone(phone).length }));
           history.registrar(clientId, phone, nombre, {
             tipo: "contenido_pendiente_interaccion",
             meta: meta.titulo,
@@ -569,13 +577,14 @@ async function sendPendingContentAfterInteraction(phone, client, nombre, interac
   const waiting = pendingContent.findWaitingByPhone(phone);
   console.log("Paciente tocó botón de plantilla", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), interactionText }));
   console.log("Buscando contenido pendiente por teléfono", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), count: waiting.length, interactionText }));
+  console.log("Pendientes activos para este teléfono", JSON.stringify({ phone, normalizedPhone: pendingContent.normalizePhone(phone), count: waiting.length }));
   if (!waiting.length) {
     console.log("No hay contenido pendiente para este teléfono", JSON.stringify({ phone, interactionText }));
     history.registrar(client.id, phone, nombre, {
       tipo: "contenido_pendiente_sin_resultado",
       meta: "Interacción con plantilla previa",
       metaEmoji: "ℹ️",
-      comentario: `${interactionText}, pero no había contenido pendiente.`,
+      comentario: `${interactionText}, pero no había contenido pendiente para este teléfono.`,
       direccion: "sistema",
     });
     return;
@@ -639,11 +648,14 @@ async function getIncomingText(m) {
 }
 
 async function procesarMensaje(m) {
-  const phone = m.from;
+  const phone = pendingContent.normalizePhone(m.from);
+  console.log("Webhook recibido desde teléfono", JSON.stringify({ rawPhone: m.from, normalizedPhone: phone, type: m.type }));
   const client = findClientByPhone(phone);
   const incoming = await getIncomingText(m);
   const txt = incoming.norm;
   const tipoMsg = incoming.type;
+  console.log("Teléfono normalizado del webhook", phone);
+  if (isUtilityTemplateButtonInteraction(incoming.raw)) console.log("Botón detectado", JSON.stringify({ phone, raw: incoming.raw, label: utilityTemplateButtonText(incoming.raw) || incoming.raw }));
 
   // Registrar mensaje entrante
   const s = state.get(phone);
