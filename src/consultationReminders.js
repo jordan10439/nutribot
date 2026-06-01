@@ -143,6 +143,10 @@ function list(filters = {}) {
 }
 
 function ensureForConsultation(client, consultation) {
+  if (consultation?.scheduleReminder === false) {
+    cancelForConsultation(client.id, consultation.id);
+    return { reminders: [], warnings: [] };
+  }
   if (!consultation?.planDeliveredDate) return { reminders: [], warnings: [] };
   const schedule = calculateSchedule(consultation.planDeliveredDate);
   if (!schedule) return { reminders: [], warnings: ["Fecha de entrega de pauta inválida."] };
@@ -207,12 +211,14 @@ function update(id, patch = {}) {
   if (index < 0) return null;
   const current = items[index];
   if (current.status === "sent") throw new Error("No se puede editar un recordatorio ya enviado.");
+  const nextStatus = patch.status || (current.status === "error" ? "scheduled" : current.status || "scheduled");
   const templateType = patch.templateType || current.templateType || "without_button";
-  const template = getTemplate(templateType);
+  const template = nextStatus === "cancelled"
+    ? templateDefinitions().find(item => item.id === templateType) || { metaTemplateName: current.templateName, metaLanguageCode: current.languageCode }
+    : getTemplate(templateType);
   const scheduledDate = String(patch.scheduledDate || current.scheduledDate || "").slice(0, 10);
   const scheduledTime = String(patch.scheduledTime || current.scheduledTime || "11:00").slice(0, 5);
   const scheduledAt = `${scheduledDate}T${scheduledTime}:00`;
-  const nextStatus = patch.status || (current.status === "error" ? "scheduled" : current.status || "scheduled");
   if (String(nextStatus) === "scheduled" && isPastLocal(scheduledAt)) {
     throw new Error("La fecha de recordatorio ya pasó. Selecciona una nueva fecha.");
   }
@@ -237,10 +243,23 @@ function cancel(id) {
   const items = load();
   const index = items.findIndex(item => item.id === id);
   if (index < 0) return null;
-  if (items[index].status === "sent") return enriched(items[index]);
+  if (items[index].status === "sent") throw new Error("Este recordatorio ya fue enviado.");
   items[index] = { ...items[index], status: "cancelled", updatedAt: new Date().toISOString() };
   save(items);
   return enriched(items[index]);
+}
+
+function cancelForConsultation(clientId, consultationId) {
+  const items = load();
+  let changed = false;
+  for (const item of items) {
+    if (item.clientId === clientId && item.consultationId === consultationId && item.status === "scheduled") {
+      item.status = "cancelled";
+      item.updatedAt = new Date().toISOString();
+      changed = true;
+    }
+  }
+  if (changed) save(items);
 }
 
 async function sendReminder(item) {
@@ -314,4 +333,4 @@ function startScheduler() {
   interval = setInterval(() => processDueReminders().catch(e => console.error("Error revisando recordatorios de consulta:", e.message)), 60 * 1000);
 }
 
-module.exports = { calculateSchedule, cancel, ensureForConsultation, list, processDueReminders, startScheduler, templateDefinitions, update };
+module.exports = { calculateSchedule, cancel, cancelForConsultation, ensureForConsultation, list, processDueReminders, startScheduler, templateDefinitions, update };

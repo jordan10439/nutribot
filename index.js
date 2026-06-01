@@ -243,9 +243,13 @@ app.put("/api/consultation-reminders/:id", auth, (req, res) => {
 });
 
 app.post("/api/consultation-reminders/:id/cancel", auth, (req, res) => {
-  const reminder = consultationReminders.cancel(req.params.id);
-  if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
-  res.json({ ok: true, reminder });
+  try {
+    const reminder = consultationReminders.cancel(req.params.id);
+    if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    res.json({ ok: true, reminder });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // Proxy para descargar medios desde WhatsApp Graph API (requiere token env META_TOKEN)

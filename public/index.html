@@ -322,6 +322,13 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
         <div class="patient-search compact"><span>🔎</span><input id="reminder_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('reminders',this.value)"/></div>
         <select class="activity-select" id="reminder_patient_filter" onchange="renderConsultationReminders()"><option value="">Todos los pacientes</option></select>
       </div>
+      <div class="tip-tabs" style="margin-bottom:12px">
+        <button class="tip-tab active" data-reminder-filter="all" onclick="setConsultationReminderFilter('all')">Todos</button>
+        <button class="tip-tab" data-reminder-filter="scheduled" onclick="setConsultationReminderFilter('scheduled')">Programados</button>
+        <button class="tip-tab" data-reminder-filter="sent" onclick="setConsultationReminderFilter('sent')">Enviados</button>
+        <button class="tip-tab" data-reminder-filter="cancelled" onclick="setConsultationReminderFilter('cancelled')">Cancelados</button>
+        <button class="tip-tab" data-reminder-filter="error" onclick="setConsultationReminderFilter('error')">Errores</button>
+      </div>
       <div id="consultation_reminder_list" class="reminder-list"></div>
     </div>
   </div>
@@ -553,6 +560,12 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Número de consulta</label><input id="consultation_number" disabled /></div>
     <div class="fg"><label>Fecha de la consulta</label><input type="date" id="consultation_date" /></div>
     <div class="fg"><label>Fecha entrega de pauta</label><input type="date" id="plan_delivered_date" /></div>
+    <div class="fg"><label>Recordatorio de fin de seguimiento</label>
+      <select id="consultation_schedule_reminder">
+        <option value="yes">Sí, programar recordatorio</option>
+        <option value="no">No programar recordatorio</option>
+      </select>
+    </div>
     <div class="fg"><label>Peso</label><input id="consultation_weight" placeholder="Ej: 68 kg" /></div>
     <div class="fg"><label>Mayores complicaciones con la alimentación</label><textarea id="consultation_complications" rows="4" placeholder="Falta de tiempo, ansiedad por comer, desorden de horarios..."></textarea></div>
     <div class="fg"><label>Aspectos positivos</label><textarea id="consultation_positives" rows="4" placeholder="Buena disposición, apoyo familiar, cambios logrados..."></textarea></div>
@@ -571,6 +584,12 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Tipo de plantilla</label>
       <select id="reminder_template_type"></select>
       <div class="tip-note" id="reminder_template_hint"></div>
+    </div>
+    <div class="fg"><label>Estado</label>
+      <select id="reminder_status">
+        <option value="scheduled">Mantener programado</option>
+        <option value="cancelled">Cancelar / No enviar</option>
+      </select>
     </div>
     <div class="ma"><button class="bc" onclick="closeM('consultationReminderModal')">Cancelar</button><button class="bsv" onclick="saveConsultationReminder()">Guardar cambios</button></div>
   </div>
@@ -630,7 +649,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],consultationReminderFilter="all",goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -929,6 +948,12 @@ function reminderTemplateLabel(reminder){
   return reminder.templateType==="with_button"?`Con botón: ${reminder.templateName||"contacto_si"}`:`Sin botón: ${reminder.templateName||"recuerda_agendar"}`;
 }
 
+function setConsultationReminderFilter(filter){
+  consultationReminderFilter=filter;
+  document.querySelectorAll("[data-reminder-filter]").forEach(button=>button.classList.toggle("active",button.dataset.reminderFilter===filter));
+  renderConsultationReminders();
+}
+
 function clientForReminder(reminder){
   return clients.find(c=>c.id===reminder.clientId);
 }
@@ -939,6 +964,7 @@ function renderConsultationReminders(){
   const query=searchNormalize(patientSearches.reminders||"");
   let items=[...(consultationReminders||[])];
   if(selected)items=items.filter(item=>item.clientId===selected);
+  if(consultationReminderFilter!=="all")items=items.filter(item=>(item.status||"scheduled")===consultationReminderFilter);
   if(query)items=items.filter(item=>{
     const client=clientForReminder(item);
     return clientSearchText(client).includes(query)||searchNormalize([item.patientName,item.recipientName,item.phone].join(" ")).includes(query);
@@ -1002,13 +1028,14 @@ function openConsultationReminderModal(id){
   I("reminder_id").value=id;
   I("reminder_date").value=item.scheduledDate||String(item.scheduledAt||"").slice(0,10);
   I("reminder_time").value=item.scheduledTime||String(item.scheduledAt||"").slice(11,16)||"11:00";
+  I("reminder_status").value=item.status==="cancelled"?"cancelled":"scheduled";
   fillConsultationReminderTemplateSelect(item.templateType||"without_button");
   I("consultationReminderModal").classList.add("open");
 }
 
 async function saveConsultationReminder(){
   const id=I("reminder_id").value;
-  const payload={scheduledDate:I("reminder_date").value,scheduledTime:I("reminder_time").value,templateType:I("reminder_template_type").value};
+  const payload={scheduledDate:I("reminder_date").value,scheduledTime:I("reminder_time").value,templateType:I("reminder_template_type").value,status:I("reminder_status").value};
   const res=await api("PUT",`/consultation-reminders/${id}`,payload);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   closeM("consultationReminderModal");
@@ -1139,6 +1166,7 @@ function openConsultationModal(clientId,consultationId=""){
   I("consultation_number").value=`Consulta ${nextNumber}`;
   I("consultation_date").value=item?.consultationDate||localDateInputValue();
   I("plan_delivered_date").value=item?.planDeliveredDate||"";
+  I("consultation_schedule_reminder").value=item?.scheduleReminder===false?"no":"yes";
   I("consultation_weight").value=item?.weight||"";
   I("consultation_complications").value=item?.complications||"";
   I("consultation_positives").value=item?.positives||"";
@@ -1154,6 +1182,7 @@ async function saveConsultation(){
   const payload={
     consultationDate:I("consultation_date").value,
     planDeliveredDate:I("plan_delivered_date").value,
+    scheduleReminder:I("consultation_schedule_reminder").value!=="no",
     weight:I("consultation_weight").value,
     complications:I("consultation_complications").value,
     positives:I("consultation_positives").value,
@@ -2507,9 +2536,10 @@ function closeM(id){
   } else if(id==='consultationModal'){
     I(id).classList.remove('open');
     ["consultation_client_id","consultation_id","consultation_number","consultation_date","plan_delivered_date","consultation_weight","consultation_complications","consultation_positives","consultation_goals","consultation_notes"].forEach(field=>{const el=I(field); if(el)el.value=""});
+    const sr=I("consultation_schedule_reminder"); if(sr)sr.value="yes";
   } else if(id==='consultationReminderModal'){
     I(id).classList.remove('open');
-    ["reminder_id","reminder_date","reminder_time","reminder_template_type","reminder_template_hint"].forEach(field=>{const el=I(field); if(el)el.value=""; if(el&&field==="reminder_template_hint")el.textContent=""});
+    ["reminder_id","reminder_date","reminder_time","reminder_template_type","reminder_status","reminder_template_hint"].forEach(field=>{const el=I(field); if(el)el.value=""; if(el&&field==="reminder_template_hint")el.textContent=""});
   } else if(id==='welcomeModal'){
     I(id).classList.remove('open');
     I('welcome_client_id').value='';
