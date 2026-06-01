@@ -40,7 +40,11 @@ app.post("/api/login", (req, res) => {
 app.get("/api/clients", auth, (req, res) => res.json(db.getAll()));
 app.get("/api/welcome-templates", auth, (req, res) => {
   const options = welcomeTemplateOptions();
-  console.log("Plantillas de bienvenida disponibles", JSON.stringify(options.map(t => ({ id: t.id, label: t.label, available: t.available !== false, metaTemplateName: t.metaTemplateName, metaLanguageCode: t.metaLanguageCode, hasButton: t.hasButton, error: t.error }))));
+  console.log("WELCOME WITH BUTTON NAME:", options.find(t => t.id === "with_button")?.metaTemplateName || "");
+  console.log("WELCOME WITH BUTTON LANGUAGE:", options.find(t => t.id === "with_button")?.metaLanguageCode || "");
+  console.log("WELCOME WITHOUT BUTTON NAME:", options.find(t => t.id === "without_button")?.metaTemplateName || "");
+  console.log("WELCOME WITHOUT BUTTON LANGUAGE:", options.find(t => t.id === "without_button")?.metaLanguageCode || "");
+  console.log("Plantillas de bienvenida disponibles", JSON.stringify(options.map(t => ({ id: t.id, label: t.label, configured: !!t.configured, metaTemplateName: t.metaTemplateName, metaLanguageCode: t.metaLanguageCode, hasButton: t.hasButton, error: t.error }))));
   res.json(options);
 });
 

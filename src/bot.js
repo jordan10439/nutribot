@@ -9,16 +9,26 @@ const msg     = require("./messages");
 const utilityTemplates = require("./utilityTemplates");
 const { explainMetaError } = require("./metaErrors");
 
-const WELCOME_TEMPLATE_WITH_BUTTON_NAME = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_NAME || "";
-const WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE || "";
-const WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME = process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME || "";
-const WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE = process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE || "";
+function cleanEnvValue(value) {
+  let clean = String(value || "").trim();
+  const first = clean[0];
+  const last = clean[clean.length - 1];
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    clean = clean.slice(1, -1).trim();
+  }
+  return clean;
+}
 
-function configuredWelcomeValue(value, variable, field) {
-  const clean = String(value || "").trim();
+const WELCOME_TEMPLATE_WITH_BUTTON_NAME = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_NAME);
+const WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE);
+const WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME);
+const WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE);
+
+function configuredWelcomeValue(value, variable) {
+  const clean = cleanEnvValue(value);
   const placeholder = /placeholder|ejemplo|example|cambiar|configurar|nombre[_ -]?real/i.test(clean);
   if (!clean || placeholder) {
-    throw new Error(`Falta configurar ${field} de la plantilla de bienvenida aprobada en Meta (${variable})`);
+    throw new Error(`Falta configurar ${variable}`);
   }
   return clean;
 }
@@ -29,15 +39,15 @@ function welcomeTemplateConfig(type = "with_button") {
     return {
       type: cleanType,
       label: "Bienvenida sin botón",
-      name: configuredWelcomeValue(WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME", "el nombre técnico real de la plantilla de bienvenida sin botón"),
-      languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE", "el idioma de la plantilla de bienvenida sin botón"),
+      name: configuredWelcomeValue(WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME"),
+      languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE"),
     };
   }
   return {
     type: cleanType,
     label: "Bienvenida con botón",
-    name: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITH_BUTTON_NAME", "el nombre técnico real de la plantilla de bienvenida con botón"),
-    languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE", "el idioma de la plantilla de bienvenida con botón"),
+    name: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITH_BUTTON_NAME"),
+    languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE"),
   };
 }
 
@@ -56,6 +66,7 @@ function welcomeTemplateOptions() {
         templateName: config.name,
         languageCode: config.languageCode,
         hasButton: config.type === "with_button",
+        configured: true,
         available: true,
       });
     } catch (e) {
@@ -69,6 +80,7 @@ function welcomeTemplateOptions() {
         templateName: "",
         languageCode: "",
         hasButton: type === "with_button",
+        configured: false,
         available: false,
         error: e.message,
       });
