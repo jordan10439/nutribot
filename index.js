@@ -47,9 +47,23 @@ function cleanClientPayload(body = {}, existing = null) {
   if (!nombres.length || !phones.length) throw new Error("Completa nombre y teléfono");
   if (nombres.length !== phones.length) throw new Error("Cada integrante debe tener nombre y teléfono");
   const seen = new Set();
+  const duplicateWarnings = [];
   for (const phone of phones) {
     if (seen.has(phone)) throw new Error(`Teléfono duplicado en este paciente: ${phone}`);
     seen.add(phone);
+    const duplicates = db.getAll().filter(client => client.id !== existing?.id && (client.phones || []).some(p => normalizePhone(p) === phone));
+    duplicateWarnings.push(...duplicates.map(client => ({
+      phone,
+      clientId: client.id,
+      name: (client.nombres || []).join(" & "),
+      type: (client.phones || []).length > 1 ? "Pareja" : "Individual",
+    })));
+  }
+  if (duplicateWarnings.length && !body.allowDuplicatePhones) {
+    console.log("Teléfono duplicado detectado, se permite solo con confirmación frontend", JSON.stringify(duplicateWarnings));
+  }
+  if (duplicateWarnings.length && body.allowDuplicatePhones) {
+    console.log("Teléfono duplicado confirmado por usuaria, guardando de todas formas", JSON.stringify(duplicateWarnings));
   }
   return {
     ...(existing || {}),
@@ -59,6 +73,7 @@ function cleanClientPayload(body = {}, existing = null) {
     goals: existing?.goals || body.goals || [],
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    duplicateWarnings,
   };
 }
 
@@ -127,8 +142,11 @@ app.get("/api/welcome-templates", auth, (req, res) => {
 
 app.post("/api/clients", auth, async (req, res) => {
   let client;
+  let duplicateWarnings = [];
   try {
     client = cleanClientPayload(req.body);
+    duplicateWarnings = client.duplicateWarnings || [];
+    delete client.duplicateWarnings;
     client.id = db.newId(client.nombres[0]);
     client.welcome = { status: "not_sent", updatedAt: new Date().toISOString() };
   } catch (e) {
@@ -145,7 +163,7 @@ app.post("/api/clients", auth, async (req, res) => {
       return res.status(502).json({ error: e.message, client, welcomeSent: false });
     }
   }
-  res.json({ ok: true, client, welcomeSent: !!req.body.sendWelcome });
+  res.json({ ok: true, client, welcomeSent: !!req.body.sendWelcome, duplicateWarnings });
 });
 
 app.put("/api/clients/:id", auth, (req, res) => {
@@ -153,6 +171,8 @@ app.put("/api/clients/:id", auth, (req, res) => {
     const existing = db.getById(req.params.id);
     if (!existing) return res.status(404).json({ error: "No encontrado" });
     const client = cleanClientPayload(req.body, existing);
+    const duplicateWarnings = client.duplicateWarnings || [];
+    delete client.duplicateWarnings;
     db.upsert(client);
     history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
       tipo: "paciente_editado",
@@ -162,7 +182,7 @@ app.put("/api/clients/:id", auth, (req, res) => {
       direccion: "sistema",
     });
     recargarTodos();
-    res.json({ ok: true, client });
+    res.json({ ok: true, client, duplicateWarnings });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

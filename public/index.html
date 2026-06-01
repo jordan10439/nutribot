@@ -899,6 +899,13 @@ function clientMatchesSearch(client,scope){
   return query.split(" ").every(part=>haystack.includes(part));
 }
 
+function searchTextIncludes(text,query){
+  const normalized=normalizeSearchText(query);
+  if(!normalized)return true;
+  const haystack=normalizeSearchText(text);
+  return normalized.split(" ").every(part=>haystack.includes(part));
+}
+
 function filterClientsBySearch(list,query){
   const normalized=normalizeSearchText(query);
   const ordered=sortClientsNewestFirst(list);
@@ -1403,6 +1410,12 @@ function openGoalPhoto(encodedId){
 
 function diasL(d){if(!d||d.length===7)return"Todos";const n=["","Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];return d.map(x=>n[x]).join(", ")}
 
+function isGoalUnsentScheduled(clientId, goalId){
+  const row=(goalsDashboard.goals||[]).find(goal=>goal.clientId===clientId&&goal.goalId===goalId);
+  if(!row)return true;
+  return ["pendiente","programada"].includes(row.status)&&!row.sentAt;
+}
+
 function welcomeStatusLabel(client){
   const status=client?.welcome?.status||"not_sent";
   return ({not_sent:"No enviada",sent:"Enviada",scheduled:"Programada",cancelled:"Cancelada",error:"Error"})[status]||"No enviada";
@@ -1437,7 +1450,7 @@ function renderClients(){
         <div class="mif"><strong>${m.titulo}</strong><span>${m.hora} · ${diasL(m.dias)} · ${m.utilityTemplateId?utilityTemplateLabel(m.utilityTemplateId):'Sin plantilla previa'}</span></div>
         <button class="bi" onclick="openMM('${c.id}','${m.id}')" title="Editar meta">✏️</button>
         <button class="bi" onclick="sendMeta('${c.id}','${m.id}')" title="Enviar ahora">📤</button>
-        <button class="md2" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>
+        ${isGoalUnsentScheduled(c.id,m.id)?`<button class="md2" onclick="deleteScheduledGoal('${c.id}','${m.id}')">Eliminar</button>`:`<button class="md2" onclick="deleteMeta('${c.id}','${m.id}')">🗑️</button>`}
       </div>`).join("");
     return`<div class="card">
       <div class="ch">
@@ -1758,11 +1771,10 @@ function activityMessageInfo(entry){
 }
 
 function activityMatchesPatientSearch(entry){
-  const query=searchNormalize(patientSearches.activity||"");
+  const query=patientSearches.activity||"";
   if(!query)return true;
   const client=clients.find(c=>c.id===entry.clientId);
-  const text=searchNormalize([entry.nombre,entry.clientNombre,entry.patientName,entry.phone,client?clientSearchText(client):""].join(" "));
-  return text.includes(query);
+  return searchTextIncludes([entry.nombre,entry.clientNombre,entry.patientName,entry.phone,client?clientSearchText(client):""].join(" "),query);
 }
 
 function renderActivity(){
@@ -2195,11 +2207,11 @@ function renderTipHistory(){
   const patientId=I('tip_history_patient')?.value||'';
   const selectedClient=clients.find(c=>c.id===patientId);
   const patientNames=selectedClient?.nombres||[];
-  const tipSearch=searchNormalize(patientSearches.tips||"");
+  const tipSearch=patientSearches.tips||"";
   const rows=(window._nutri_tip_history||[]).filter(r=>{
     const rowClient=clients.find(c=>c.id===r.clientId);
-    const rowText=searchNormalize([r.patientName,r.phone,rowClient?clientSearchText(rowClient):""].join(" "));
-    return tipHistoryMatchesFilter(r)&&(!tipSearch||rowText.includes(tipSearch))&&(!patientId||r.clientId===patientId||(!r.clientId&&patientNames.includes(r.patientName)))&&(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter);
+    const rowText=[r.patientName,r.phone,rowClient?clientSearchText(rowClient):""].join(" ");
+    return tipHistoryMatchesFilter(r)&&searchTextIncludes(rowText,tipSearch)&&(!patientId||r.clientId===patientId||(!r.clientId&&patientNames.includes(r.patientName)))&&(tipFilter==='all'||r.tipType===tipFilter)&&(tipFolderFilter==='all'||(r.folderId||'general')===tipFolderFilter);
   }).slice(0,80);
   if(!rows.length){el.innerHTML=`<div class="empty-h">${tipSearch?'No se encontraron pacientes.':patientId?'No hay tips registrados para este paciente.':'Sin tips enviados o programados en esta vista.'}</div>`;return}
   el.innerHTML=rows.map(r=>{
@@ -2474,13 +2486,15 @@ async function saveClient(sendWelcome=false){
   if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
   const editId=I("client_edit_id").value;
   const duplicates=duplicatePhoneMatches(phones,editId);
+  let allowDuplicatePhones=false;
   if(duplicates.length){
     const detail=duplicates.map(client=>`- ${clientDisplayName(client)} · ${clientKindLabel(client)}`).join("\n");
     const ok=confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
     if(!ok)return;
+    allowDuplicatePhones=true;
   }
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
-  const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType};
+  const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType,allowDuplicatePhones};
   const res=await api(editId?"PUT":"POST",editId?`/clients/${editId}`:"/clients",payload);
   if(editId&&sendWelcome&&!res.error){
     const welcomeRes=await api("POST",`/clients/${editId}/welcome`,{welcomeTemplateType});
