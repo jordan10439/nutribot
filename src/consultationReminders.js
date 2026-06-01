@@ -160,7 +160,10 @@ function ensureForConsultation(client, consultation) {
   const now = new Date().toISOString();
   const reminders = [];
   const warnings = [];
-  const template = templateDefinitions().find(item => item.id === "without_button");
+  const requestedTemplateType = ["with_button", "without_button"].includes(consultation.reminderTemplateType)
+    ? consultation.reminderTemplateType
+    : "without_button";
+  const template = templateDefinitions().find(item => item.id === requestedTemplateType);
 
   for (const phone of phones) {
     const existingIndex = items.findIndex(item => item.clientId === client.id && item.consultationId === consultation.id && item.phone === phone);
@@ -177,7 +180,7 @@ function ensureForConsultation(client, consultation) {
       patientName: (client.nombres || []).join(" & "),
       consultationId: consultation.id,
       consultationNumber: consultation.number,
-      templateType: existing?.templateType || "without_button",
+      templateType: requestedTemplateType,
       templateName: template?.metaTemplateName || "",
       languageCode: template?.metaLanguageCode || "",
       status: "scheduled",

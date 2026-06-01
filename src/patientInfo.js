@@ -30,6 +30,7 @@ function normalizeConsultation(input = {}, existing = {}) {
     consultationDate: String(input.consultationDate || existing.consultationDate || "").slice(0, 10),
     planDeliveredDate: String(input.planDeliveredDate || existing.planDeliveredDate || "").slice(0, 10),
     scheduleReminder: typeof input.scheduleReminder === "undefined" ? existing.scheduleReminder !== false : input.scheduleReminder !== false,
+    reminderTemplateType: ["with_button", "without_button"].includes(input.reminderTemplateType) ? input.reminderTemplateType : (existing.reminderTemplateType || "without_button"),
     weight: String(input.weight || existing.weight || "").trim(),
     complications: String(input.complications || existing.complications || "").trim(),
     positives: String(input.positives || existing.positives || "").trim(),

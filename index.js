@@ -252,6 +252,26 @@ app.post("/api/consultation-reminders/:id/cancel", auth, (req, res) => {
   }
 });
 
+app.patch("/api/consultation-reminders/:id/cancel", auth, (req, res) => {
+  try {
+    const reminder = consultationReminders.cancel(req.params.id);
+    if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    res.json({ ok: true, reminder });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/api/consultation-reminders/:id", auth, (req, res) => {
+  try {
+    const reminder = consultationReminders.cancel(req.params.id);
+    if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    res.json({ ok: true, reminder });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // Proxy para descargar medios desde WhatsApp Graph API (requiere token env META_TOKEN)
 app.get("/api/media/:id", auth, async (req, res) => {
   const id = req.params.id;

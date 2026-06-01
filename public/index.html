@@ -562,9 +562,13 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
     <div class="fg"><label>Fecha entrega de pauta</label><input type="date" id="plan_delivered_date" /></div>
     <div class="fg"><label>Recordatorio de fin de seguimiento</label>
       <select id="consultation_schedule_reminder">
-        <option value="yes">Sí, programar recordatorio</option>
+        <option value="yes">Sí, programar automáticamente</option>
         <option value="no">No programar recordatorio</option>
       </select>
+    </div>
+    <div class="fg" id="consultation_reminder_template_box"><label>Plantilla del recordatorio</label>
+      <select id="consultation_reminder_template_type"></select>
+      <div class="tip-note" id="consultation_reminder_template_hint"></div>
     </div>
     <div class="fg"><label>Peso</label><input id="consultation_weight" placeholder="Ej: 68 kg" /></div>
     <div class="fg"><label>Mayores complicaciones con la alimentación</label><textarea id="consultation_complications" rows="4" placeholder="Falta de tiempo, ansiedad por comer, desorden de horarios..."></textarea></div>
@@ -964,7 +968,8 @@ function renderConsultationReminders(){
   const query=searchNormalize(patientSearches.reminders||"");
   let items=[...(consultationReminders||[])];
   if(selected)items=items.filter(item=>item.clientId===selected);
-  if(consultationReminderFilter!=="all")items=items.filter(item=>(item.status||"scheduled")===consultationReminderFilter);
+  if(consultationReminderFilter==="all")items=items.filter(item=>(item.status||"scheduled")!=="cancelled");
+  else items=items.filter(item=>(item.status||"scheduled")===consultationReminderFilter);
   if(query)items=items.filter(item=>{
     const client=clientForReminder(item);
     return clientSearchText(client).includes(query)||searchNormalize([item.patientName,item.recipientName,item.phone].join(" ")).includes(query);
@@ -992,7 +997,7 @@ function renderConsultationReminderCard(item){
     ${item.error?`<div class="ecom">Error: ${escapeHtml(item.error)}</div>`:""}
     <div class="reminder-actions">
       ${status==="scheduled"||status==="error"?`<button class="bam" onclick="openConsultationReminderModal('${item.id}')">Editar</button>`:""}
-      ${status==="scheduled"||status==="error"?`<button class="bam" onclick="cancelConsultationReminder('${item.id}')">Cancelar</button>`:""}
+      ${status==="scheduled"||status==="error"?`<button class="bam" onclick="deleteConsultationReminder('${item.id}')">Eliminar</button>`:""}
       <button class="bam" onclick="toggleConsultationDetail('reminder-${item.id}')">Ver detalle</button>
     </div>
     <div class="consultation-detail" id="consultation-detail-reminder-${item.id}">
@@ -1009,16 +1014,24 @@ ${item.sentAt?`Enviado: ${panelDate(item.sentAt)}`:""}${item.error?`\nError: ${e
 }
 
 function fillConsultationReminderTemplateSelect(selected="without_button"){
-  const select=I("reminder_template_type"); if(!select)return;
-  select.innerHTML=consultationReminderTemplates.map(t=>`<option value="${escapeHtml(t.id)}" ${t.configured?"":"disabled"}>${escapeHtml(t.label)}${t.configured?"":" · no configurada"}</option>`).join("");
-  select.value=consultationReminderTemplates.some(t=>t.id===selected&&t.configured)?selected:(consultationReminderTemplates.find(t=>t.configured)?.id||"");
-  updateConsultationReminderTemplateHint();
-  select.onchange=updateConsultationReminderTemplateHint;
+  fillReminderTemplateSelect("reminder_template_type","reminder_template_hint",selected);
 }
 
-function updateConsultationReminderTemplateHint(){
-  const template=consultationReminderTemplates.find(t=>t.id===I("reminder_template_type")?.value);
-  const hint=I("reminder_template_hint"); if(!hint)return;
+function fillConsultationFormReminderTemplateSelect(selected="without_button"){
+  fillReminderTemplateSelect("consultation_reminder_template_type","consultation_reminder_template_hint",selected);
+}
+
+function fillReminderTemplateSelect(selectId,hintId,selected="without_button"){
+  const select=I(selectId); if(!select)return;
+  select.innerHTML=consultationReminderTemplates.map(t=>`<option value="${escapeHtml(t.id)}" ${t.configured?"":"disabled"}>${escapeHtml(t.label)}: ${escapeHtml(t.metaTemplateName||"sin configurar")}${t.configured?"":" · no configurada"}</option>`).join("");
+  select.value=consultationReminderTemplates.some(t=>t.id===selected&&t.configured)?selected:(consultationReminderTemplates.find(t=>t.configured)?.id||"without_button");
+  updateReminderTemplateHint(selectId,hintId);
+  select.onchange=()=>updateReminderTemplateHint(selectId,hintId);
+}
+
+function updateReminderTemplateHint(selectId,hintId){
+  const template=consultationReminderTemplates.find(t=>t.id===I(selectId)?.value);
+  const hint=I(hintId); if(!hint)return;
   hint.textContent=template?.configured?`Plantilla Meta: ${template.metaTemplateName} · ${template.metaLanguageCode}`:(template?.error||"Falta configurar esta plantilla en Railway.");
 }
 
@@ -1044,9 +1057,9 @@ async function saveConsultationReminder(){
   showToast("✅ Recordatorio actualizado");
 }
 
-async function cancelConsultationReminder(id){
-  if(!confirm("¿Cancelar este recordatorio programado?"))return;
-  const res=await api("POST",`/consultation-reminders/${id}/cancel`);
+async function deleteConsultationReminder(id){
+  if(!confirm("¿Seguro que quieres eliminar este recordatorio programado?"))return;
+  const res=await api("DELETE",`/consultation-reminders/${id}`);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   await loadConsultationReminders();
   renderPatientInfoPanel();
@@ -1156,7 +1169,8 @@ function toggleConsultationDetail(id){
   I(`consultation-detail-${id}`)?.classList.toggle("open");
 }
 
-function openConsultationModal(clientId,consultationId=""){
+async function openConsultationModal(clientId,consultationId=""){
+  if(!consultationReminderTemplates.length)await loadConsultationReminders(false);
   const info=patientInfoCache[clientId]||{consultations:[]};
   const item=(info.consultations||[]).find(entry=>entry.id===consultationId);
   const nextNumber=item?.number||((info.consultations||[]).reduce((max,entry)=>Math.max(max,Number(entry.number)||0),0)+1);
@@ -1167,6 +1181,7 @@ function openConsultationModal(clientId,consultationId=""){
   I("consultation_date").value=item?.consultationDate||localDateInputValue();
   I("plan_delivered_date").value=item?.planDeliveredDate||"";
   I("consultation_schedule_reminder").value=item?.scheduleReminder===false?"no":"yes";
+  fillConsultationFormReminderTemplateSelect(item?.reminderTemplateType||"without_button");
   I("consultation_weight").value=item?.weight||"";
   I("consultation_complications").value=item?.complications||"";
   I("consultation_positives").value=item?.positives||"";
@@ -1183,6 +1198,7 @@ async function saveConsultation(){
     consultationDate:I("consultation_date").value,
     planDeliveredDate:I("plan_delivered_date").value,
     scheduleReminder:I("consultation_schedule_reminder").value!=="no",
+    reminderTemplateType:I("consultation_reminder_template_type").value||"without_button",
     weight:I("consultation_weight").value,
     complications:I("consultation_complications").value,
     positives:I("consultation_positives").value,
@@ -2537,6 +2553,8 @@ function closeM(id){
     I(id).classList.remove('open');
     ["consultation_client_id","consultation_id","consultation_number","consultation_date","plan_delivered_date","consultation_weight","consultation_complications","consultation_positives","consultation_goals","consultation_notes"].forEach(field=>{const el=I(field); if(el)el.value=""});
     const sr=I("consultation_schedule_reminder"); if(sr)sr.value="yes";
+    const crt=I("consultation_reminder_template_type"); if(crt)crt.value="without_button";
+    const crh=I("consultation_reminder_template_hint"); if(crh)crh.textContent="";
   } else if(id==='consultationReminderModal'){
     I(id).classList.remove('open');
     ["reminder_id","reminder_date","reminder_time","reminder_template_type","reminder_status","reminder_template_hint"].forEach(field=>{const el=I(field); if(el)el.value=""; if(el&&field==="reminder_template_hint")el.textContent=""});

@@ -19,10 +19,10 @@ function cleanEnvValue(value) {
   return clean;
 }
 
-const WELCOME_TEMPLATE_WITH_BUTTON_NAME = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_NAME);
-const WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE);
-const WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME);
-const WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE);
+const WELCOME_TEMPLATE_WITH_BUTTON_NAME = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_NAME) || "bienvenida_con_boton";
+const WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE) || "es_CL";
+const WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME) || "plantilla_numero_3";
+const WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE = cleanEnvValue(process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE) || "es_CL";
 
 function configuredWelcomeValue(value, variable) {
   const clean = cleanEnvValue(value);
