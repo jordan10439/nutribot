@@ -144,6 +144,18 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .consultation-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .consultation-detail{display:none;margin-top:10px;border-top:1px solid #edf3ed;padding-top:10px}
 .consultation-detail.open{display:block}
+.reminder-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.reminder-list{display:flex;flex-direction:column;gap:9px}
+.reminder-card{background:#fff;border:1px solid #e0ece0;border-radius:10px;padding:13px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.reminder-card.error{border-left:3px solid #c94040;background:#fffafa}
+.reminder-card.cancelled{opacity:.75}
+.reminder-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.reminder-head strong{font-size:13px;color:#213b26}.reminder-head span{font-size:11px;color:#7a9a7a}
+.reminder-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px;font-size:11px;color:#587158}
+.reminder-grid b{display:block;color:#2a5738;margin-bottom:2px}
+.reminder-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.reminder-status{display:inline-block;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:900}
+.reminder-status.scheduled{background:#fff3cd;color:#856404}.reminder-status.sent{background:#e8f5e9;color:#256535}.reminder-status.cancelled{background:#f3f3f3;color:#687468}.reminder-status.error{background:#fce7e7;color:#a92c2c}
 @media(max-width:780px){.patient-info-layout{grid-template-columns:1fr}}
 /* MENSAJES CONFIG */
 .msg-card{background:#fff;border-radius:12px;padding:16px;margin-bottom:10px;border:1px solid #e0ece0;box-shadow:0 2px 8px rgba(0,0,0,.04)}
@@ -261,6 +273,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   <div class="tabs">
     <div class="tab active" data-tab="p" onclick="showTab('p')">👥 Pacientes</div>
     <div class="tab" data-tab="info" onclick="showTab('info')">🗂️ Información de pacientes</div>
+    <div class="tab" data-tab="reminders" onclick="showTab('reminders')">📅 Recordatorios de consulta</div>
     <div class="tab" data-tab="goals" onclick="showTab('goals')">🎯 Metas</div>
     <div class="tab" data-tab="c" onclick="showTab('c')">💬 Conversaciones</div>
     <div class="tab" data-tab="h" onclick="showTab('h')">📋 Actividad</div>
@@ -298,6 +311,18 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
           <div class="empty-h">Selecciona un paciente para ver su ficha interna.</div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- RECORDATORIOS DE CONSULTA -->
+  <div id="treminders" style="display:none">
+    <div class="content">
+      <div class="sh"><h2>📅 Recordatorios de consulta</h2></div>
+      <div class="reminder-toolbar">
+        <div class="patient-search compact"><span>🔎</span><input id="reminder_patient_search" placeholder="Buscar paciente…" oninput="setPatientSearch('reminders',this.value)"/></div>
+        <select class="activity-select" id="reminder_patient_filter" onchange="renderConsultationReminders()"><option value="">Todos los pacientes</option></select>
+      </div>
+      <div id="consultation_reminder_list" class="reminder-list"></div>
     </div>
   </div>
 
@@ -537,6 +562,20 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   </div>
 </div>
 
+<div class="mo" id="consultationReminderModal">
+  <div class="modal">
+    <h2>Editar recordatorio de consulta</h2>
+    <input type="hidden" id="reminder_id" />
+    <div class="fg"><label>Fecha de envío</label><input type="date" id="reminder_date" /></div>
+    <div class="fg"><label>Hora de envío</label><input type="time" id="reminder_time" /></div>
+    <div class="fg"><label>Tipo de plantilla</label>
+      <select id="reminder_template_type"></select>
+      <div class="tip-note" id="reminder_template_hint"></div>
+    </div>
+    <div class="ma"><button class="bc" onclick="closeM('consultationReminderModal')">Cancelar</button><button class="bsv" onclick="saveConsultationReminder()">Guardar cambios</button></div>
+  </div>
+</div>
+
 <!-- Modal Tip -->
 <div class="mo" id="tipModal">
   <div class="modal">
@@ -591,7 +630,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 <div class="toast" id="toast"></div>
 
 <script>
-let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:""},patientInfoCache={},selectedInfoClientId="";
+let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
 const I=id=>document.getElementById(id);
 const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
 
@@ -693,12 +732,13 @@ function logout(){TOKEN="";I("ls").style.display="flex";I("app").style.display="
 
 function showTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.toggle('active', el.getAttribute('data-tab')===t));
-  const map = {p:'tp', info:'tinfo', goals:'tgoals', c:'tc', h:'th', m:'tm', tips:'ttips'};
+  const map = {p:'tp', info:'tinfo', reminders:'treminders', goals:'tgoals', c:'tc', h:'th', m:'tm', tips:'ttips'};
   Object.values(map).forEach(id=>{ const el=I(id); if(el) el.style.display='none'; });
   const target = map[t] || map.p;
   if(target){ I(target).style.display = (t==='c') ? 'flex' : 'block'; }
   if(t==='h') loadGlobal();
   if(t==='info') loadPatientInfoSection();
+  if(t==='reminders') loadConsultationReminders();
   if(t==='goals') loadGoalsDashboard();
   if(t==='m') loadMessages();
   if(t==='c') updateChatSel();
@@ -716,6 +756,7 @@ async function loadAll(){
   I("s3").textContent=clients.filter(c=>c.phones?.length>1).length;
   fillActivityPatientSelect();
   fillInfoPatientSelect();
+  fillReminderPatientSelect();
   updateChatSel();
 }
 
@@ -848,6 +889,10 @@ function fillInfoPatientSelect(){
   select.value=clients.some(c=>c.id===selected)?selected:"";
 }
 
+function fillReminderPatientSelect(){
+  fillPatientSelect("reminder_patient_filter","reminders","Todos los pacientes");
+}
+
 function setPatientSearch(scope,value){
   patientSearches[scope]=value||"";
   if(scope==="patients")renderClients();
@@ -857,12 +902,128 @@ function setPatientSearch(scope,value){
   if(scope==="chat"){updateChatSel();loadChat();}
   if(scope==="activity"){fillActivityPatientSelect();renderActivity();}
   if(scope==="info"){fillInfoPatientSelect();renderPatientInfoPanel();}
+  if(scope==="reminders"){fillReminderPatientSelect();renderConsultationReminders();}
 }
 
 async function loadPatientInfoSection(){
+  await loadConsultationReminders(false);
   fillInfoPatientSelect();
   if(selectedInfoClientId) await selectPatientInfo(selectedInfoClientId);
   else renderPatientInfoPanel();
+}
+
+async function loadConsultationReminders(render=true){
+  const reminders=await api("GET","/consultation-reminders");
+  consultationReminders=Array.isArray(reminders)?reminders:[];
+  const templates=await api("GET","/consultation-reminder-templates");
+  consultationReminderTemplates=Array.isArray(templates)?templates:[];
+  fillReminderPatientSelect();
+  if(render)renderConsultationReminders();
+}
+
+function reminderStatusLabel(status){
+  return ({scheduled:"Programado",sent:"Enviado",cancelled:"Cancelado",error:"Error"})[status]||status||"Sin estado";
+}
+
+function reminderTemplateLabel(reminder){
+  return reminder.templateType==="with_button"?`Con botón: ${reminder.templateName||"contacto_si"}`:`Sin botón: ${reminder.templateName||"recuerda_agendar"}`;
+}
+
+function clientForReminder(reminder){
+  return clients.find(c=>c.id===reminder.clientId);
+}
+
+function renderConsultationReminders(){
+  const box=I("consultation_reminder_list"); if(!box)return;
+  const selected=I("reminder_patient_filter")?.value||"";
+  const query=searchNormalize(patientSearches.reminders||"");
+  let items=[...(consultationReminders||[])];
+  if(selected)items=items.filter(item=>item.clientId===selected);
+  if(query)items=items.filter(item=>{
+    const client=clientForReminder(item);
+    return clientSearchText(client).includes(query)||searchNormalize([item.patientName,item.recipientName,item.phone].join(" ")).includes(query);
+  });
+  if(!items.length){
+    box.innerHTML=`<div class="empty-h">${selected?"No hay recordatorios registrados para este paciente.":"No hay recordatorios de consulta registrados."}</div>`;
+    return;
+  }
+  box.innerHTML=items.map(renderConsultationReminderCard).join("");
+}
+
+function renderConsultationReminderCard(item){
+  const status=item.status||"scheduled";
+  return `<div class="reminder-card ${status}">
+    <div class="reminder-head">
+      <div><strong>${escapeHtml(item.patientName||"Paciente")}</strong><br><span>${escapeHtml(item.recipientName||"")} ${item.clientType?`· ${escapeHtml(item.clientType)}`:""}</span></div>
+      <span class="reminder-status ${escapeHtml(status)}">${escapeHtml(reminderStatusLabel(status))}</span>
+    </div>
+    <div class="reminder-grid">
+      <div><b>Fecha entrega pauta</b>${item.pautaDeliveredAt?panelDateOnly(item.pautaDeliveredAt):"Sin registro"}</div>
+      <div><b>Seguimiento hasta</b>${item.followUpEndsAt?panelDateOnly(item.followUpEndsAt):"Sin registro"}</div>
+      <div><b>Programado</b>${item.scheduledAt?panelDate(item.scheduledAt):"Sin programación"}</div>
+      <div><b>Plantilla</b>${escapeHtml(reminderTemplateLabel(item))}</div>
+    </div>
+    ${item.error?`<div class="ecom">Error: ${escapeHtml(item.error)}</div>`:""}
+    <div class="reminder-actions">
+      ${status==="scheduled"||status==="error"?`<button class="bam" onclick="openConsultationReminderModal('${item.id}')">Editar</button>`:""}
+      ${status==="scheduled"||status==="error"?`<button class="bam" onclick="cancelConsultationReminder('${item.id}')">Cancelar</button>`:""}
+      <button class="bam" onclick="toggleConsultationDetail('reminder-${item.id}')">Ver detalle</button>
+    </div>
+    <div class="consultation-detail" id="consultation-detail-reminder-${item.id}">
+      <div class="info-text">Paciente: ${escapeHtml(item.patientName||"Paciente")}
+Destinatario: ${escapeHtml(item.recipientName||"")}
+Fecha entrega pauta: ${item.pautaDeliveredAt?panelDateOnly(item.pautaDeliveredAt):"Sin registro"}
+Seguimiento hasta: ${item.followUpEndsAt?panelDateOnly(item.followUpEndsAt):"Sin registro"}
+Recordatorio programado: ${item.scheduledAt?panelDate(item.scheduledAt):"Sin programación"}
+Plantilla: ${escapeHtml(reminderTemplateLabel(item))}
+Estado: ${escapeHtml(reminderStatusLabel(status))}
+${item.sentAt?`Enviado: ${panelDate(item.sentAt)}`:""}${item.error?`\nError: ${escapeHtml(item.error)}`:""}</div>
+    </div>
+  </div>`;
+}
+
+function fillConsultationReminderTemplateSelect(selected="without_button"){
+  const select=I("reminder_template_type"); if(!select)return;
+  select.innerHTML=consultationReminderTemplates.map(t=>`<option value="${escapeHtml(t.id)}" ${t.configured?"":"disabled"}>${escapeHtml(t.label)}${t.configured?"":" · no configurada"}</option>`).join("");
+  select.value=consultationReminderTemplates.some(t=>t.id===selected&&t.configured)?selected:(consultationReminderTemplates.find(t=>t.configured)?.id||"");
+  updateConsultationReminderTemplateHint();
+  select.onchange=updateConsultationReminderTemplateHint;
+}
+
+function updateConsultationReminderTemplateHint(){
+  const template=consultationReminderTemplates.find(t=>t.id===I("reminder_template_type")?.value);
+  const hint=I("reminder_template_hint"); if(!hint)return;
+  hint.textContent=template?.configured?`Plantilla Meta: ${template.metaTemplateName} · ${template.metaLanguageCode}`:(template?.error||"Falta configurar esta plantilla en Railway.");
+}
+
+function openConsultationReminderModal(id){
+  const item=consultationReminders.find(entry=>entry.id===id);
+  if(!item)return;
+  I("reminder_id").value=id;
+  I("reminder_date").value=item.scheduledDate||String(item.scheduledAt||"").slice(0,10);
+  I("reminder_time").value=item.scheduledTime||String(item.scheduledAt||"").slice(11,16)||"11:00";
+  fillConsultationReminderTemplateSelect(item.templateType||"without_button");
+  I("consultationReminderModal").classList.add("open");
+}
+
+async function saveConsultationReminder(){
+  const id=I("reminder_id").value;
+  const payload={scheduledDate:I("reminder_date").value,scheduledTime:I("reminder_time").value,templateType:I("reminder_template_type").value};
+  const res=await api("PUT",`/consultation-reminders/${id}`,payload);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  closeM("consultationReminderModal");
+  await loadConsultationReminders();
+  renderPatientInfoPanel();
+  showToast("✅ Recordatorio actualizado");
+}
+
+async function cancelConsultationReminder(id){
+  if(!confirm("¿Cancelar este recordatorio programado?"))return;
+  const res=await api("POST",`/consultation-reminders/${id}/cancel`);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  await loadConsultationReminders();
+  renderPatientInfoPanel();
+  showToast("Recordatorio cancelado");
 }
 
 async function selectPatientInfo(clientId){
@@ -905,6 +1066,7 @@ function renderPatientInfoPanel(){
   const consultations=[...(info.consultations||[])].sort((a,b)=>(Number(b.number)||0)-(Number(a.number)||0));
   const latest=latestConsultation(info);
   const latestPlan=latestPlanDelivery(consultations);
+  const latestReminder=latestPlan?consultationReminders.find(item=>item.clientId===client.id&&item.consultationId===latestPlan.id&&item.status==="scheduled"):null;
   const created=client.createdAt?panelDate(client.createdAt):clientCreatedTime(client)?panelDate(clientCreatedTime(client)):"Sin registro";
   el.innerHTML=`<div class="patient-info-card">
     <div class="sh" style="margin-bottom:8px"><h2>${escapeHtml(clientDisplayName(client))}</h2><button class="ba" onclick="openConsultationModal('${client.id}')">+ Registrar consulta</button></div>
@@ -915,6 +1077,7 @@ function renderPatientInfoPanel(){
       <div class="info-metric"><b>${consultations.length}</b>Consultas registradas</div>
       <div class="info-metric"><b>${escapeHtml(latest?.weight||"Sin registro")}</b>Último peso</div>
     </div>
+    <div class="mot">${latestReminder?`Recordatorio programado: ${panelDate(latestReminder.scheduledAt)}`:"Sin recordatorio programado"}</div>
     <div class="info-section-title">Resumen de principales complicaciones</div>
     <div class="info-text">${escapeHtml(consultationSummary(latest?.complications))}</div>
     <div class="info-section-title">Resumen de aspectos positivos</div>
@@ -1001,9 +1164,12 @@ async function saveConsultation(){
   const res=await api(consultationId?"PUT":"POST",path,payload);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   patientInfoCache[clientId]=res.info||{consultations:[]};
+  await loadConsultationReminders(false);
   closeM("consultationModal");
   renderPatientInfoPanel();
-  showToast("✅ Consulta guardada");
+  if(res.reminderWarnings?.length)showToast(`⚠️ Consulta guardada. ${res.reminderWarnings[0]}`);
+  else if(res.reminders?.length)showToast(`✅ Consulta guardada. Recordatorio de fin de seguimiento programado para ${panelDate(res.reminders[0].scheduledAt)}.`);
+  else showToast("✅ Consulta guardada");
 }
 
 function createGoalFromConsultation(clientId,consultationId){
@@ -1326,20 +1492,20 @@ function activityMatches(entry){
     return (entry.tipo==="mensaje_recibido" && !entry.media?.id && !isTechnicalActivityReply(entry.comentario))
       || (entry.tipo==="completada" && !!entry.comentario);
   }
-  if(activityFilter==="error")return ["meta_error","tip_error","plantilla_previa_error"].includes(entry.tipo);
+  if(activityFilter==="error")return ["meta_error","tip_error","plantilla_previa_error","recordatorio_consulta_error"].includes(entry.tipo);
   if(activityFilter==="revision")return !!entry.requiereRevision;
   return entry.tipo===activityFilter;
 }
 
 function activityDeliveryStatus(entry){
-  if(["meta_error","tip_error","plantilla_previa_error"].includes(entry.tipo) || entry.deliveryStatus==="failed"){
+  if(["meta_error","tip_error","plantilla_previa_error","recordatorio_consulta_error"].includes(entry.tipo) || entry.deliveryStatus==="failed"){
     return { label:"Error", className:"status-error" };
   }
   if(entry.tipo==="completada")return { label:"Completada", className:"status-completada" };
   if(entry.tipo==="no_completada")return { label:"No completada", className:"status-no_completada" };
   if(entry.deliveryStatus==="read")return { label:"Leído", className:"status-completada" };
   if(entry.deliveryStatus==="delivered")return { label:"Entregado", className:"status-completada" };
-  if(["accepted","sent"].includes(entry.deliveryStatus) || ["bienvenida_enviada","plantilla_previa_enviada","meta_enviada","tip_enviado"].includes(entry.tipo)){
+  if(["accepted","sent"].includes(entry.deliveryStatus) || ["bienvenida_enviada","plantilla_previa_enviada","meta_enviada","tip_enviado","recordatorio_consulta_enviado"].includes(entry.tipo)){
     return { label:"Enviado", className:"status-enviada" };
   }
   return { label:"Registrado", className:"status-pendiente" };
@@ -1357,6 +1523,15 @@ function activityMessageInfo(entry){
       description:`Plantilla previa enviada: ${entry.utilityTemplateLabel||title}`,
       detail:[`Teléfono: ${entry.phone||"Sin registro"}`,entry.deliveryStatus?`Estado Meta: ${entry.deliveryStatus}`:"",entry.metaMessageId?`Message ID plantilla: ${entry.metaMessageId}`:""].filter(Boolean).join("\n"),
     };
+  }
+  if(entry.tipo==="recordatorio_consulta_programado"){
+    return { kind:"Recordatorio de consulta", description:"Recordatorio de fin de seguimiento programado.", detail:entry.comentario||"" };
+  }
+  if(entry.tipo==="recordatorio_consulta_enviado"){
+    return { kind:"Recordatorio enviado", description:"Recordatorio de fin de seguimiento enviado.", detail:[entry.templateName?`Plantilla: ${entry.templateName}`:"",entry.metaMessageId?`Message ID: ${entry.metaMessageId}`:""].filter(Boolean).join("\n") };
+  }
+  if(entry.tipo==="recordatorio_consulta_error"){
+    return { kind:"Error de recordatorio", description:"Error al enviar recordatorio de fin de seguimiento.", detail:entry.comentario||"Sin motivo registrado." };
   }
   if(entry.tipo==="meta_enviada"){
     return {
@@ -2332,6 +2507,9 @@ function closeM(id){
   } else if(id==='consultationModal'){
     I(id).classList.remove('open');
     ["consultation_client_id","consultation_id","consultation_number","consultation_date","plan_delivered_date","consultation_weight","consultation_complications","consultation_positives","consultation_goals","consultation_notes"].forEach(field=>{const el=I(field); if(el)el.value=""});
+  } else if(id==='consultationReminderModal'){
+    I(id).classList.remove('open');
+    ["reminder_id","reminder_date","reminder_time","reminder_template_type","reminder_template_hint"].forEach(field=>{const el=I(field); if(el)el.value=""; if(el&&field==="reminder_template_hint")el.textContent=""});
   } else if(id==='welcomeModal'){
     I(id).classList.remove('open');
     I('welcome_client_id').value='';

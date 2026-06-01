@@ -9,6 +9,7 @@ const conversations = require("./src/conversations");
 const messages   = require("./src/messages");
 const tips       = require("./src/tips");
 const patientInfo = require("./src/patientInfo");
+const consultationReminders = require("./src/consultationReminders");
 const utilityTemplates = require("./src/utilityTemplates");
 const { enviarTip, enviarPlantillaUtilidad } = require("./src/whatsapp");
 const { procesarMensaje, enviarMeta, enviarBienvenida, welcomeTemplateOptions } = require("./src/bot");
@@ -199,7 +200,8 @@ app.post("/api/patient-info/:clientId/consultations", auth, (req, res) => {
   const client = db.getById(req.params.clientId);
   if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
   const consultation = patientInfo.addConsultation(req.params.clientId, req.body || {});
-  res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId) });
+  const reminderResult = consultationReminders.ensureForConsultation(client, consultation);
+  res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId), reminders: reminderResult.reminders, reminderWarnings: reminderResult.warnings });
 });
 
 app.put("/api/patient-info/:clientId/consultations/:consultationId", auth, (req, res) => {
@@ -207,7 +209,43 @@ app.put("/api/patient-info/:clientId/consultations/:consultationId", auth, (req,
   if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
   const consultation = patientInfo.updateConsultation(req.params.clientId, req.params.consultationId, req.body || {});
   if (!consultation) return res.status(404).json({ error: "Consulta no encontrada" });
-  res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId) });
+  const reminderResult = consultationReminders.ensureForConsultation(client, consultation);
+  res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId), reminders: reminderResult.reminders, reminderWarnings: reminderResult.warnings });
+});
+
+// ── Recordatorios de consulta ────────────────────────────────────────────────
+app.get("/api/consultation-reminder-templates", auth, (req, res) => {
+  const templates = consultationReminders.templateDefinitions();
+  console.log("Plantillas de recordatorio de consulta", JSON.stringify(templates.map(t => ({
+    id: t.id,
+    label: t.label,
+    configured: t.configured,
+    metaTemplateName: t.metaTemplateName,
+    metaLanguageCode: t.metaLanguageCode,
+    hasButton: t.hasButton,
+    error: t.error,
+  }))));
+  res.json(templates);
+});
+
+app.get("/api/consultation-reminders", auth, (req, res) => {
+  res.json(consultationReminders.list({ clientId: req.query.clientId || "" }));
+});
+
+app.put("/api/consultation-reminders/:id", auth, (req, res) => {
+  try {
+    const reminder = consultationReminders.update(req.params.id, req.body || {});
+    if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+    res.json({ ok: true, reminder });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/consultation-reminders/:id/cancel", auth, (req, res) => {
+  const reminder = consultationReminders.cancel(req.params.id);
+  if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
+  res.json({ ok: true, reminder });
 });
 
 // Proxy para descargar medios desde WhatsApp Graph API (requiere token env META_TOKEN)
@@ -634,5 +672,6 @@ app.listen(PORT, () => {
   console.log(`\n🌱 NutriGO Panel v3 — puerto ${PORT}`);
   recargarTodos();
   revisarTipsProgramados();
+  consultationReminders.startScheduler();
   setInterval(revisarTipsProgramados, 60 * 1000);
 });
