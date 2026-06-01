@@ -846,11 +846,11 @@ function localTimeInputValue(date=new Date()){
 }
 
 function clientDisplayName(client){
-  return (client?.nombres||[]).filter(Boolean).join(" & ")||"Paciente";
+  return client?.displayName||(client?.nombres||[]).filter(Boolean).join(" & ")||"Paciente";
 }
 
 function clientKindLabel(client){
-  return (client?.phones||[]).length>1?"Pareja":"Individual";
+  return client?.type==="couple"||((client?.phones||[]).length>1)?"Pareja":"Individual";
 }
 
 function patientChoiceLabel(client,index=null){
@@ -888,7 +888,8 @@ function searchNormalize(value){
 }
 
 function clientSearchText(client){
-  return normalizeSearchText([...(client?.nombres||[]),...(client?.phones||[]),client?.id||"",clientKindLabel(client)].join(" "));
+  const members=(client?.members||[]).flatMap(member=>[member.name,member.phone,member.role,member.internalName]);
+  return normalizeSearchText([client?.name,client?.displayName,client?.internalName,client?.contextKey,...(client?.nombres||[]),...(client?.phones||[]),...members,client?.id||"",clientKindLabel(client)].join(" "));
 }
 
 function clientMatchesSearch(client,scope){
@@ -960,6 +961,10 @@ function fillReminderPatientSelect(){
 
 function setPatientSearch(scope,value){
   patientSearches[scope]=value||"";
+  if(value&&scope==="goals"&&I("goal_patient_filter"))I("goal_patient_filter").value="";
+  if(value&&scope==="activity"&&I("fcli"))I("fcli").value="";
+  if(value&&scope==="tips"&&I("tip_history_patient"))I("tip_history_patient").value="";
+  if(value&&scope==="reminders"&&I("reminder_patient_filter"))I("reminder_patient_filter").value="";
   if(scope==="patients")renderClients();
   if(scope==="goals"){fillGoalPatientSelect();renderGoalsDashboard();}
   if(scope==="tips"){fillTipHistoryPatientSelect();renderTipHistory();}
@@ -1322,7 +1327,8 @@ function panelDateKey(value){
 }
 
 function visibleGoals(){
-  const patient=I("goal_patient_filter")?.value||"";
+  const hasSearch=!!normalizeSearchText(patientSearches.goals||"");
+  const patient=hasSearch?"":(I("goal_patient_filter")?.value||"");
   const date=I("goal_date_filter")?.value||"";
   return (goalsDashboard.goals||[]).filter(goal=>{
     const client=clients.find(c=>c.id===goal.clientId);
@@ -1341,7 +1347,8 @@ function visibleGoals(){
 }
 
 function renderGoalsDashboard(){
-  const patientFilter=I("goal_patient_filter")?.value||"";
+  const hasSearch=!!normalizeSearchText(patientSearches.goals||"");
+  const patientFilter=hasSearch?"":(I("goal_patient_filter")?.value||"");
   const summaries=(goalsDashboard.summaries||[]).filter(summary=>{
     const client=clients.find(c=>c.id===summary.clientId);
     if(!clientMatchesSearch(client,"goals"))return false;
@@ -2494,7 +2501,7 @@ async function saveClient(sendWelcome=false){
     allowDuplicatePhones=true;
   }
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
-  const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType,allowDuplicatePhones};
+  const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType,allowDuplicatePhones,allowDuplicatePhone:allowDuplicatePhones};
   const res=await api(editId?"PUT":"POST",editId?`/clients/${editId}`:"/clients",payload);
   if(editId&&sendWelcome&&!res.error){
     const welcomeRes=await api("POST",`/clients/${editId}/welcome`,{welcomeTemplateType});

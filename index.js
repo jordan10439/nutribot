@@ -59,16 +59,31 @@ function cleanClientPayload(body = {}, existing = null) {
       type: (client.phones || []).length > 1 ? "Pareja" : "Individual",
     })));
   }
-  if (duplicateWarnings.length && !body.allowDuplicatePhones) {
+  const duplicateConfirmed = !!(body.allowDuplicatePhones || body.allowDuplicatePhone);
+  if (duplicateWarnings.length && !duplicateConfirmed) {
     console.log("Teléfono duplicado detectado, se permite solo con confirmación frontend", JSON.stringify(duplicateWarnings));
   }
-  if (duplicateWarnings.length && body.allowDuplicatePhones) {
+  if (duplicateWarnings.length && duplicateConfirmed) {
     console.log("Teléfono duplicado confirmado por usuaria, guardando de todas formas", JSON.stringify(duplicateWarnings));
   }
+  const clientId = existing?.id || "";
+  const type = phones.length > 1 ? "couple" : "individual";
+  const displayName = nombres.join(" & ");
+  const internalName = `${displayName} · ${type === "couple" ? "Pareja" : "Individual"}`;
   return {
     ...(existing || {}),
     nombres,
     phones,
+    type,
+    displayName,
+    internalName,
+    contextKey: clientId ? `${type}:${clientId}` : "",
+    members: nombres.map((name, index) => ({
+      name,
+      phone: phones[index],
+      role: index === 0 ? "partner_1" : "partner_2",
+      internalName: `${name} · ${type === "couple" ? "En pareja" : "Individual"}`,
+    })),
     timezone: body.timezone || existing?.timezone || "America/Santiago",
     goals: existing?.goals || body.goals || [],
     createdAt: existing?.createdAt || new Date().toISOString(),
@@ -148,6 +163,7 @@ app.post("/api/clients", auth, async (req, res) => {
     duplicateWarnings = client.duplicateWarnings || [];
     delete client.duplicateWarnings;
     client.id = db.newId(client.nombres[0]);
+    client.contextKey = `${client.type}:${client.id}`;
     client.welcome = { status: "not_sent", updatedAt: new Date().toISOString() };
   } catch (e) {
     return res.status(400).json({ error: e.message });
