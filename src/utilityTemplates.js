@@ -8,6 +8,8 @@ const TEMPLATES = [
     languageCode: process.env.META_TEMPLATE_SEGUIMIENTO_DIRECTO_LANGUAGE || "",
     body: "Hola\nTe escribo por tu seguimiento nutricional ✨",
     buttonLabel: "Ver seguimiento",
+    hasButton: true,
+    requiresPatientClick: true,
   },
   {
     id: "seguimiento_nutricional",
@@ -18,6 +20,8 @@ const TEMPLATES = [
     languageCode: process.env.META_TEMPLATE_SEGUIMIENTO_NUTRICIONAL_LANGUAGE || "",
     body: "Hola, soy NutriGO\nTienes un nuevo mensaje de seguimiento registrado por Carla ✨",
     buttonLabel: "Ver mensaje",
+    hasButton: true,
+    requiresPatientClick: true,
   },
   {
     id: "recordatorio_registrado",
@@ -28,6 +32,8 @@ const TEMPLATES = [
     languageCode: process.env.META_TEMPLATE_RECORDATORIO_REGISTRADO_LANGUAGE || "",
     body: "Hola, soy NutriGO\nTienes un recordatorio nutricional registrado para hoy ✨",
     buttonLabel: "Ver recordatorio",
+    hasButton: true,
+    requiresPatientClick: true,
   },
   {
     id: "recomendacion_nutricional",
@@ -38,6 +44,8 @@ const TEMPLATES = [
     languageCode: process.env.META_TEMPLATE_RECOMENDACION_NUTRICIONAL_LANGUAGE || "",
     body: "Hola, soy NutriGO\nTienes una recomendación nutricional registrada por Carla ✨",
     buttonLabel: "Ver recomendación",
+    hasButton: true,
+    requiresPatientClick: true,
   },
 ];
 
@@ -78,6 +86,8 @@ function list() {
     ...template,
     metaTemplateName: configuredName(template),
     metaLanguageCode: configuredLanguage(template),
+    hasButton: !!template.hasButton,
+    requiresPatientClick: !!template.requiresPatientClick,
   }));
 }
 
@@ -92,6 +102,8 @@ function diagnostics() {
     hasLanguage: !!configuredValue(template.languageCode),
     metaTemplateName: configuredValue(template.metaName),
     metaLanguageCode: configuredValue(template.languageCode),
+    hasButton: !!template.hasButton,
+    requiresPatientClick: !!template.requiresPatientClick,
   }));
 }
 

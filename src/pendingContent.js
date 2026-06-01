@@ -39,9 +39,14 @@ function upsertWaiting(input) {
     type: input.type,
     payload: input.payload || {},
     status: "waiting_patient_interaction",
+    triggerTemplateId: input.triggerTemplateId || "",
+    triggerTemplateName: input.triggerTemplateName || "",
+    triggerButtonLabels: input.triggerButtonLabels || ["Ver seguimiento", "Ver mensaje", "Ver recomendación", "Ver recordatorio", "Vamos"],
     templateMessageId: input.templateMessageId || "",
     createdAt: input.createdAt || now,
     updatedAt: now,
+    sentAt: input.sentAt || "",
+    error: input.error || input.lastError || "",
     lastError: input.lastError || "",
   };
   const key = pendingKey(next);
@@ -68,11 +73,12 @@ function update(id, patch) {
 }
 
 function markSent(id, patch = {}) {
-  return update(id, { ...patch, status: "sent", sentAt: new Date().toISOString(), lastError: "" });
+  return update(id, { ...patch, status: "sent", sentAt: new Date().toISOString(), error: "", lastError: "" });
 }
 
 function markError(id, error, patch = {}) {
-  return update(id, { ...patch, status: "error", lastError: String(error || "Error desconocido") });
+  const message = String(error || "Error desconocido");
+  return update(id, { ...patch, status: "error", error: message, lastError: message });
 }
 
 module.exports = { findWaitingByPhone, markError, markSent, upsertWaiting };

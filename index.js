@@ -457,6 +457,48 @@ async function sendTipRecord(send, position = null, total = null) {
         deliveryStatus: "accepted",
         deliveryStage: "plantilla_previa",
       });
+      if (utilityTemplate.requiresPatientClick || utilityTemplate.hasButton) {
+        console.log("Plantilla con botón seleccionada", JSON.stringify({ id: send.id, phone: send.phone, patientName: send.patientName, utilityTemplateId: send.utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
+        console.log("No se enviará contenido principal todavía", JSON.stringify({ id: send.id, phone: send.phone, type: "tip", tipId: send.tipId }));
+        console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ id: send.id, phone: send.phone, type: "tip", templateMessageId: utilityTemplateMessageId }));
+        const pending = pendingContent.upsertWaiting({
+          clientId: send.clientId,
+          phone: send.phone,
+          patientName: send.patientName,
+          type: "tip",
+          triggerTemplateId: send.utilityTemplateId,
+          triggerTemplateName: utilityTemplates.configuredName(utilityTemplate),
+          triggerButtonLabels: [utilityTemplate.buttonLabel || "Ver mensaje", "Ver seguimiento", "Ver mensaje", "Ver recomendación", "Ver recordatorio", "Vamos"],
+          templateMessageId: utilityTemplateMessageId,
+          payload: {
+            sendId: send.id,
+            tipId: send.tipId,
+            message: send.message,
+            utilityTemplateId: send.utilityTemplateId || "",
+            utilityTemplateLabel: utilityTemplate.label,
+          },
+        });
+        tips.updateSend(send.id, {
+          status: "pendiente_interaccion",
+          error: "",
+          pendingContentId: pending.id,
+          utilityTemplateMessageId,
+          deliveryStatus: "accepted",
+        });
+        history.registrar(send.clientId, send.phone, send.patientName, {
+          tipo: "contenido_pendiente_interaccion",
+          meta: send.tipTitle,
+          metaEmoji: "⏳",
+          comentario: "Plantilla previa enviada. Contenido principal esperando interacción del paciente.",
+          direccion: "sistema",
+          pendingContentId: pending.id,
+          templateMessageId: utilityTemplateMessageId,
+          utilityTemplateId: send.utilityTemplateId || "",
+          utilityTemplateLabel: utilityTemplate.label,
+        });
+        console.log("Resultado final individual", JSON.stringify({ nombre: send.patientName, phone: send.phone, clientId: send.clientId, role: send.recipientRole, plantillaPrevia: "enviada", contenidoPrincipal: "esperando_interaccion", messageId: "", templateMessageId: utilityTemplateMessageId, pendingContentId: pending.id }));
+        return;
+      }
     }
     console.log("Continuando con envío de contenido principal");
     console.log(`Enviando contenido principal a ${send.patientName}/${send.phone}`, JSON.stringify({ role: send.recipientRole, tipo: "tip", tipTitle: send.tipTitle }));

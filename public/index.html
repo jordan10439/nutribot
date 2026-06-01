@@ -1578,6 +1578,9 @@ function activityMessageInfo(entry){
   if(entry.tipo==="contenido_pendiente_error"){
     return { kind:"Error contenido pendiente", description:"Error al enviar contenido pendiente después de interacción.", detail:entry.comentario||"Sin motivo registrado." };
   }
+  if(entry.tipo==="contenido_pendiente_sin_resultado"){
+    return { kind:"Interacción sin pendiente", description:entry.comentario||"Paciente tocó un botón de plantilla, pero no había contenido pendiente." };
+  }
   if(entry.tipo==="recordatorio_consulta_programado"){
     return { kind:"Recordatorio de consulta", description:"Recordatorio de fin de seguimiento programado.", detail:entry.comentario||"" };
   }
@@ -2109,7 +2112,7 @@ function renderTipHistory(){
   if(!rows.length){el.innerHTML=`<div class="empty-h">${tipSearch?'No se encontraron pacientes.':patientId?'No hay tips registrados para este paciente.':'Sin tips enviados o programados en esta vista.'}</div>`;return}
   el.innerHTML=rows.map(r=>{
     const eventDate=r.status==='enviado'?(r.sentAt||r.scheduledAt||r.when||r.createdAt):r.status==='cancelado'?(r.cancelledAt||r.scheduledAt||r.when||r.createdAt):(r.scheduledAt||r.when||r.createdAt);
-    const eventLabel=r.status==='enviado'?'Enviado':r.status==='cancelado'?'Cancelado':'Programado para';
+    const eventLabel=r.status==='enviado'?'Enviado':r.status==='cancelado'?'Cancelado':r.status==='pendiente_interaccion'?'Esperando clic del paciente':'Programado para';
     const errorLabel=friendlyTipError(r.error);
     const errorDetail=[
       `Error completo: ${r.error||'Sin detalle técnico'}`,
@@ -2120,12 +2123,12 @@ function renderTipHistory(){
       `Plantilla previa: ${r.utilityTemplateId?utilityTemplateLabel(r.utilityTemplateId):'Sin plantilla previa'}`,
       `Etapa: ${r.deliveryStage==='plantilla_previa'?'Plantilla previa':r.deliveryStage==='contenido_principal'?'Contenido principal':'Sin registro'}`,
     ].join('\n');
-    const statusLabel=r.status==='error'?(r.hidden?'Error revisado':'Error registrado'):r.status;
+    const statusLabel=r.status==='error'?(r.hidden?'Error revisado':'Error registrado'):r.status==='pendiente_interaccion'?'Esperando interacción':r.status;
     return `<div class="tip-history-row">
     <div><strong>${escapeHtml(r.patientName)}</strong><br><span style="color:#7a9a7a">${escapeHtml(r.tipTitle)}</span></div>
     <div><span style="color:#7a9a7a">${eventLabel}</span><br>${new Date(eventDate).toLocaleString('es-CL')}</div>
     <div>${tipLabel(r.tipType)}<br><span style="color:#7a9a7a">📁 ${escapeHtml(folderName(r.folderId))}</span><br><span style="color:#7a9a7a">${r.utilityTemplateId?`Previo: ${escapeHtml(utilityTemplateLabel(r.utilityTemplateId))}`:'Sin plantilla previa'}</span><br><span style="color:#7a9a7a">Tel: ${escapeHtml(r.phone||'Sin registro')}</span></div>
-    <div><span class="tag ${r.status==='programado'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(statusLabel)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Contenido: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.status==='error'?`<br><span style="color:#c94040">${escapeHtml(tipErrorExplanation(r.error))}</span><div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="toggleTipErrorDetail('${r.id}')">Ver detalle</button>${!r.hidden?`<button class="bam" onclick="reviewTipError('${r.id}')">Marcar como revisado</button>`:''}</div><div class="tip-error-detail" id="tip-error-detail-${r.id}">${escapeHtml(errorDetail)}</div>`:''}${r.utilityTemplateMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID plantilla: ${escapeHtml(r.utilityTemplateMessageId)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID contenido: ${escapeHtml(r.metaMessageId)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
+    <div><span class="tag ${r.status==='programado'||r.status==='pendiente_interaccion'?'tb':r.status==='error'||r.status==='cancelado'?'tr':'tg'}">${escapeHtml(statusLabel)}</span>${r.deliveryStatus?`<br><span style="color:#7a9a7a">Contenido: ${escapeHtml(r.deliveryStatus)}</span>`:''}${r.status==='error'?`<br><span style="color:#c94040">${escapeHtml(tipErrorExplanation(r.error))}</span><div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="toggleTipErrorDetail('${r.id}')">Ver detalle</button>${!r.hidden?`<button class="bam" onclick="reviewTipError('${r.id}')">Marcar como revisado</button>`:''}</div><div class="tip-error-detail" id="tip-error-detail-${r.id}">${escapeHtml(errorDetail)}</div>`:''}${r.utilityTemplateMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID plantilla: ${escapeHtml(r.utilityTemplateMessageId)}</span>`:''}${r.metaMessageId?`<br><span style="color:#7a9a7a;word-break:break-all">ID contenido: ${escapeHtml(r.metaMessageId)}</span>`:''}${['programado','pendiente'].includes(r.status)?`<div class="tip-actions" style="margin-top:7px"><button class="bam" onclick="openScheduledTip('${r.id}')">Editar</button><button class="md2" onclick="cancelScheduledTip('${r.id}')">Cancelar</button></div>`:''}</div>
   </div>`}).join('');
 }
 function toggleTipErrorDetail(id){

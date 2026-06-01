@@ -359,6 +359,43 @@ async function enviarMeta(clientId, meta, options = {}) {
           deliveryStatus: "accepted",
           deliveryStage: "plantilla_previa",
         });
+        if (utilityTemplate.requiresPatientClick || utilityTemplate.hasButton) {
+          console.log("Plantilla con botón seleccionada", JSON.stringify({ phone, nombre, role, utilityTemplateId, utilityTemplateLabel: utilityTemplate.label }));
+          console.log("No se enviará contenido principal todavía", JSON.stringify({ phone, type: "goal", goalId: meta.id }));
+          console.log("Guardando contenido pendiente hasta interacción", JSON.stringify({ phone, type: "goal", goalId: meta.id, templateMessageId: utilityTemplateMessageId }));
+          const pending = pendingContent.upsertWaiting({
+            clientId,
+            phone,
+            patientName: nombre,
+            type: "goal",
+            triggerTemplateId: utilityTemplateId,
+            triggerTemplateName: utilityTemplates.configuredName(utilityTemplate),
+            triggerButtonLabels: [utilityTemplate.buttonLabel || "Ver seguimiento", "Ver seguimiento", "Ver mensaje", "Ver recomendación", "Ver recordatorio", "Vamos"],
+            templateMessageId: utilityTemplateMessageId,
+            payload: {
+              goalId: meta.id,
+              meta,
+              utilityTemplateId,
+              utilityTemplateLabel: utilityTemplate.label,
+            },
+          });
+          history.registrar(clientId, phone, nombre, {
+            tipo: "contenido_pendiente_interaccion",
+            meta: meta.titulo,
+            goalId: meta.id,
+            metaEmoji: meta.emoji || "⏳",
+            comentario: "Plantilla previa enviada. Contenido principal esperando interacción del paciente.",
+            direccion: "sistema",
+            pendingContentId: pending.id,
+            templateMessageId: utilityTemplateMessageId,
+            utilityTemplateId,
+            utilityTemplateLabel: utilityTemplate.label,
+          });
+          const individualResult = { nombre, phone, clientId, role, plantillaPrevia: "enviada", contenidoPrincipal: "esperando_interaccion", messageId: "", interactionMessageId: "", templateMessageId: utilityTemplateMessageId, pendingContentId: pending.id, ok: true, pending: true };
+          console.log("Resultado final individual", JSON.stringify(individualResult));
+          results.push(individualResult);
+          continue;
+        }
       }
       console.log("Continuando con envío de contenido principal");
       console.log(`Enviando contenido principal a ${nombre}/${phone}`, JSON.stringify({ role, tipo: "meta", meta: meta.titulo }));
@@ -530,10 +567,23 @@ async function sendPendingTipContent(pending, client, phone, nombre) {
 
 async function sendPendingContentAfterInteraction(phone, client, nombre, interactionText) {
   const waiting = pendingContent.findWaitingByPhone(phone);
-  console.log("Buscando contenido pendiente para interacción de plantilla", JSON.stringify({ phone, count: waiting.length, interactionText }));
-  if (!waiting.length) return;
+  console.log("Paciente tocó botón de plantilla", JSON.stringify({ phone, interactionText }));
+  console.log("Buscando contenido pendiente por teléfono", JSON.stringify({ phone, count: waiting.length, interactionText }));
+  if (!waiting.length) {
+    console.log("No hay contenido pendiente para este teléfono", JSON.stringify({ phone, interactionText }));
+    history.registrar(client.id, phone, nombre, {
+      tipo: "contenido_pendiente_sin_resultado",
+      meta: "Interacción con plantilla previa",
+      metaEmoji: "ℹ️",
+      comentario: `${interactionText}, pero no había contenido pendiente.`,
+      direccion: "sistema",
+    });
+    return;
+  }
   const pending = waiting[0];
+  console.log("Contenido pendiente encontrado", JSON.stringify({ pendingId: pending.id, phone, type: pending.type }));
   try {
+    console.log("Enviando contenido pendiente", JSON.stringify({ pendingId: pending.id, phone, type: pending.type }));
     const result = pending.type === "tip"
       ? await sendPendingTipContent(pending, client, phone, nombre)
       : await sendPendingGoalContent(pending, client, phone, nombre);
@@ -547,6 +597,7 @@ async function sendPendingContentAfterInteraction(phone, client, nombre, interac
       pendingContentId: pending.id,
       metaMessageId: result.metaMessageId || "",
     });
+    console.log("Contenido pendiente enviado correctamente", JSON.stringify({ pendingId: pending.id, phone, type: pending.type, result }));
     console.log("Contenido pendiente enviado después de interacción del paciente", JSON.stringify({ pendingId: pending.id, phone, type: pending.type, result }));
   } catch (e) {
     pendingContent.markError(pending.id, e.message);
