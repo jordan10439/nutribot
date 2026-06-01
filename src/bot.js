@@ -182,6 +182,45 @@ function calcularProgresoMeta(client, phone, currentMeta) {
   };
 }
 
+function sameGoal(entry, meta) {
+  if (!entry || !meta) return false;
+  const entryGoal = entry.goalId || entry.meta || "";
+  const metaGoal = meta.id || meta.titulo || "";
+  return String(entryGoal) === String(metaGoal) || String(entry.meta || "") === String(meta.titulo || "");
+}
+
+function partnerPhoneFor(client, phone) {
+  const normalizedPhone = pendingContent.normalizePhone(phone);
+  return (client.phones || []).find(p => pendingContent.normalizePhone(p) !== normalizedPhone) || "";
+}
+
+function partnerHasPendingGoalInteraction(partnerPhone, meta) {
+  if (!partnerPhone || !meta) return false;
+  return pendingContent.findWaitingByPhone(partnerPhone).some(item => (
+    item.type === "goal" &&
+    item.status === "waiting_patient_interaction" &&
+    sameGoal({ goalId: item.payload?.goalId, meta: item.payload?.meta?.titulo }, meta)
+  ));
+}
+
+function partnerCompletedGoal(client, partnerPhone, meta) {
+  const normalizedPartner = pendingContent.normalizePhone(partnerPhone);
+  return history.getHistorial(client.id).some(entry => (
+    entry.tipo === "completada" &&
+    pendingContent.normalizePhone(entry.phone) === normalizedPartner &&
+    sameGoal(entry, meta)
+  ));
+}
+
+function partnerProgressBlock(client, phone, meta) {
+  if (esIndividual(client)) return "";
+  const partnerPhone = partnerPhoneFor(client, phone);
+  if (!partnerPhone || partnerHasPendingGoalInteraction(partnerPhone, meta)) return "";
+  if (!partnerCompletedGoal(client, partnerPhone, meta)) return "";
+  const partnerName = nombreDe(client, partnerPhone);
+  return `\n\n👥 *Avance en pareja:*\n${partnerName} ya completó esta meta ✅`;
+}
+
 function resumenProgresoPaciente(progreso) {
   return [
     "⭐ *Puntos de esta meta: 10/10*",
@@ -741,7 +780,7 @@ async function procesarMensaje(m) {
         }, ms);
         await enviar(phone, `Entendido. Te volveré a recordar en ${value} ${unit}.`);
       } else {
-        await enviar(phone, `Entendido. No volveré a insistir por ahora. 💚`);
+        await enviar(phone, `Entendido. No volveré a insistir por ahora. 💚${partnerProgressBlock(client, phone, meta)}`);
       }
     } else {
       // Re-send buttons
@@ -872,15 +911,30 @@ async function procesarMensaje(m) {
       });
 
       if (!solo) {
-        const partner = client.phones.find(p => p !== phone);
+        const partner = partnerPhoneFor(client, phone);
+        const partnerPending = partnerHasPendingGoalInteraction(partner, s.meta);
         if (resultado.ambos) {
           msgFinal += `\n\n🎊 *¡Los dos completaron la meta!* ¡Equipo increíble! 💚`;
-          if (partner) await enviar(partner, `🎊 *¡${nombre} también completó la meta!*\n\n${resumenPts}`);
+          history.registrar(client.id, phone, nombre, {
+            tipo: "avance_pareja",
+            meta: s.meta?.titulo,
+            goalId: s.meta?.id || "",
+            metaEmoji: "👥",
+            comentario: "La pareja también completó esta meta. No se envió aviso proactivo para evitar mensajes fuera de contexto.",
+            direccion: "sistema",
+          });
         } else {
           msgFinal += `\n\n⏳ Esperando que tu pareja complete...`;
-          if (partner && state.get(partner).flow !== state.FLOW.DONE) {
-            await enviar(partner, `💪 *¡${nombre} ya completó la meta!*\nResponde *LISTO* cuando termines 🚀`);
-          }
+          history.registrar(client.id, phone, nombre, {
+            tipo: "avance_pareja",
+            meta: s.meta?.titulo,
+            goalId: s.meta?.id || "",
+            metaEmoji: "👥",
+            comentario: partnerPending
+              ? "La pareja aún no recibió la meta principal; no se envió aviso prematuro."
+              : "La pareja aún no completa esta meta; no se envió aviso proactivo.",
+            direccion: "sistema",
+          });
         }
       }
 
