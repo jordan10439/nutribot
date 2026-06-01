@@ -857,7 +857,13 @@ function patientChoiceLabel(client,index=null){
   const names=client?.nombres||[];
   const name=index===null?clientDisplayName(client):(names[index]||names[0]||"Paciente");
   const sameNameCount=(clients||[]).filter(item=>clientDisplayName(item).toLowerCase()===clientDisplayName(client).toLowerCase()).length;
-  return sameNameCount>1||((client?.phones||[]).length>1&&index===null)?`${name} · ${clientKindLabel(client)}`:name;
+  const sharesPhone=(clients||[]).some(item=>item.id!==client?.id&&(item.phones||[]).some(phone=>(client?.phones||[]).map(normalizePhone).includes(normalizePhone(phone))));
+  return sameNameCount>1||sharesPhone||((client?.phones||[]).length>1&&index===null)?`${name} · ${clientKindLabel(client)}`:name;
+}
+
+function duplicatePhoneMatches(phones,editId=""){
+  const normalized=phones.map(normalizePhone).filter(Boolean);
+  return clients.filter(client=>client.id!==editId&&(client.phones||[]).some(phone=>normalized.includes(normalizePhone(phone))));
 }
 
 function clientCreatedTime(client){
@@ -2420,6 +2426,12 @@ async function saveClient(sendWelcome=false){
   const welcomeTemplateType=sendWelcome?selectedWelcomeType("welcome_template_type"):"";
   if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
   const editId=I("client_edit_id").value;
+  const duplicates=duplicatePhoneMatches(phones,editId);
+  if(duplicates.length){
+    const detail=duplicates.map(client=>`- ${clientDisplayName(client)} · ${clientKindLabel(client)}`).join("\n");
+    const ok=confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
+    if(!ok)return;
+  }
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
   const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType};
   const res=await api(editId?"PUT":"POST",editId?`/clients/${editId}`:"/clients",payload);

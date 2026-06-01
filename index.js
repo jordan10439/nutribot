@@ -50,8 +50,6 @@ function cleanClientPayload(body = {}, existing = null) {
   for (const phone of phones) {
     if (seen.has(phone)) throw new Error(`Teléfono duplicado en este paciente: ${phone}`);
     seen.add(phone);
-    const duplicate = db.getAll().find(client => client.id !== existing?.id && (client.phones || []).some(p => normalizePhone(p) === phone));
-    if (duplicate) throw new Error(`El teléfono ${phone} ya existe en otro paciente`);
   }
   return {
     ...(existing || {}),
