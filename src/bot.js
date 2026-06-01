@@ -9,8 +9,8 @@ const msg     = require("./messages");
 const utilityTemplates = require("./utilityTemplates");
 const { explainMetaError } = require("./metaErrors");
 
-const WELCOME_TEMPLATE_WITH_BUTTON_NAME = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_NAME || process.env.META_WELCOME_TEMPLATE_NAME || process.env.META_TEMPLATE_NAME || "";
-const WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE || process.env.META_WELCOME_TEMPLATE_LANGUAGE || "";
+const WELCOME_TEMPLATE_WITH_BUTTON_NAME = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_NAME || "";
+const WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE = process.env.META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE || "";
 const WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME = process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_NAME || "";
 const WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE = process.env.META_WELCOME_TEMPLATE_WITHOUT_BUTTON_LANGUAGE || "";
 
@@ -36,8 +36,8 @@ function welcomeTemplateConfig(type = "with_button") {
   return {
     type: cleanType,
     label: "Bienvenida con botón",
-    name: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITH_BUTTON_NAME o META_WELCOME_TEMPLATE_NAME", "el nombre técnico real de la plantilla de bienvenida con botón"),
-    languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE o META_WELCOME_TEMPLATE_LANGUAGE", "el idioma de la plantilla de bienvenida con botón"),
+    name: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_NAME, "META_WELCOME_TEMPLATE_WITH_BUTTON_NAME", "el nombre técnico real de la plantilla de bienvenida con botón"),
+    languageCode: configuredWelcomeValue(WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE, "META_WELCOME_TEMPLATE_WITH_BUTTON_LANGUAGE", "el idioma de la plantilla de bienvenida con botón"),
   };
 }
 
@@ -48,19 +48,27 @@ function welcomeTemplateOptions() {
     try {
       const config = welcomeTemplateConfig(type);
       options.push({
+        id: config.type,
         type: config.type,
         label: config.label,
+        metaTemplateName: config.name,
+        metaLanguageCode: config.languageCode,
         templateName: config.name,
         languageCode: config.languageCode,
+        hasButton: config.type === "with_button",
         available: true,
       });
     } catch (e) {
       console.log("Plantilla de bienvenida no disponible", JSON.stringify({ type, error: e.message }));
       options.push({
+        id: type,
         type,
         label,
+        metaTemplateName: "",
+        metaLanguageCode: "",
         templateName: "",
         languageCode: "",
+        hasButton: type === "with_button",
         available: false,
         error: e.message,
       });

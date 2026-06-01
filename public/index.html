@@ -603,23 +603,32 @@ async function loadUtilityTemplates(){
 async function loadWelcomeTemplates(){
   const templates=await api("GET","/welcome-templates");
   welcomeTemplates=Array.isArray(templates)?templates:[];
-  console.log("Plantillas de bienvenida recibidas", welcomeTemplates.map(t=>({type:t.type,label:t.label,available:t.available!==false,templateName:t.templateName,languageCode:t.languageCode,error:t.error})));
+  console.log("Plantillas de bienvenida recibidas", welcomeTemplates.map(t=>({id:t.id||t.type,label:t.label,available:t.available!==false,metaTemplateName:t.metaTemplateName||t.templateName,metaLanguageCode:t.metaLanguageCode||t.languageCode,hasButton:t.hasButton,error:t.error})));
 }
 function fillWelcomeSelect(selectId,hintId,selected="with_button"){
   const input=I(selectId); if(!input)return;
   const available=welcomeTemplates.filter(t=>t.available!==false);
-  input.value=available.some(t=>t.type===selected)?selected:(available[0]?.type||"");
+  input.value=available.some(t=>welcomeTemplateId(t)===selected)?selected:(welcomeTemplateId(available[0])||"");
   renderWelcomeChoices(selectId,hintId);
   updateWelcomeHint(selectId,hintId);
 }
 function updateWelcomeHint(selectId,hintId){
   const hint=I(hintId); if(!hint)return;
   const value=I(selectId)?.value||"";
-  const template=welcomeTemplates.find(t=>t.type===value);
-  hint.textContent=template?.available!==false?`Plantilla Meta: ${template.templateName} · ${template.languageCode}`:"Falta configurar una plantilla de bienvenida aprobada en Meta.";
+  const template=welcomeTemplates.find(t=>welcomeTemplateId(t)===value);
+  hint.textContent=template?.available!==false?`Plantilla Meta: ${welcomeTemplateName(template)} · ${welcomeTemplateLanguage(template)}`:"Falta configurar una plantilla de bienvenida aprobada en Meta.";
 }
 function selectedWelcomeType(selectId){
   return I(selectId)?.value||"";
+}
+function welcomeTemplateId(template){
+  return template?.id||template?.type||"";
+}
+function welcomeTemplateName(template){
+  return template?.metaTemplateName||template?.templateName||"";
+}
+function welcomeTemplateLanguage(template){
+  return template?.metaLanguageCode||template?.languageCode||"";
 }
 function welcomeFeatureLabel(type){
   return type==="without_button"?"Sin botón":'Incluye botón "Vamos"';
@@ -638,13 +647,14 @@ function renderWelcomeChoices(selectId,hintId){
     {type:"without_button",label:"Bienvenida sin botón",available:false,error:"Falta configurar la plantilla de bienvenida sin botón en Meta."}
   ];
   box.innerHTML=templates.map(t=>{
+    const id=welcomeTemplateId(t);
     const available=t.available!==false;
-    const detail=available?`Plantilla Meta: ${escapeHtml(t.templateName)} · ${escapeHtml(t.languageCode)}`:escapeHtml(t.error||"Falta configurar esta plantilla en Meta.");
-    return `<button type="button" class="welcome-choice-card ${welcomeCardClass(t.type)} ${current===t.type?"active":""} ${available?"":"disabled"}" onclick="chooseWelcomeTemplate('${selectId}','${hintId}','${escapeHtml(t.type)}')" ${available?"":'aria-disabled="true"'}><strong>${escapeHtml(t.label)}</strong><span>${detail}</span><span class="welcome-feature">${escapeHtml(welcomeFeatureLabel(t.type))}</span>${available?"":`<div class="welcome-choice-error">${detail}</div>`}</button>`;
+    const detail=available?`Plantilla Meta: ${escapeHtml(welcomeTemplateName(t))} · ${escapeHtml(welcomeTemplateLanguage(t))}`:escapeHtml(t.error||"Falta configurar esta plantilla en Meta.");
+    return `<button type="button" class="welcome-choice-card ${welcomeCardClass(id)} ${current===id?"active":""} ${available?"":"disabled"}" onclick="chooseWelcomeTemplate('${selectId}','${hintId}','${escapeHtml(id)}')" ${available?"":'aria-disabled="true"'}><strong>${escapeHtml(t.label)}</strong><span>${detail}</span><span class="welcome-feature">${escapeHtml(welcomeFeatureLabel(id))}</span>${available?"":`<div class="welcome-choice-error">${detail}</div>`}</button>`;
   }).join("");
 }
 function chooseWelcomeTemplate(selectId,hintId,type){
-  const template=welcomeTemplates.find(t=>t.type===type);
+  const template=welcomeTemplates.find(t=>welcomeTemplateId(t)===type);
   if(template?.available===false){
     showToast(`⚠️ ${template.error||"Falta configurar esta plantilla en Meta."}`);
     return;
