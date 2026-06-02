@@ -2572,17 +2572,24 @@ async function saveClient(sendWelcome=false){
   const welcomeTemplateType=sendWelcome?selectedWelcomeType("welcome_template_type"):"";
   if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
   const editId=I("client_edit_id").value;
-  const duplicates=[...duplicatePhoneMatches(phones,editId), ...await duplicatePhoneMatchesServer(phones,editId)];
-  const uniqueDuplicates=duplicates.filter((item,index,arr)=>arr.findIndex(other=>(other.clientId||other.id) === (item.clientId||item.id))===index);
   let allowDuplicatePhones=false;
-  if(uniqueDuplicates.length){
-    const detail=uniqueDuplicates.map(client=>`- ${client.name||clientDisplayName(client)} · ${client.type||clientKindLabel(client)}`).join("\n");
-    const ok=confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
-    if(!ok)return;
-    allowDuplicatePhones=true;
+  try{
+    const duplicates=[...duplicatePhoneMatches(phones,editId), ...await duplicatePhoneMatchesServer(phones,editId)];
+    const uniqueDuplicates=duplicates.filter((item,index,arr)=>arr.findIndex(other=>(other.clientId||other.id) === (item.clientId||item.id))===index);
+    if(uniqueDuplicates.length){
+      const detail=uniqueDuplicates.map(client=>`- ${client.name||clientDisplayName(client)} · ${client.type||clientKindLabel(client)}`).join("\n");
+      const continueAnyway=confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
+      if(!continueAnyway)return;
+      allowDuplicatePhones=true;
+      console.log("Duplicado detectado, usuario decidió continuar");
+    }
+  }catch(e){
+    console.warn("No se pudo revisar duplicados, se continuará igual",e);
   }
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
   const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType,allowDuplicatePhones,allowDuplicatePhone:allowDuplicatePhones};
+  console.log("Intentando guardar paciente",payload);
+  console.log("Enviando paciente al backend");
   const res=await api(editId?"PUT":"POST",editId?`/clients/${editId}`:"/clients",payload);
   if(editId&&sendWelcome&&!res.error){
     const welcomeRes=await api("POST",`/clients/${editId}/welcome`,{welcomeTemplateType});
