@@ -194,7 +194,7 @@ app.post("/api/clients", auth, async (req, res) => {
       await sendWelcomeToClient(client, req.body.welcomeTemplateType || "with_button");
     } catch (e) {
       setWelcomeState(client, { status: "error", templateType: req.body.welcomeTemplateType || "with_button", error: e.message });
-      return res.status(502).json({ error: e.message, client, welcomeSent: false });
+      return res.json({ ok: true, client, welcomeSent: false, welcomeError: e.message, duplicateWarnings });
     }
   }
   res.json({ ok: true, client, welcomeSent: !!req.body.sendWelcome, duplicateWarnings });

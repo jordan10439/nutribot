@@ -2590,6 +2590,7 @@ async function saveClient(sendWelcome=false){
   }
   closeM("cm");
   if(res.error){showToast(`⚠️ ${res.error}`);loadAll();return}
+  if(res.welcomeError){showToast(`✅ Paciente guardado. ⚠️ Bienvenida no enviada: ${res.welcomeError}`);loadAll();return}
   showToast(sendWelcome?"✅ Paciente guardado — bienvenida enviada":"✅ Paciente guardado");loadAll();
 }
 async function delClient(id){
