@@ -212,11 +212,12 @@ app.put("/api/clients/:id", auth, (req, res) => {
 });
 
 app.delete("/api/clients/:id", auth, (req, res) => {
+  console.log("DELETE /api/clients/:id", req.params.id);
   const existing = db.getById(req.params.id);
   if (!existing) return res.status(404).json({ error: "Paciente no encontrado" });
   db.remove(req.params.id);
   recargarTodos();
-  res.json({ ok: true, deleted: true, clientId: req.params.id });
+  res.json({ ok: true, deleted: true, id: req.params.id, clientId: req.params.id });
 });
 
 // ── Metas ──────────────────────────────────────────────────────────────────────
@@ -268,15 +269,19 @@ app.put("/api/clients/:id/goals/:goalId", auth, (req, res) => {
 });
 
 app.delete("/api/clients/:id/goals/:goalId", auth, (req, res) => {
+  console.log("DELETE /api/clients/:id/goals/:goalId", JSON.stringify({ clientId: req.params.id, goalId: req.params.goalId }));
   const client = db.getById(req.params.id);
   if (!client) return res.status(404).json({ error: "No encontrado" });
+  const goal = (client.goals || []).find(g => g.id === req.params.goalId);
+  if (!goal) return res.status(404).json({ error: "Meta no encontrada" });
   client.goals = (client.goals || []).filter(g => g.id !== req.params.goalId);
   db.upsert(client);
   recargarTodos();
-  res.json({ ok: true });
+  res.json({ ok: true, deleted: true, clientId: client.id, goalId: req.params.goalId });
 });
 
 function cancelScheduledGoal(req, res) {
+  console.log("DELETE/cancel meta programada", JSON.stringify({ clientId: req.params.id, goalId: req.params.goalId }));
   const client = db.getById(req.params.id);
   if (!client) return res.status(404).json({ error: "No encontrado" });
   const goal = client.goals?.find(g => g.id === req.params.goalId);
@@ -878,8 +883,11 @@ app.put("/api/tips/:id", auth, (req, res) => {
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.delete("/api/tips/:id", auth, (req, res) => {
+  console.log("DELETE /api/tips/:id", req.params.id);
+  const tip = tips.getTip(req.params.id);
+  if (!tip) return res.status(404).json({ error: "Tip no encontrado" });
   tips.deleteTip(req.params.id);
-  res.json({ ok: true });
+  res.json({ ok: true, deleted: true, tipId: req.params.id });
 });
 app.get("/api/tip-folders", auth, (req, res) => res.json(tips.listFolders()));
 app.post("/api/tip-folders", auth, (req, res) => {
@@ -925,10 +933,22 @@ app.put("/api/tip-sends/:id", auth, async (req, res) => {
   }
 });
 app.post("/api/tip-sends/:id/cancel", auth, (req, res) => {
+  console.log("POST /api/tip-sends/:id/cancel", req.params.id);
   try {
     const send = tips.cancelScheduledSend(req.params.id);
     console.log("Tip programado cancelado", JSON.stringify({ id: send.id }));
-    res.json({ ok: true, send });
+    res.json({ ok: true, cancelled: true, sendId: send.id, send });
+  } catch (e) {
+    console.error("Error al cancelar tip programado", e.message);
+    res.status(400).json({ error: e.message });
+  }
+});
+app.delete("/api/tip-sends/:id/cancel", auth, (req, res) => {
+  console.log("DELETE /api/tip-sends/:id/cancel", req.params.id);
+  try {
+    const send = tips.cancelScheduledSend(req.params.id);
+    console.log("Tip programado cancelado", JSON.stringify({ id: send.id }));
+    res.json({ ok: true, cancelled: true, sendId: send.id, send });
   } catch (e) {
     console.error("Error al cancelar tip programado", e.message);
     res.status(400).json({ error: e.message });

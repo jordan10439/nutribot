@@ -491,6 +491,18 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   </div>
 </div>
 
+<!-- Modal Confirmacion Eliminacion -->
+<div class="mo" id="deleteConfirmModal">
+  <div class="modal">
+    <h2 id="delete_confirm_title">Confirmar eliminación</h2>
+    <p id="delete_confirm_message" style="font-size:13px;color:#456145;line-height:1.45;margin:0 0 10px">¿Seguro que quieres eliminar este registro?</p>
+    <div class="ma">
+      <button class="bc" onclick="resolveDeleteConfirmModal(false)">Cancelar</button>
+      <button class="md2" onclick="resolveDeleteConfirmModal(true)">Eliminar</button>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="welcomeModal">
   <div class="modal">
     <h2>Reenviar bienvenida</h2>
@@ -2415,8 +2427,12 @@ async function saveTip(){
   }
 }
 async function deleteTip(id){
-  if(!confirm('¿Eliminar este tip?'))return;
-  await api('DELETE',`/tips/${id}`);
+  console.log("Eliminar tip",id);
+  const ok=await confirmDeleteModal("¿Seguro que quieres eliminar este tip?","Eliminar tip");
+  if(!ok)return;
+  const res=await api('DELETE',`/tips/${id}`);
+  console.log("Respuesta eliminar tip",res);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
   await loadTips(); showToast('🗑️ Tip eliminado');
 }
 function buildTipMessage(tip){
@@ -2541,8 +2557,11 @@ async function saveScheduledTip(){
   showToast('Tip programado actualizado');
 }
 async function cancelScheduledTip(id){
-  if(!confirm('Cancelar este envio programado?'))return;
-  const res=await api('POST',`/tip-sends/${id}/cancel`);
+  console.log("Eliminar/cancelar tip programado",id);
+  const ok=await confirmDeleteModal("¿Seguro que quieres cancelar este envío programado?","Cancelar envío programado");
+  if(!ok)return;
+  const res=await api('DELETE',`/tip-sends/${id}/cancel`);
+  console.log("Respuesta eliminar/cancelar tip programado",res);
   if(res.error){showToast(res.error);return}
   await loadTips();
   showToast('Tip programado cancelado');
@@ -2593,6 +2612,22 @@ function resolveDuplicatePhoneModal(value){
   if(duplicatePhoneModalResolver){
     duplicatePhoneModalResolver(!!value);
     duplicatePhoneModalResolver=null;
+  }
+}
+let deleteConfirmModalResolver=null;
+function confirmDeleteModal(message,title="Confirmar eliminación"){
+  return new Promise(resolve=>{
+    deleteConfirmModalResolver=resolve;
+    I("delete_confirm_title").textContent=title;
+    I("delete_confirm_message").textContent=message;
+    I("deleteConfirmModal").classList.add("open");
+  });
+}
+function resolveDeleteConfirmModal(value){
+  I("deleteConfirmModal").classList.remove("open");
+  if(deleteConfirmModalResolver){
+    deleteConfirmModalResolver(!!value);
+    deleteConfirmModalResolver=null;
   }
 }
 async function saveClient(sendWelcome=false){
@@ -2652,8 +2687,11 @@ async function saveClient(sendWelcome=false){
 async function delClient(id){
   const client=clients.find(c=>c.id===id);
   const label=client?clientDisplayName(client):"este paciente";
-  if(!confirm(`¿Eliminar ${label}? Esta acción quitará su ficha del panel.`))return;
+  console.log("Eliminar paciente click",id);
+  const ok=await confirmDeleteModal(`¿Seguro que quieres eliminar ${label}? Esta acción quitará su ficha del panel.`,"Eliminar paciente");
+  if(!ok)return;
   const res=await api("DELETE",`/clients/${id}`);
+  console.log("Respuesta eliminar paciente",res);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   clients=clients.filter(c=>c.id!==id);
   showToast("🗑️ Paciente eliminado");
@@ -2829,10 +2867,21 @@ async function saveMeta(sendNow=false){
   }
   closeM("mm");loadAll();
 }
-async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadAll()}
+async function deleteMeta(cid,gid){
+  console.log("Eliminar meta",cid,gid);
+  const ok=await confirmDeleteModal("¿Seguro que quieres eliminar esta meta?","Eliminar meta");
+  if(!ok)return;
+  const res=await api("DELETE",`/clients/${cid}/goals/${gid}`);
+  console.log("Respuesta eliminar meta",res);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  showToast("🗑️ Eliminada");loadAll();
+}
 async function deleteScheduledGoal(cid,gid){
-  if(!confirm("¿Seguro que quieres eliminar esta meta programada?"))return;
+  console.log("Eliminar meta programada",cid,gid);
+  const ok=await confirmDeleteModal("¿Seguro que quieres eliminar esta meta programada?","Eliminar meta programada");
+  if(!ok)return;
   const res=await api("DELETE",`/clients/${cid}/goals/${gid}/cancel-scheduled`);
+  console.log("Respuesta eliminar meta programada",res);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   const client=clients.find(c=>c.id===cid);
   if(client)client.goals=(client.goals||[]).filter(goal=>goal.id!==gid);
