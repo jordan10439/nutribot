@@ -1412,7 +1412,7 @@ function goalPhotoSummary(goal){
 
 function goalMemberSummary(goal){
   const members=goal.members||[];
-  if(!members.length)return "";
+  if(members.length<2)return "";
   return `<div class="goal-small" style="margin-top:6px">${escapeHtml(goal.memberCompletionSummary||"")}<br>${members.map(member=>`${escapeHtml(member.name)}: ${escapeHtml(member.statusLabel||"Pendiente")}${member.difficulty?` · ${escapeHtml(member.difficulty)}`:""}`).join("<br>")}</div>`;
 }
 
@@ -1451,7 +1451,7 @@ function memberPhotoSummary(member){
 
 function goalMemberDetails(goal){
   const members=goal.members||[];
-  if(!members.length)return "";
+  if(members.length<2)return "";
   return `<div style="font-size:12px;font-weight:800;color:#2a5738;margin:10px 0 5px">Seguimiento por integrante</div>
   <div class="goal-detail-grid">${members.map(member=>`<div class="goal-detail-field">
     <strong>${escapeHtml(member.name)}</strong>

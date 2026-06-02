@@ -100,7 +100,11 @@ function nombreDe(client, phone) {
   const index = (client.phones || []).findIndex(p => pendingContent.normalizePhone(p) === normalizedPhone);
   return client.nombres?.[index] ?? client.nombres?.[0] ?? "Amig@";
 }
-function esIndividual(client) { return client.phones.length === 1; }
+function isCoupleClient(client) {
+  const type = String(client?.type || client?.tipo || "").toLowerCase();
+  return type === "couple" || type === "pareja";
+}
+function esIndividual(client) { return !isCoupleClient(client); }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
 
 function isMetaFlowReply(value) {
@@ -190,6 +194,7 @@ function sameGoal(entry, meta) {
 }
 
 function partnerPhoneFor(client, phone) {
+  if (!isCoupleClient(client)) return "";
   const normalizedPhone = pendingContent.normalizePhone(phone);
   return (client.phones || []).find(p => pendingContent.normalizePhone(p) !== normalizedPhone) || "";
 }
@@ -204,6 +209,7 @@ function partnerHasPendingGoalInteraction(partnerPhone, meta) {
 }
 
 function partnerCompletedGoal(client, partnerPhone, meta) {
+  if (!isCoupleClient(client)) return false;
   const normalizedPartner = pendingContent.normalizePhone(partnerPhone);
   return history.getHistorial(client.id).some(entry => (
     entry.tipo === "completada" &&
@@ -213,7 +219,7 @@ function partnerCompletedGoal(client, partnerPhone, meta) {
 }
 
 function partnerProgressBlock(client, phone, meta) {
-  if (esIndividual(client)) return "";
+  if (!isCoupleClient(client)) return "";
   const partnerPhone = partnerPhoneFor(client, phone);
   if (!partnerPhone || partnerHasPendingGoalInteraction(partnerPhone, meta)) return "";
   if (!partnerCompletedGoal(client, partnerPhone, meta)) return "";
@@ -882,7 +888,7 @@ async function procesarMensaje(m) {
         });
       }
       if (requiereRevision) console.log("Meta marcada para revisión posterior", JSON.stringify({ phone, meta: s.meta?.titulo, motivo: dificultad.dificultad === "Difícil" ? "dificultad alta" : "respuesta emocional negativa" }));
-      const resultado = points.sumar(client.id, phone, client.phones.length);
+      const resultado = points.sumar(client.id, phone, isCoupleClient(client) ? (client.phones || []).length : 1);
       state.set(phone, { flow: state.FLOW.ESPERANDO_COMENTARIO });
 
       const aiMsg = await respuestaIA(nombre,
@@ -912,7 +918,7 @@ async function procesarMensaje(m) {
         direccion: "saliente",
       });
 
-      if (!solo) {
+      if (isCoupleClient(client)) {
         const partner = partnerPhoneFor(client, phone);
         const partnerPending = partnerHasPendingGoalInteraction(partner, s.meta);
         if (resultado.ambos) {

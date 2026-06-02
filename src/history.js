@@ -57,6 +57,11 @@ function normalizePhone(phone) {
   return String(phone || "").replace(/\D/g, "");
 }
 
+function isCoupleClient(client) {
+  const type = String(client?.type || client?.tipo || "").toLowerCase();
+  return type === "couple" || type === "pareja";
+}
+
 function datePartsInTimezone(date, timezone) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone || "America/Santiago",
@@ -121,7 +126,8 @@ function getGoalsDashboard(clients, sourceHistory) {
         ))
         .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       const sendTypes = ["meta_enviada", "meta_error", "plantilla_previa_error", "contenido_pendiente_interaccion"];
-      const memberPhones = (client.phones || []).map(normalizePhone).filter(Boolean);
+      const isCoupleGoal = isCoupleClient(client);
+      const memberPhones = isCoupleGoal ? (client.phones || []).map(normalizePhone).filter(Boolean) : [];
       function currentEventsForPhone(phone) {
         const normalized = normalizePhone(phone);
         const memberEvents = events.filter(entry => normalizePhone(entry.phone) === normalized);
@@ -169,8 +175,8 @@ function getGoalsDashboard(clients, sourceHistory) {
           events: memberEvents,
         };
       }
-      const members = (client.phones || []).map(memberData);
-      if (members.length > 1) {
+      const members = isCoupleGoal ? (client.phones || []).map(memberData) : [];
+      if (isCoupleGoal) {
         console.log("Construyendo dashboard metas pareja", goal.id, client.id);
         members.forEach(member => console.log("Respuesta de integrante", member.phone, member.name, JSON.stringify({
           status: member.status,
@@ -244,7 +250,7 @@ function getGoalsDashboard(clients, sourceHistory) {
         reviewReasons,
         lastResponseAt: lastResponse?.fecha || "",
         points: completed ? Number(completed.puntos) || 10 : 0,
-        memberCompletionSummary: `${members.filter(member => member.status === "completada").length}/${members.length} integrantes completaron esta meta`,
+        memberCompletionSummary: isCoupleGoal ? `${members.filter(member => member.status === "completada").length}/${members.length} integrantes completaron esta meta` : "",
         members,
         events,
       });
