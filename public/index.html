@@ -866,6 +866,11 @@ function duplicatePhoneMatches(phones,editId=""){
   return clients.filter(client=>client.id!==editId&&(client.phones||[]).some(phone=>normalized.includes(normalizePhone(phone))));
 }
 
+async function duplicatePhoneMatchesServer(phones,editId=""){
+  const res=await api("POST","/clients/check-duplicate-phones",{phones,excludeClientId:editId});
+  return Array.isArray(res.duplicates)?res.duplicates:[];
+}
+
 function clientCreatedTime(client){
   const explicit=new Date(client?.createdAt||client?.fechaRegistro||client?.registeredAt||0).getTime();
   if(Number.isFinite(explicit)&&explicit>0)return explicit;
@@ -2492,10 +2497,11 @@ async function saveClient(sendWelcome=false){
   const welcomeTemplateType=sendWelcome?selectedWelcomeType("welcome_template_type"):"";
   if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
   const editId=I("client_edit_id").value;
-  const duplicates=duplicatePhoneMatches(phones,editId);
+  const duplicates=[...duplicatePhoneMatches(phones,editId), ...await duplicatePhoneMatchesServer(phones,editId)];
+  const uniqueDuplicates=duplicates.filter((item,index,arr)=>arr.findIndex(other=>(other.clientId||other.id) === (item.clientId||item.id))===index);
   let allowDuplicatePhones=false;
-  if(duplicates.length){
-    const detail=duplicates.map(client=>`- ${clientDisplayName(client)} · ${clientKindLabel(client)}`).join("\n");
+  if(uniqueDuplicates.length){
+    const detail=uniqueDuplicates.map(client=>`- ${client.name||clientDisplayName(client)} · ${client.type||clientKindLabel(client)}`).join("\n");
     const ok=confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
     if(!ok)return;
     allowDuplicatePhones=true;
@@ -2685,7 +2691,8 @@ async function saveMeta(sendNow=false){
 async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadAll()}
 async function deleteScheduledGoal(cid,gid){
   if(!confirm("¿Seguro que quieres eliminar esta meta programada?"))return;
-  await api("DELETE",`/clients/${cid}/goals/${gid}`);
+  const res=await api("POST",`/clients/${cid}/goals/${gid}/cancel-scheduled`);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
   showToast("Meta programada eliminada");
   loadAll();
 }

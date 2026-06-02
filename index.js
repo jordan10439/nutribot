@@ -92,6 +92,21 @@ function cleanClientPayload(body = {}, existing = null) {
   };
 }
 
+function duplicatePhoneWarnings(phones = [], excludeClientId = "") {
+  const normalized = phones.map(normalizePhone).filter(Boolean);
+  return db.getAll()
+    .filter(client => client.id !== excludeClientId)
+    .flatMap(client => (client.phones || [])
+      .filter(phone => normalized.includes(normalizePhone(phone)))
+      .map(phone => ({
+        phone: normalizePhone(phone),
+        clientId: client.id,
+        name: client.displayName || (client.nombres || []).join(" & "),
+        type: client.type === "couple" || (client.phones || []).length > 1 ? "Pareja" : "Individual",
+        contextKey: client.contextKey || "",
+      })));
+}
+
 function setWelcomeState(client, patch) {
   client.welcome = { ...(client.welcome || { status: "not_sent" }), ...patch, updatedAt: new Date().toISOString() };
   db.upsert(client);
@@ -145,6 +160,9 @@ app.post("/api/login", (req, res) => {
 
 // ── Clientes ───────────────────────────────────────────────────────────────────
 app.get("/api/clients", auth, (req, res) => res.json(db.getAll()));
+app.post("/api/clients/check-duplicate-phones", auth, (req, res) => {
+  res.json({ ok: true, duplicates: duplicatePhoneWarnings(req.body.phones || [], req.body.excludeClientId || "") });
+});
 app.get("/api/welcome-templates", auth, (req, res) => {
   const options = welcomeTemplateOptions();
   console.log("WELCOME WITH BUTTON NAME:", options.find(t => t.id === "with_button")?.metaTemplateName || "");
@@ -265,6 +283,25 @@ app.delete("/api/clients/:id/goals/:goalId", auth, (req, res) => {
   db.upsert(client);
   recargarTodos();
   res.json({ ok: true });
+});
+
+app.post("/api/clients/:id/goals/:goalId/cancel-scheduled", auth, (req, res) => {
+  const client = db.getById(req.params.id);
+  if (!client) return res.status(404).json({ error: "No encontrado" });
+  const goal = client.goals?.find(g => g.id === req.params.goalId);
+  if (!goal) return res.status(404).json({ error: "Meta no encontrada" });
+  client.goals = (client.goals || []).filter(g => g.id !== req.params.goalId);
+  db.upsert(client);
+  history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
+    tipo: "meta_cancelada",
+    meta: goal.titulo,
+    goalId: goal.id,
+    metaEmoji: goal.emoji || "🗑️",
+    comentario: "Meta programada eliminada antes del envío.",
+    direccion: "sistema",
+  });
+  recargarTodos();
+  res.json({ ok: true, cancelled: true });
 });
 
 app.post("/api/clients/:id/send", auth, async (req, res) => {
@@ -976,6 +1013,13 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.get("/health", (_, res) => res.json({ status: "ok", clientes: db.getAll().length, uptime: Math.floor(process.uptime()) }));
+app.get("/api/debug/deploy", auth, (_, res) => res.json({
+  app: "nutribot-panel",
+  cwd: process.cwd(),
+  duplicatePhonesPolicy: "allowed_with_frontend_confirmation",
+  patientIdentity: "clientId",
+  startCommand: "node index.js",
+}));
 app.get("/privacy", (_, res) => res.sendFile(path.join(__dirname, "public/privacy.html")));
 app.get("*", (_, res) => res.sendFile(path.join(__dirname, "public/index.html")));
 
