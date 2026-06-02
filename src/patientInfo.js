@@ -71,4 +71,15 @@ function updateConsultation(clientId, consultationId, input) {
   return updated;
 }
 
-module.exports = { getInfo, addConsultation, updateConsultation };
+function deleteConsultation(clientId, consultationId) {
+  const data = load();
+  const current = data[clientId] || { consultations: [] };
+  const index = (current.consultations || []).findIndex(item => item.id === consultationId);
+  if (index < 0) return null;
+  const [deleted] = current.consultations.splice(index, 1);
+  data[clientId] = current;
+  save(data);
+  return deleted;
+}
+
+module.exports = { getInfo, addConsultation, updateConsultation, deleteConsultation };

@@ -457,6 +457,16 @@ app.put("/api/patient-info/:clientId/consultations/:consultationId", auth, (req,
   res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId), reminders: reminderResult.reminders, reminderWarnings: reminderResult.warnings });
 });
 
+app.delete("/api/patient-info/:clientId/consultations/:consultationId", auth, (req, res) => {
+  console.log("DELETE consulta paciente", req.params);
+  const client = db.getById(req.params.clientId);
+  if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
+  const consultation = patientInfo.deleteConsultation(req.params.clientId, req.params.consultationId);
+  if (!consultation) return res.status(404).json({ error: "Consulta no encontrada" });
+  consultationReminders.cancelForConsultation(req.params.clientId, req.params.consultationId);
+  res.json({ ok: true, deleted: true, clientId: req.params.clientId, consultationId: req.params.consultationId, info: patientInfo.getInfo(req.params.clientId) });
+});
+
 // ── Recordatorios de consulta ────────────────────────────────────────────────
 app.get("/api/consultation-reminder-templates", auth, (req, res) => {
   const templates = consultationReminders.templateDefinitions();
@@ -507,10 +517,11 @@ app.patch("/api/consultation-reminders/:id/cancel", auth, (req, res) => {
 });
 
 app.delete("/api/consultation-reminders/:id", auth, (req, res) => {
+  console.log("DELETE/CANCEL recordatorio consulta", req.params);
   try {
     const reminder = consultationReminders.cancel(req.params.id);
     if (!reminder) return res.status(404).json({ error: "Recordatorio no encontrado" });
-    res.json({ ok: true, reminder });
+    res.json({ ok: true, cancelled: true, reminderId: req.params.id, reminder });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

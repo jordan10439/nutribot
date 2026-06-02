@@ -1208,8 +1208,11 @@ async function saveConsultationReminder(){
 }
 
 async function deleteConsultationReminder(id){
-  if(!confirm("¿Seguro que quieres eliminar este recordatorio programado?"))return;
+  console.log("Eliminar/cancelar recordatorio consulta",id);
+  const ok=await confirmDeleteModal("¿Seguro que quieres eliminar este recordatorio?","Eliminar recordatorio");
+  if(!ok)return;
   const res=await api("DELETE",`/consultation-reminders/${id}`);
+  console.log("Respuesta eliminar/cancelar recordatorio consulta",res);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   await loadConsultationReminders();
   renderPatientInfoPanel();
@@ -1292,6 +1295,7 @@ function renderConsultationCard(clientId,item){
     <div class="consultation-actions">
       <button class="bam" onclick="toggleConsultationDetail('${item.id}')">Ver detalle</button>
       <button class="bam" onclick="openConsultationModal('${clientId}','${item.id}')">Editar</button>
+      <button class="md2" onclick="deleteConsultation('${clientId}','${item.id}')">Eliminar consulta</button>
       <button class="bam" onclick="createGoalFromConsultation('${clientId}','${item.id}')">Crear meta desde esta consulta</button>
     </div>
     <div class="consultation-detail" id="consultation-detail-${item.id}">
@@ -1317,6 +1321,19 @@ ${escapeHtml(item.notes||"Sin registro")}</div>
 
 function toggleConsultationDetail(id){
   I(`consultation-detail-${id}`)?.classList.toggle("open");
+}
+
+async function deleteConsultation(clientId,consultationId){
+  console.log("Eliminar consulta",clientId,consultationId);
+  const ok=await confirmDeleteModal("¿Seguro que quieres eliminar esta consulta?","Eliminar consulta");
+  if(!ok)return;
+  const res=await api("DELETE",`/patient-info/${clientId}/consultations/${consultationId}`);
+  console.log("Respuesta eliminar consulta",res);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  patientInfoCache[clientId]=res.info||{consultations:[]};
+  await loadConsultationReminders(false);
+  renderPatientInfoPanel();
+  showToast("Consulta eliminada");
 }
 
 async function openConsultationModal(clientId,consultationId=""){
