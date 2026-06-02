@@ -1955,18 +1955,23 @@ function updateChatSel(){
   const cur=sel.value;
   const [curId]=String(cur||"").split("::");
   const matches=searchedClients("chat");
-  const selectedClient=clients.find(c=>c.id===curId);
-  const chatClients=[...matches];
-  if(selectedClient&&!chatClients.some(c=>c.id===selectedClient.id))chatClients.unshift(selectedClient);
-  const options=chatClients.flatMap(c=>{
-    const phones=c.phones||[];
-    return phones.map((phone,index)=>({
-    value:`${c.id}::${phone}`,
-    label:patientChoiceLabel(c,index),
-  }));
+  const visibleClients=sortClientsNewestFirst(matches);
+  console.log("Buscador conversaciones:",patientSearches.chat);
+  console.log("Total pacientes para conversaciones:",clients.length);
+  console.log("Pacientes filtrados conversaciones:",visibleClients.length);
+  console.log("Resultados conversaciones:",visibleClients.map(c=>c.name||c.displayName||clientDisplayName(c)));
+  const selectedStillVisible=visibleClients.some(c=>c.id===curId);
+  const options=visibleClients.flatMap(c=>{
+    const rawPhones=[...(c.phones||[]),c.phone,c.telefono,c.whatsapp,...(c.members||[]).flatMap(member=>[member.phone,member.telefono,member.whatsapp])];
+    const phones=[...new Set(rawPhones.map(normalizePhone).filter(Boolean))];
+    const entries=phones.length?phones:[""];
+    return entries.map((phone,index)=>({
+      value:`${c.id}::${phone}`,
+      label:phones.length?patientChoiceLabel(c,index):patientChoiceLabel(c),
+    }));
   });
   sel.innerHTML=`<option value="">Selecciona un paciente...</option>`+(options.length?options.map(option=>`<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join(""):`<option value="" disabled>No se encontraron pacientes.</option>`);
-  sel.value=cur;
+  sel.value=selectedStillVisible&&options.some(option=>option.value===cur)?cur:"";
 }
 
 function friendlyReply(value){
