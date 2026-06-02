@@ -665,7 +665,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="debug-version">Versión debug pacientes: 2026-06-01-2</div>
+<div class="debug-version">Versión debug pacientes: 2026-06-01-3</div>
 
 <script>
 let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],consultationReminderFilter="all",goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",tipSend:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
@@ -912,8 +912,26 @@ function searchNormalize(value){
 }
 
 function clientSearchText(client){
-  const members=(client?.members||[]).flatMap(member=>[member.name,member.phone,member.role,member.internalName]);
-  return normalizeSearchText([client?.name,client?.displayName,client?.internalName,client?.contextKey,...(client?.nombres||[]),...(client?.phones||[]),...members,client?.id||"",clientKindLabel(client)].join(" "));
+  const members=(client?.members||[]).flatMap(member=>[member.name,member.phone,member.role,member.internalName,member.displayName,member.nombre,member.telefono,member.whatsapp]);
+  const pairMembers=(client?.integrantes||client?.pareja||[]).flatMap(member=>typeof member==="object"?[member.name,member.nombre,member.phone,member.telefono,member.whatsapp,member.role]:[member]);
+  return normalizeSearchText([
+    client?.name,
+    client?.nombre,
+    client?.patientName,
+    client?.displayName,
+    client?.internalName,
+    client?.contextKey,
+    client?.phone,
+    client?.telefono,
+    client?.whatsapp,
+    client?.tipo,
+    ...(client?.nombres||[]),
+    ...(client?.phones||[]),
+    ...members,
+    ...pairMembers,
+    client?.id||"",
+    clientKindLabel(client),
+  ].join(" "));
 }
 
 function clientMatchesSearch(client,scope){
@@ -985,6 +1003,7 @@ function fillReminderPatientSelect(){
 
 function setPatientSearch(scope,value){
   patientSearches[scope]=value||"";
+  if(scope==="patients")console.log("Buscador de pacientes input:",value);
   console.log("Buscador de pacientes",JSON.stringify({scope,value:patientSearches[scope]}));
   if(value&&scope==="goals"&&I("goal_patient_filter"))I("goal_patient_filter").value="";
   if(value&&scope==="activity"&&I("fcli"))I("fcli").value="";
@@ -1503,6 +1522,9 @@ function renderClients(){
   const el=I("clist");
   if(!clients.length){el.innerHTML=`<div class="empty"><div>👥</div><p>No hay pacientes aún.</p></div>`;return}
   const visible=searchedClients("patients");
+  console.log("Total pacientes:",clients.length);
+  console.log("Pacientes filtrados:",visible.length);
+  console.log("Resultados:",visible.map(c=>c.name||c.displayName||clientDisplayName(c)));
   if(!visible.length){el.innerHTML=`<div class="empty"><div>🔎</div><p>No se encontraron pacientes.</p></div>`;return}
   el.innerHTML=visible.map(c=>{
     const solo=c.phones?.length===1;
