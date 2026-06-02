@@ -2572,25 +2572,39 @@ async function saveClient(sendWelcome=false){
   const welcomeTemplateType=sendWelcome?selectedWelcomeType("welcome_template_type"):"";
   if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
   const editId=I("client_edit_id").value;
+  const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType,allowDuplicatePhones:false,allowDuplicatePhone:false};
+  console.log("Paso 1 payload listo",payload);
   let allowDuplicatePhones=false;
+  let duplicateCheck=[];
+  console.log("Paso 2 revisando duplicados");
   try{
-    const duplicates=[...duplicatePhoneMatches(phones,editId), ...await duplicatePhoneMatchesServer(phones,editId)];
-    const uniqueDuplicates=duplicates.filter((item,index,arr)=>arr.findIndex(other=>(other.clientId||other.id) === (item.clientId||item.id))===index);
-    if(uniqueDuplicates.length){
-      const detail=uniqueDuplicates.map(client=>`- ${client.name||clientDisplayName(client)} · ${client.type||clientKindLabel(client)}`).join("\n");
-      const continueAnyway=confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
-      if(!continueAnyway)return;
-      allowDuplicatePhones=true;
-      console.log("Duplicado detectado, usuario decidió continuar");
-    }
+    const localDuplicates=duplicatePhoneMatches(phones,editId);
+    const serverDuplicates=await duplicatePhoneMatchesServer(phones,editId);
+    duplicateCheck=[...localDuplicates,...serverDuplicates].filter((item,index,arr)=>arr.findIndex(other=>(other.clientId||other.id) === (item.clientId||item.id))===index);
   }catch(e){
     console.warn("No se pudo revisar duplicados, se continuará igual",e);
   }
+  console.log("Paso 3 resultado duplicados",duplicateCheck);
+  if(duplicateCheck.length){
+    const detail=duplicateCheck.map(client=>`- ${client.name||clientDisplayName(client)} · ${client.type||clientKindLabel(client)}`).join("\n");
+    const continueAnyway=window.confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
+    console.log("Paso 4 usuario decide continuar",continueAnyway);
+    if(!continueAnyway)return;
+    allowDuplicatePhones=true;
+    payload.allowDuplicatePhones=true;
+    payload.allowDuplicatePhone=true;
+    console.log("Duplicado detectado, usuario decidió continuar");
+  }else{
+    console.log("Paso 4 usuario decide continuar",true);
+  }
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
-  const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType,allowDuplicatePhones,allowDuplicatePhone:allowDuplicatePhones};
   console.log("Intentando guardar paciente",payload);
+  const endpoint=editId?`/clients/${editId}`:"/clients";
+  const method=editId?"PUT":"POST";
+  console.log(`Paso 5 ejecutando ${method} /api${endpoint}`);
   console.log("Enviando paciente al backend");
-  const res=await api(editId?"PUT":"POST",editId?`/clients/${editId}`:"/clients",payload);
+  const res=await api(method,endpoint,payload);
+  console.log(`Paso 6 respuesta ${method} /api${endpoint}`,res);
   if(editId&&sendWelcome&&!res.error){
     const welcomeRes=await api("POST",`/clients/${editId}/welcome`,{welcomeTemplateType});
     if(welcomeRes.error){closeM("cm");showToast(`⚠️ Paciente editado, pero no se envió bienvenida: ${welcomeRes.error}`);loadAll();return}
