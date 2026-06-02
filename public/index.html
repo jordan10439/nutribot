@@ -478,6 +478,19 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
   </div>
 </div>
 
+<!-- Modal Telefono Duplicado -->
+<div class="mo" id="duplicatePhoneModal">
+  <div class="modal">
+    <h2>Número ya registrado</h2>
+    <p style="font-size:13px;color:#456145;line-height:1.45;margin:0 0 10px">Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?</p>
+    <div class="tip-note" id="duplicate_phone_detail"></div>
+    <div class="ma">
+      <button class="bc" onclick="resolveDuplicatePhoneModal(false)">Cancelar</button>
+      <button class="bsv" onclick="resolveDuplicatePhoneModal(true)">Continuar y guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="welcomeModal">
   <div class="modal">
     <h2>Reenviar bienvenida</h2>
@@ -2565,6 +2578,23 @@ function openCM(id=""){
   I("cm").classList.add("open");
 }
 function setMode(m){mode=m;I("ts").classList.toggle("active",m==="s");I("tpr").classList.toggle("active",m==="p");I("pf").style.display=m==="p"?"block":"none";I("nl1").textContent=m==="s"?"Nombre del paciente":"Nombre (integrante 1)"}
+let duplicatePhoneModalResolver=null;
+function confirmDuplicatePhoneModal(detail=""){
+  console.log("Modal duplicado abierto");
+  return new Promise(resolve=>{
+    duplicatePhoneModalResolver=resolve;
+    const detailBox=I("duplicate_phone_detail");
+    if(detailBox)detailBox.textContent=detail||"";
+    I("duplicatePhoneModal").classList.add("open");
+  });
+}
+function resolveDuplicatePhoneModal(value){
+  I("duplicatePhoneModal").classList.remove("open");
+  if(duplicatePhoneModalResolver){
+    duplicatePhoneModalResolver(!!value);
+    duplicatePhoneModalResolver=null;
+  }
+}
 async function saveClient(sendWelcome=false){
   const nombres=[I("n1").value.trim()],phones=[I("p1").value.trim()];
   if(mode==="p"){nombres.push(I("n2").value.trim());phones.push(I("p2").value.trim())}
@@ -2589,7 +2619,8 @@ async function saveClient(sendWelcome=false){
   console.log("Paso 3 resultado duplicados",duplicateCheck);
   if(duplicateCheck.length){
     const detail=duplicateCheck.map(client=>`- ${client.name||clientDisplayName(client)} · ${client.type||clientKindLabel(client)}`).join("\n");
-    const continueAnyway=window.confirm(`Este número ya está registrado en otro paciente o pareja. ¿Deseas continuar de todas formas?\n\n${detail}`);
+    const continueAnyway=await confirmDuplicatePhoneModal(detail);
+    console.log("Usuario confirmó duplicado:",continueAnyway);
     console.log("Paso 4 usuario decide continuar",continueAnyway);
     if(!continueAnyway)return;
     allowDuplicatePhones=true;
