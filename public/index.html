@@ -665,7 +665,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="debug-version">Versión debug pacientes: 2026-06-01-1</div>
+<div class="debug-version">Versión debug pacientes: 2026-06-01-2</div>
 
 <script>
 let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],consultationReminderFilter="all",goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",tipSend:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
@@ -1017,6 +1017,21 @@ function bindPatientSearchInputs(){
     input.addEventListener("input",event=>setPatientSearch(scope,event.target.value));
   });
 }
+
+document.addEventListener("input",event=>{
+  const scopeByInputId={
+    patient_search:"patients",
+    info_patient_search:"info",
+    reminder_patient_search:"reminders",
+    goal_patient_search:"goals",
+    chat_patient_search:"chat",
+    activity_patient_search:"activity",
+    tip_history_patient_search:"tips",
+    tip_send_patient_search:"tipSend",
+  };
+  const scope=scopeByInputId[event.target?.id];
+  if(scope)setPatientSearch(scope,event.target.value);
+});
 
 async function loadPatientInfoSection(){
   await loadConsultationReminders(false);
@@ -2738,7 +2753,7 @@ async function saveMeta(sendNow=false){
 async function deleteMeta(cid,gid){if(!confirm("¿Eliminar esta meta?"))return;await api("DELETE",`/clients/${cid}/goals/${gid}`);showToast("🗑️ Eliminada");loadAll()}
 async function deleteScheduledGoal(cid,gid){
   if(!confirm("¿Seguro que quieres eliminar esta meta programada?"))return;
-  const res=await api("POST",`/clients/${cid}/goals/${gid}/cancel-scheduled`);
+  const res=await api("DELETE",`/clients/${cid}/goals/${gid}/cancel-scheduled`);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   const client=clients.find(c=>c.id===cid);
   if(client)client.goals=(client.goals||[]).filter(goal=>goal.id!==gid);

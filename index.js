@@ -287,7 +287,7 @@ app.delete("/api/clients/:id/goals/:goalId", auth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/api/clients/:id/goals/:goalId/cancel-scheduled", auth, (req, res) => {
+function cancelScheduledGoal(req, res) {
   const client = db.getById(req.params.id);
   if (!client) return res.status(404).json({ error: "No encontrado" });
   const goal = client.goals?.find(g => g.id === req.params.goalId);
@@ -303,8 +303,11 @@ app.post("/api/clients/:id/goals/:goalId/cancel-scheduled", auth, (req, res) => 
     direccion: "sistema",
   });
   recargarTodos();
-  res.json({ ok: true, cancelled: true });
-});
+  res.json({ ok: true, cancelled: true, deleted: true, clientId: client.id, goalId: goal.id });
+}
+
+app.post("/api/clients/:id/goals/:goalId/cancel-scheduled", auth, cancelScheduledGoal);
+app.delete("/api/clients/:id/goals/:goalId/cancel-scheduled", auth, cancelScheduledGoal);
 
 app.post("/api/clients/:id/send", auth, async (req, res) => {
   try {
