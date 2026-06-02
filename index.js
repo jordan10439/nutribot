@@ -44,27 +44,12 @@ function normalizePhone(phone) {
 function cleanClientPayload(body = {}, existing = null) {
   const nombres = (body.nombres || []).map(name => String(name || "").trim()).filter(Boolean);
   const phones = (body.phones || []).map(normalizePhone).filter(Boolean);
-  const allowDuplicatePhones = !!(body.allowDuplicatePhones || body.allowDuplicatePhone || body.confirmDuplicatePhone || body.forceDuplicatePhone);
   if (!nombres.length || !phones.length) throw new Error("Completa nombre y teléfono");
   if (nombres.length !== phones.length) throw new Error("Cada integrante debe tener nombre y teléfono");
   const seen = new Set();
-  const duplicateWarnings = [];
   for (const phone of phones) {
     if (seen.has(phone)) throw new Error(`Teléfono duplicado en este paciente: ${phone}`);
     seen.add(phone);
-    const duplicates = db.getAll().filter(client => client.id !== existing?.id && (client.phones || []).some(p => normalizePhone(p) === phone));
-    duplicateWarnings.push(...duplicates.map(client => ({
-      phone,
-      clientId: client.id,
-      name: (client.nombres || []).join(" & "),
-      type: (client.phones || []).length > 1 ? "Pareja" : "Individual",
-    })));
-  }
-  if (duplicateWarnings.length && !allowDuplicatePhones) {
-    console.log("Teléfono duplicado detectado. No se bloquea porque el paciente se identifica por clientId/contexto.", JSON.stringify(duplicateWarnings));
-  }
-  if (duplicateWarnings.length && allowDuplicatePhones) {
-    console.log("Teléfono duplicado confirmado por usuaria, guardando de todas formas", JSON.stringify(duplicateWarnings));
   }
   const clientId = existing?.id || "";
   const type = phones.length > 1 ? "couple" : "individual";
@@ -88,7 +73,7 @@ function cleanClientPayload(body = {}, existing = null) {
     goals: existing?.goals || body.goals || [],
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    duplicateWarnings,
+    duplicateWarnings: [],
   };
 }
 
