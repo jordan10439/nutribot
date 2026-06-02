@@ -120,14 +120,20 @@ function getGoalsDashboard(clients, sourceHistory) {
           entry.goalId ? entry.goalId === goal.id : entry.meta === goal.titulo
         ))
         .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-      const sendEvent = events.find(entry => ["meta_enviada", "meta_error", "plantilla_previa_error", "contenido_pendiente_interaccion"].includes(entry.tipo));
-      const cycleStartedAt = sendEvent ? new Date(sendEvent.fecha).getTime() : 0;
-      const currentEvents = cycleStartedAt
-        ? events.filter(entry => new Date(entry.fecha).getTime() >= cycleStartedAt)
-        : events;
+      const sendTypes = ["meta_enviada", "meta_error", "plantilla_previa_error", "contenido_pendiente_interaccion"];
+      const memberPhones = (client.phones || []).map(normalizePhone).filter(Boolean);
+      function currentEventsForPhone(phone) {
+        const normalized = normalizePhone(phone);
+        const memberEvents = events.filter(entry => normalizePhone(entry.phone) === normalized);
+        const sendEvent = memberEvents.find(entry => sendTypes.includes(entry.tipo));
+        const cycleStartedAt = sendEvent ? new Date(sendEvent.fecha).getTime() : 0;
+        return cycleStartedAt
+          ? memberEvents.filter(entry => new Date(entry.fecha).getTime() >= cycleStartedAt)
+          : memberEvents;
+      }
       function memberData(phone, index) {
         const normalized = normalizePhone(phone);
-        const memberEvents = currentEvents.filter(entry => normalizePhone(entry.phone) === normalized);
+        const memberEvents = currentEventsForPhone(phone);
         const completed = memberEvents.find(entry => entry.tipo === "completada");
         const followup = memberEvents.find(entry => entry.tipo === "seguimiento_meta");
         const declined = memberEvents.find(entry => entry.tipo === "no_completada");
@@ -164,6 +170,28 @@ function getGoalsDashboard(clients, sourceHistory) {
         };
       }
       const members = (client.phones || []).map(memberData);
+      if (members.length > 1) {
+        console.log("Construyendo dashboard metas pareja", goal.id, client.id);
+        members.forEach(member => console.log("Respuesta de integrante", member.phone, member.name, JSON.stringify({
+          status: member.status,
+          emotion: member.emotionalResponse,
+          difficulty: member.difficulty,
+          comment: member.comment,
+          photo: !!member.photo?.id,
+          lastResponseAt: member.lastResponseAt,
+        })));
+        console.log("Member responses finales", JSON.stringify(members.map(member => ({
+          phone: member.phone,
+          name: member.name,
+          status: member.status,
+          difficulty: member.difficulty,
+          hasPhoto: !!member.photo?.id,
+        }))));
+      }
+      const currentEvents = memberPhones.length
+        ? members.flatMap(member => member.events).sort((a, b) => new Date(b.fecha) - new Date(a.fecha))
+        : events;
+      const sendEvent = currentEvents.find(entry => sendTypes.includes(entry.tipo));
       const completed = currentEvents.find(entry => entry.tipo === "completada");
       const followup = currentEvents.find(entry => entry.tipo === "seguimiento_meta");
       const declined = currentEvents.find(entry => entry.tipo === "no_completada");
