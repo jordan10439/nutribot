@@ -159,12 +159,15 @@ app.get("/api/welcome-templates", auth, (req, res) => {
 });
 
 app.post("/api/clients", auth, async (req, res) => {
+  console.log("POST /api/clients body", JSON.stringify(req.body));
+  console.log("existing id recibido", req.body?.id || "");
   let client;
   let duplicateWarnings = [];
   try {
     client = cleanClientPayload(req.body);
     duplicateWarnings = client.duplicateWarnings || [];
     delete client.duplicateWarnings;
+    console.log("cliente limpio antes de guardar", JSON.stringify(client));
     client.id = db.newId(client.nombres[0]);
     client.contextKey = `${client.type}:${client.id}`;
     client.welcome = { status: "not_sent", updatedAt: new Date().toISOString() };
@@ -172,6 +175,7 @@ app.post("/api/clients", auth, async (req, res) => {
     return res.status(400).json({ error: e.message });
   }
   db.upsert(client);
+  console.log("cliente guardado id", client.id);
   recargarTodos();
   // Enviar bienvenida solo si el cliente lo solicita (body.sendWelcome === true)
   if (req.body.sendWelcome) {

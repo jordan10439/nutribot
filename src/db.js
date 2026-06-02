@@ -46,7 +46,8 @@ function remove(id) {
 }
 
 function newId(name) {
-  return name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"") + "_" + Date.now();
+  const base = name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
+  return `${base}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 module.exports = { getAll, getById, upsert, remove, newId, sortClientsNewestFirst };

@@ -796,6 +796,7 @@ async function loadAll(){
   await loadUtilityTemplates();
   await loadWelcomeTemplates();
   clients=sortClientsNewestFirst(await api("GET","/clients"));
+  console.log("Clientes después de guardar",clients.map(c=>({id:c.id,name:c.name||c.displayName||clientDisplayName(c),type:c.type,phones:c.phones})));
   await loadGoalsDashboard(false);
   renderClients();
   I("s1").textContent=clients.length;
@@ -2572,6 +2573,7 @@ async function saveClient(sendWelcome=false){
   const welcomeTemplateType=sendWelcome?selectedWelcomeType("welcome_template_type"):"";
   if(sendWelcome&&!welcomeTemplateType){showToast("⚠️ Falta configurar una plantilla de bienvenida aprobada en Meta");return}
   const editId=I("client_edit_id").value;
+  console.log("client_edit_id al guardar:",editId);
   const payload={nombres,phones,timezone:I("tz").value,goals:[],sendWelcome:!editId&&!!sendWelcome,welcomeTemplateType,allowDuplicatePhones:false,allowDuplicatePhone:false};
   console.log("Paso 1 payload listo",payload);
   let allowDuplicatePhones=false;
@@ -2599,12 +2601,14 @@ async function saveClient(sendWelcome=false){
   }
   showToast(sendWelcome?"⏳ Guardando y enviando bienvenida...":"⏳ Guardando...");
   console.log("Intentando guardar paciente",payload);
+  console.log("Payload final POST /api/clients",payload);
   const endpoint=editId?`/clients/${editId}`:"/clients";
   const method=editId?"PUT":"POST";
   console.log(`Paso 5 ejecutando ${method} /api${endpoint}`);
   console.log("Enviando paciente al backend");
   const res=await api(method,endpoint,payload);
   console.log(`Paso 6 respuesta ${method} /api${endpoint}`,res);
+  console.log("Respuesta real POST /api/clients",res);
   if(editId&&sendWelcome&&!res.error){
     const welcomeRes=await api("POST",`/clients/${editId}/welcome`,{welcomeTemplateType});
     if(welcomeRes.error){closeM("cm");showToast(`⚠️ Paciente editado, pero no se envió bienvenida: ${welcomeRes.error}`);loadAll();return}
