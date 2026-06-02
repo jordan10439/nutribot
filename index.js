@@ -44,6 +44,7 @@ function normalizePhone(phone) {
 function cleanClientPayload(body = {}, existing = null) {
   const nombres = (body.nombres || []).map(name => String(name || "").trim()).filter(Boolean);
   const phones = (body.phones || []).map(normalizePhone).filter(Boolean);
+  const allowDuplicatePhones = !!(body.allowDuplicatePhones || body.allowDuplicatePhone || body.confirmDuplicatePhone || body.forceDuplicatePhone);
   if (!nombres.length || !phones.length) throw new Error("Completa nombre y teléfono");
   if (nombres.length !== phones.length) throw new Error("Cada integrante debe tener nombre y teléfono");
   const seen = new Set();
@@ -59,11 +60,10 @@ function cleanClientPayload(body = {}, existing = null) {
       type: (client.phones || []).length > 1 ? "Pareja" : "Individual",
     })));
   }
-  const duplicateConfirmed = !!(body.allowDuplicatePhones || body.allowDuplicatePhone);
-  if (duplicateWarnings.length && !duplicateConfirmed) {
-    console.log("Teléfono duplicado detectado, se permite solo con confirmación frontend", JSON.stringify(duplicateWarnings));
+  if (duplicateWarnings.length && !allowDuplicatePhones) {
+    console.log("Teléfono duplicado detectado. No se bloquea porque el paciente se identifica por clientId/contexto.", JSON.stringify(duplicateWarnings));
   }
-  if (duplicateWarnings.length && duplicateConfirmed) {
+  if (duplicateWarnings.length && allowDuplicatePhones) {
     console.log("Teléfono duplicado confirmado por usuaria, guardando de todas formas", JSON.stringify(duplicateWarnings));
   }
   const clientId = existing?.id || "";
@@ -223,9 +223,11 @@ app.put("/api/clients/:id", auth, (req, res) => {
 });
 
 app.delete("/api/clients/:id", auth, (req, res) => {
+  const existing = db.getById(req.params.id);
+  if (!existing) return res.status(404).json({ error: "Paciente no encontrado" });
   db.remove(req.params.id);
   recargarTodos();
-  res.json({ ok: true });
+  res.json({ ok: true, deleted: true, clientId: req.params.id });
 });
 
 // ── Metas ──────────────────────────────────────────────────────────────────────

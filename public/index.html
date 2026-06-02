@@ -255,6 +255,7 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 .msg-name{font-size:10px;color:#708270;margin-bottom:3px;font-weight:700}
 .chat-photo{display:block;max-width:210px;max-height:210px;object-fit:cover;border-radius:7px;margin:6px 0 4px;cursor:pointer;border:1px solid #dbe9db}
 .chat-photo-link{display:inline-block;border:none;background:transparent;padding:2px 0;color:#2a5738;font-size:12px;font-weight:800;cursor:pointer}
+.debug-version{position:fixed;right:10px;bottom:8px;z-index:9999;background:#123b24;color:#f7fff8;border:1px solid #d8ead9;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:900;box-shadow:0 4px 12px rgba(0,0,0,.12)}
 @media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.hres{grid-template-columns:1fr 1fr}.tip-history-row{grid-template-columns:1fr}.ma{flex-wrap:wrap}.goal-list-head{display:none}.goal-row{grid-template-columns:1fr;gap:7px;padding:12px}.goal-detail-grid{grid-template-columns:1fr}.chat-header-inner{flex-direction:column;align-items:stretch}.chat-area{height:calc(100vh - 150px)}.chat-message{max-width:90%}}
 </style>
 </head>
@@ -664,11 +665,19 @@ body{font-family:'Segoe UI',sans-serif;background:#f0f4f0;color:#1a2e1a;min-heig
 </div>
 
 <div class="toast" id="toast"></div>
+<div class="debug-version">Versión debug pacientes: 2026-06-01-1</div>
 
 <script>
 let TOKEN="",clients=[],mode="s",msgLabels={},utilityTemplates=[],welcomeTemplates=[],consultationReminders=[],consultationReminderTemplates=[],consultationReminderFilter="all",goalsDashboard={goals:[],summaries:[]},goalFilter="all",activityEntries=[],activityFilter="all",tipHistoryFilter="main",patientSearches={patients:"",goals:"",tips:"",tipSend:"",chat:"",activity:"",info:"",reminders:""},patientInfoCache={},selectedInfoClientId="";
 const I=id=>document.getElementById(id);
-const api=async(m,p,b)=>{const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});return r.json()};
+const api=async(m,p,b)=>{
+  const r=await fetch("/api"+p,{method:m,headers:{"Content-Type":"application/json","x-admin-token":TOKEN},body:b?JSON.stringify(b):undefined});
+  const text=await r.text();
+  let data={};
+  try{data=text?JSON.parse(text):{}}catch{data={error:text||`HTTP ${r.status}`}};
+  if(!r.ok)return {error:data.error||`HTTP ${r.status}`,status:r.status,...data};
+  return data;
+};
 
 async function loadUtilityTemplates(){
   const templates=await api("GET","/utility-templates");
@@ -783,6 +792,7 @@ function showTab(t){
 }
 
 async function loadAll(){
+  bindPatientSearchInputs();
   await loadUtilityTemplates();
   await loadWelcomeTemplates();
   clients=sortClientsNewestFirst(await api("GET","/clients"));
@@ -867,8 +877,17 @@ function duplicatePhoneMatches(phones,editId=""){
 }
 
 async function duplicatePhoneMatchesServer(phones,editId=""){
-  const res=await api("POST","/clients/check-duplicate-phones",{phones,excludeClientId:editId});
-  return Array.isArray(res.duplicates)?res.duplicates:[];
+  try{
+    const res=await api("POST","/clients/check-duplicate-phones",{phones,excludeClientId:editId});
+    if(res.error){
+      console.warn("No se pudo consultar duplicados en backend; se usará validación local",res.error);
+      return [];
+    }
+    return Array.isArray(res.duplicates)?res.duplicates:[];
+  }catch(e){
+    console.warn("No se pudo consultar duplicados en backend; se usará validación local",e.message);
+    return [];
+  }
 }
 
 function clientCreatedTime(client){
@@ -966,6 +985,7 @@ function fillReminderPatientSelect(){
 
 function setPatientSearch(scope,value){
   patientSearches[scope]=value||"";
+  console.log("Buscador de pacientes",JSON.stringify({scope,value:patientSearches[scope]}));
   if(value&&scope==="goals"&&I("goal_patient_filter"))I("goal_patient_filter").value="";
   if(value&&scope==="activity"&&I("fcli"))I("fcli").value="";
   if(value&&scope==="tips"&&I("tip_history_patient"))I("tip_history_patient").value="";
@@ -978,6 +998,24 @@ function setPatientSearch(scope,value){
   if(scope==="activity"){fillActivityPatientSelect();renderActivity();}
   if(scope==="info"){fillInfoPatientSelect();renderPatientInfoPanel();}
   if(scope==="reminders"){fillReminderPatientSelect();renderConsultationReminders();}
+}
+
+function bindPatientSearchInputs(){
+  [
+    ["patient_search","patients"],
+    ["info_patient_search","info"],
+    ["reminder_patient_search","reminders"],
+    ["goal_patient_search","goals"],
+    ["chat_patient_search","chat"],
+    ["activity_patient_search","activity"],
+    ["tip_history_patient_search","tips"],
+    ["tip_send_patient_search","tipSend"],
+  ].forEach(([id,scope])=>{
+    const input=I(id);
+    if(!input||input.dataset.searchBound==="1")return;
+    input.dataset.searchBound="1";
+    input.addEventListener("input",event=>setPatientSearch(scope,event.target.value));
+  });
 }
 
 async function loadPatientInfoSection(){
@@ -2517,7 +2555,16 @@ async function saveClient(sendWelcome=false){
   if(res.error){showToast(`⚠️ ${res.error}`);loadAll();return}
   showToast(sendWelcome?"✅ Paciente guardado — bienvenida enviada":"✅ Paciente guardado");loadAll();
 }
-async function delClient(id){if(!confirm("¿Eliminar este paciente?"))return;await api("DELETE",`/clients/${id}`);showToast("🗑️ Eliminado");loadAll()}
+async function delClient(id){
+  const client=clients.find(c=>c.id===id);
+  const label=client?clientDisplayName(client):"este paciente";
+  if(!confirm(`¿Eliminar ${label}? Esta acción quitará su ficha del panel.`))return;
+  const res=await api("DELETE",`/clients/${id}`);
+  if(res.error){showToast(`⚠️ ${res.error}`);return}
+  clients=clients.filter(c=>c.id!==id);
+  showToast("🗑️ Paciente eliminado");
+  loadAll();
+}
 async function sendWelcome(id){
   const c=clients.find(x=>x.id===id);
   if(!c)return;
@@ -2693,6 +2740,8 @@ async function deleteScheduledGoal(cid,gid){
   if(!confirm("¿Seguro que quieres eliminar esta meta programada?"))return;
   const res=await api("POST",`/clients/${cid}/goals/${gid}/cancel-scheduled`);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
+  const client=clients.find(c=>c.id===cid);
+  if(client)client.goals=(client.goals||[]).filter(goal=>goal.id!==gid);
   showToast("Meta programada eliminada");
   loadAll();
 }
