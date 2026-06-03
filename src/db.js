@@ -2,6 +2,7 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+const crypto = require("crypto");
 const fs   = require("fs");
 const path = require("path");
 const FILE = path.join(__dirname, "../data/db.json");
@@ -209,6 +210,108 @@ async function syncPatientToPostgres(client) {
   }
 }
 
+function parseGoalTimestamp(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function stableGoalId(clientId, goal, index) {
+  const existingId = String(goal?.id || goal?.goalId || "").trim();
+  if (existingId) return existingId;
+  const seed = JSON.stringify({
+    clientId,
+    index,
+    title: goal?.titulo || goal?.title || "",
+    description: goal?.descripcion || goal?.description || "",
+    createdAt: goal?.createdAt || goal?.fechaCreacion || "",
+    scheduledAt: goal?.scheduledAt || goal?.specificDate || goal?.fecha || "",
+  });
+  const hash = crypto.createHash("sha1").update(seed).digest("hex").slice(0, 12);
+  return `goal_${index + 1}_${hash}`;
+}
+
+function goalScheduledAt(goal) {
+  if (goal?.scheduledAt) return parseGoalTimestamp(goal.scheduledAt);
+  const date = String(goal?.specificDate || goal?.fecha || "").slice(0, 10);
+  const time = String(goal?.hora || "").slice(0, 5);
+  if (!date || !time) return null;
+  return parseGoalTimestamp(`${date}T${time}:00`);
+}
+
+async function upsertGoalToPostgres(clientId, goal, index) {
+  const goalId = stableGoalId(clientId, goal, index);
+  const title = String(goal?.titulo || goal?.title || goal?.nombre || "").trim();
+  const description = String(goal?.descripcion || goal?.description || goal?.detalle || "").trim();
+  const status = String(goal?.status || goal?.estado || goal?.state || "").trim() || "pendiente";
+  console.log("Intentando sincronizar meta en PostgreSQL", JSON.stringify({
+    clientId,
+    goalId,
+    title,
+    index,
+  }));
+  await pool.query(`
+    INSERT INTO goals (
+      client_id,
+      goal_id,
+      title,
+      description,
+      status,
+      scheduled_at,
+      sent_at,
+      completed_at,
+      data,
+      updated_at
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, NOW())
+    ON CONFLICT (client_id, goal_id) DO UPDATE SET
+      title = EXCLUDED.title,
+      description = EXCLUDED.description,
+      status = EXCLUDED.status,
+      scheduled_at = EXCLUDED.scheduled_at,
+      sent_at = EXCLUDED.sent_at,
+      completed_at = EXCLUDED.completed_at,
+      data = EXCLUDED.data,
+      updated_at = NOW()
+  `, [
+    clientId,
+    goalId,
+    title || null,
+    description || null,
+    status,
+    goalScheduledAt(goal),
+    parseGoalTimestamp(goal?.sentAt || goal?.enviadaAt || goal?.lastSentAt),
+    parseGoalTimestamp(goal?.completedAt || goal?.completadaAt),
+    JSON.stringify(goal || {}),
+  ]);
+  console.log("✅ Meta insertada/actualizada en PostgreSQL", JSON.stringify({ clientId, goalId, title }));
+  return goalId;
+}
+
+async function syncGoalsToPostgres(client) {
+  if (!client?.id) return;
+  if (!HAS_DATABASE_URL) {
+    console.warn("⚠️ DATABASE_URL no está configurada. No se sincronizarán metas con PostgreSQL.", JSON.stringify({ clientId: client.id }));
+    return;
+  }
+  const goals = Array.isArray(client.goals) ? client.goals : [];
+  console.log("Sincronización espejo de metas solicitada", JSON.stringify({ clientId: client.id, goalsCount: goals.length }));
+  if (!goals.length) return;
+  try {
+    for (let index = 0; index < goals.length; index += 1) {
+      await upsertGoalToPostgres(client.id, goals[index], index);
+    }
+    console.log("✅ Metas sincronizadas en espejo con PostgreSQL", JSON.stringify({ clientId: client.id, count: goals.length }));
+  } catch (error) {
+    console.warn("⚠️ Error sincronizando metas en espejo con PostgreSQL", JSON.stringify({ clientId: client.id, error: error.message }));
+  }
+}
+
+async function syncClientMirrorToPostgres(client) {
+  await syncPatientToPostgres(client);
+  await syncGoalsToPostgres(client);
+}
+
 async function deletePatientFromPostgres(id) {
   if (!HAS_DATABASE_URL) {
     console.warn("⚠️ DATABASE_URL no está configurada. No se eliminará paciente en PostgreSQL.", JSON.stringify({ clientId: id }));
@@ -249,7 +352,13 @@ function upsert(client) {
   else clientsCache.push(client);
   clientsCache = sortClientsNewestFirst(clientsCache);
   saveClientsBackup(clientsCache);
-  syncPatientToPostgres(client);
+  console.log("db.upsert guardó cliente en cache/JSON", JSON.stringify({
+    clientId: client.id,
+    goalsCount: Array.isArray(client.goals) ? client.goals.length : 0,
+  }));
+  syncClientMirrorToPostgres(client).catch(error => {
+    console.warn("⚠️ Error en sincronización espejo de cliente/metas con PostgreSQL", JSON.stringify({ clientId: client.id, error: error.message }));
+  });
 }
 
 function remove(id) {

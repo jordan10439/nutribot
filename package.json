@@ -7,7 +7,9 @@
     "dev": "nodemon index.js",
     "db:init": "node scripts/initDb.js",
     "db:migrate:patients": "node scripts/migratePatientsSchema.js",
-    "db:import:patients": "node scripts/importPatientsFromJson.js"
+    "db:import:patients": "node scripts/importPatientsFromJson.js",
+    "db:migrate:goals": "node scripts/migrateGoalsSchema.js",
+    "db:import:goals": "node scripts/importGoalsFromPatients.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",

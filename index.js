@@ -241,6 +241,13 @@ app.post("/api/clients/:id/goals", auth, (req, res) => {
   };
   client.goals = client.goals || [];
   client.goals.push(goal);
+  console.log("Guardando meta en client.goals", JSON.stringify({
+    action: "create",
+    clientId: client.id,
+    goalId: goal.id,
+    title: goal.titulo,
+    goalsCount: client.goals.length,
+  }));
   db.upsert(client);
   recargarTodos();
   res.json({ ok: true, goal });
@@ -263,6 +270,13 @@ app.put("/api/clients/:id/goals/:goalId", auth, (req, res) => {
   if (typeof repetirSiNo !== 'undefined') goal.repetirSiNo = !!repetirSiNo;
   if (repetirFreq) goal.repetirFreq = repetirFreq;
   if (typeof utilityTemplateId !== "undefined") goal.utilityTemplateId = utilityTemplates.validateId(utilityTemplateId);
+  console.log("Guardando meta en client.goals", JSON.stringify({
+    action: "update",
+    clientId: client.id,
+    goalId: goal.id,
+    title: goal.titulo,
+    goalsCount: Array.isArray(client.goals) ? client.goals.length : 0,
+  }));
   db.upsert(client);
   recargarTodos();
   res.json({ ok: true, goal });
