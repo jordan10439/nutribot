@@ -6,8 +6,15 @@ const fs   = require("fs");
 const path = require("path");
 const FILE = path.join(__dirname, "../data/db.json");
 
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const HAS_DATABASE_URL = Boolean(DATABASE_URL);
+console.log("DATABASE_URL configurada:", HAS_DATABASE_URL);
+if (!HAS_DATABASE_URL) {
+  console.warn("⚠️ DATABASE_URL no está configurada. PostgreSQL no se cargará.");
+}
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production'
     ? { rejectUnauthorized: false }
     : false
@@ -74,6 +81,10 @@ function normalizePatientRow(row) {
 }
 
 async function loadPatientsFromPostgres() {
+  if (!HAS_DATABASE_URL) {
+    console.warn("⚠️ DATABASE_URL no está configurada. PostgreSQL no se cargará.");
+    return [];
+  }
   const result = await pool.query(`
     SELECT
       client_id,
@@ -100,6 +111,12 @@ async function loadPatientsFromPostgres() {
 }
 
 async function initPatientsFromPostgres() {
+  if (!HAS_DATABASE_URL) {
+    clientsCache = loadJsonClients();
+    console.warn("⚠️ DATABASE_URL no está configurada. PostgreSQL no se cargará.");
+    console.log("Pacientes cargados desde respaldo JSON", JSON.stringify({ count: clientsCache.length }));
+    return clientsCache;
+  }
   try {
     const patients = await loadPatientsFromPostgres();
     if (patients.length) {
@@ -122,6 +139,10 @@ async function initPatientsFromPostgres() {
 
 async function syncPatientToPostgres(client) {
   if (!client?.id) return;
+  if (!HAS_DATABASE_URL) {
+    console.warn("⚠️ DATABASE_URL no está configurada. No se sincronizará paciente con PostgreSQL.", JSON.stringify({ clientId: client.id }));
+    return;
+  }
   const type = typeFor(client);
   const displayName = displayNameFor(client);
   const members = membersFor(client, type);
@@ -189,6 +210,10 @@ async function syncPatientToPostgres(client) {
 }
 
 async function deletePatientFromPostgres(id) {
+  if (!HAS_DATABASE_URL) {
+    console.warn("⚠️ DATABASE_URL no está configurada. No se eliminará paciente en PostgreSQL.", JSON.stringify({ clientId: id }));
+    return;
+  }
   try {
     await pool.query("DELETE FROM patients WHERE client_id = $1", [id]);
     console.log("✅ Paciente eliminado de PostgreSQL", JSON.stringify({ clientId: id }));
