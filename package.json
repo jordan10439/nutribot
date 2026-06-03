@@ -11,7 +11,9 @@
     "db:migrate:goals": "node scripts/migrateGoalsSchema.js",
     "db:import:goals": "node scripts/importGoalsFromPatients.js",
     "db:migrate:tips": "node scripts/migrateTipsSchema.js",
-    "db:import:tips": "node scripts/importTipsFromJson.js"
+    "db:import:tips": "node scripts/importTipsFromJson.js",
+    "db:migrate:consultation-reminders": "node scripts/migrateConsultationRemindersSchema.js",
+    "db:import:consultation-reminders": "node scripts/importConsultationRemindersFromJson.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",

@@ -6,6 +6,9 @@ const { enviarPlantillaOficial } = require("./whatsapp");
 
 const FILE = path.join(__dirname, "../data/consultationReminders.json");
 const DEFAULT_TZ = "America/Santiago";
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const HAS_DATABASE_URL = Boolean(DATABASE_URL);
+const pool = db.pool || db;
 let interval = null;
 
 function cleanEnvValue(value) {
@@ -34,6 +37,126 @@ function load() {
 function save(items) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(items, null, 2));
+  console.log("[consultation-reminders] save llamado", JSON.stringify({ count: Array.isArray(items) ? items.length : 0 }));
+  syncConsultationRemindersMirrorToPostgres(items).catch(error => {
+    console.warn("[consultation-reminders] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  });
+}
+
+function dateValue(value) {
+  const raw = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : null;
+}
+
+function timestampValue(value) {
+  if (!value) return null;
+  const raw = String(value);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(raw)) {
+    return raw.replace("T", " ");
+  }
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+async function syncConsultationReminderToPostgres(item) {
+  if (!item?.id || !item?.clientId) return false;
+  await pool.query(`
+    INSERT INTO consultation_reminders (
+      reminder_id,
+      client_id,
+      phone,
+      recipient_name,
+      patient_name,
+      consultation_id,
+      consultation_number,
+      template_type,
+      template_name,
+      language_code,
+      status,
+      error,
+      pauta_delivered_at,
+      follow_up_ends_at,
+      scheduled_date,
+      scheduled_time,
+      scheduled_at,
+      sent_at,
+      meta_message_id,
+      created_at,
+      updated_at,
+      data
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8,
+      $9, $10, $11, $12, $13, $14, $15, $16,
+      $17, $18, $19, $20, $21, $22::jsonb
+    )
+    ON CONFLICT (reminder_id) DO UPDATE SET
+      client_id = EXCLUDED.client_id,
+      phone = EXCLUDED.phone,
+      recipient_name = EXCLUDED.recipient_name,
+      patient_name = EXCLUDED.patient_name,
+      consultation_id = EXCLUDED.consultation_id,
+      consultation_number = EXCLUDED.consultation_number,
+      template_type = EXCLUDED.template_type,
+      template_name = EXCLUDED.template_name,
+      language_code = EXCLUDED.language_code,
+      status = EXCLUDED.status,
+      error = EXCLUDED.error,
+      pauta_delivered_at = EXCLUDED.pauta_delivered_at,
+      follow_up_ends_at = EXCLUDED.follow_up_ends_at,
+      scheduled_date = EXCLUDED.scheduled_date,
+      scheduled_time = EXCLUDED.scheduled_time,
+      scheduled_at = EXCLUDED.scheduled_at,
+      sent_at = EXCLUDED.sent_at,
+      meta_message_id = EXCLUDED.meta_message_id,
+      created_at = COALESCE(consultation_reminders.created_at, EXCLUDED.created_at),
+      updated_at = EXCLUDED.updated_at,
+      data = EXCLUDED.data
+  `, [
+    item.id,
+    item.clientId,
+    item.phone || null,
+    item.recipientName || null,
+    item.patientName || null,
+    item.consultationId || null,
+    Number.isFinite(Number(item.consultationNumber)) ? Number(item.consultationNumber) : null,
+    item.templateType || null,
+    item.templateName || null,
+    item.languageCode || null,
+    item.status || null,
+    item.error || null,
+    dateValue(item.pautaDeliveredAt),
+    dateValue(item.followUpEndsAt),
+    dateValue(item.scheduledDate),
+    item.scheduledTime || null,
+    timestampValue(item.scheduledAt),
+    timestampValue(item.sentAt),
+    item.metaMessageId || null,
+    timestampValue(item.createdAt),
+    timestampValue(item.updatedAt) || timestampValue(item.createdAt) || new Date().toISOString(),
+    JSON.stringify(item),
+  ]);
+  console.log("[consultation-reminders] recordatorio sincronizado", JSON.stringify({ reminderId: item.id, clientId: item.clientId, status: item.status || "" }));
+  return true;
+}
+
+async function syncConsultationRemindersMirrorToPostgres(items) {
+  if (!HAS_DATABASE_URL) {
+    console.warn("[consultation-reminders] DATABASE_URL no está configurada. No se sincronizará espejo PostgreSQL.");
+    return;
+  }
+  const reminders = Array.isArray(items) ? items : [];
+  console.log("[consultation-reminders] espejo solicitado");
+  console.log("[consultation-reminders] recordatorios detectados", reminders.length);
+  try {
+    let synced = 0;
+    for (const item of reminders) {
+      if (await syncConsultationReminderToPostgres(item)) synced += 1;
+    }
+    console.log("[consultation-reminders] espejo PostgreSQL sincronizado", JSON.stringify({ detected: reminders.length, synced }));
+  } catch (error) {
+    console.warn("[consultation-reminders] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  }
 }
 
 function templateDefinitions() {
