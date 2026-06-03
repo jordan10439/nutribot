@@ -9,7 +9,9 @@
     "db:migrate:patients": "node scripts/migratePatientsSchema.js",
     "db:import:patients": "node scripts/importPatientsFromJson.js",
     "db:migrate:goals": "node scripts/migrateGoalsSchema.js",
-    "db:import:goals": "node scripts/importGoalsFromPatients.js"
+    "db:import:goals": "node scripts/importGoalsFromPatients.js",
+    "db:migrate:tips": "node scripts/migrateTipsSchema.js",
+    "db:import:tips": "node scripts/importTipsFromJson.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
