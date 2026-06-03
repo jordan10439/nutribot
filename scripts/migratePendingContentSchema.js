@@ -22,31 +22,42 @@ CREATE TABLE IF NOT EXISTS pending_content (
   created_at TIMESTAMP,
   updated_at TIMESTAMP,
   dedupe_key TEXT,
-  data JSONB NOT NULL
+  data JSONB NOT NULL,
+  content JSONB
 );
 
 ALTER TABLE pending_content
   ADD COLUMN IF NOT EXISTS pending_id TEXT,
   ADD COLUMN IF NOT EXISTS client_id TEXT,
+  ADD COLUMN IF NOT EXISTS phone TEXT,
   ADD COLUMN IF NOT EXISTS original_phone TEXT,
   ADD COLUMN IF NOT EXISTS patient_name TEXT,
+  ADD COLUMN IF NOT EXISTS type TEXT,
+  ADD COLUMN IF NOT EXISTS status TEXT,
   ADD COLUMN IF NOT EXISTS trigger_template_id TEXT,
   ADD COLUMN IF NOT EXISTS trigger_template_name TEXT,
   ADD COLUMN IF NOT EXISTS trigger_button_labels JSONB,
   ADD COLUMN IF NOT EXISTS template_message_id TEXT,
   ADD COLUMN IF NOT EXISTS payload JSONB,
   ADD COLUMN IF NOT EXISTS result JSONB,
+  ADD COLUMN IF NOT EXISTS error TEXT,
   ADD COLUMN IF NOT EXISTS last_error TEXT,
   ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS created_at TIMESTAMP,
   ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP,
   ADD COLUMN IF NOT EXISTS dedupe_key TEXT,
-  ADD COLUMN IF NOT EXISTS data JSONB;
+  ADD COLUMN IF NOT EXISTS data JSONB,
+  ADD COLUMN IF NOT EXISTS content JSONB;
+
+ALTER TABLE pending_content
+  ALTER COLUMN content DROP NOT NULL;
 
 UPDATE pending_content
 SET
   pending_id = COALESCE(pending_id, 'legacy_pending_' || md5(ctid::text)),
-  data = COALESCE(data, '{}'::jsonb)
-WHERE pending_id IS NULL OR data IS NULL;
+  data = COALESCE(data, content, '{}'::jsonb),
+  content = COALESCE(content, data, '{}'::jsonb)
+WHERE pending_id IS NULL OR data IS NULL OR content IS NULL;
 
 ALTER TABLE pending_content
   ALTER COLUMN pending_id SET NOT NULL,
@@ -73,6 +84,16 @@ async function migratePendingContentSchema() {
   try {
     await pool.query(sql);
     console.log('✅ Esquema de pending_content adaptado correctamente');
+    const columns = await pool.query(`
+      SELECT column_name, data_type
+      FROM information_schema.columns
+      WHERE table_name = 'pending_content'
+      ORDER BY ordinal_position
+    `);
+    console.log('Columnas actuales de pending_content:');
+    for (const row of columns.rows) {
+      console.log(`- ${row.column_name} (${row.data_type})`);
+    }
   } catch (error) {
     console.error('❌ Error adaptando esquema de pending_content:', error);
     process.exitCode = 1;

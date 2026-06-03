@@ -55,12 +55,14 @@ async function upsertPendingItem(item) {
       created_at,
       updated_at,
       dedupe_key,
-      data
+      data,
+      content
     )
     VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8,
       $9, $10::jsonb, $11, $12::jsonb, $13::jsonb,
-      $14, $15, $16, $17, $18, $19, $20::jsonb
+      $14, $15, $16, $17, $18, $19, $20::jsonb,
+      $21::jsonb
     )
     ON CONFLICT (pending_id) DO UPDATE SET
       client_id = EXCLUDED.client_id,
@@ -81,7 +83,8 @@ async function upsertPendingItem(item) {
       created_at = COALESCE(pending_content.created_at, EXCLUDED.created_at),
       updated_at = EXCLUDED.updated_at,
       dedupe_key = EXCLUDED.dedupe_key,
-      data = EXCLUDED.data
+      data = EXCLUDED.data,
+      content = EXCLUDED.content
   `, [
     item.id,
     item.clientId || null,
@@ -102,6 +105,7 @@ async function upsertPendingItem(item) {
     timestampValue(item.createdAt),
     timestampValue(item.updatedAt) || timestampValue(item.createdAt) || new Date().toISOString(),
     buildPendingDedupeKey(item),
+    JSON.stringify(item),
     JSON.stringify(item),
   ]);
 }
