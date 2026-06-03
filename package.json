@@ -4,14 +4,18 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "db:init": "node scripts/initDb.js",
+    "db:migrate:patients": "node scripts/migratePatientsSchema.js",
+    "db:import:patients": "node scripts/importPatientsFromJson.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
     "body-parser": "^1.20.2",
+    "dotenv": "^16.6.1",
+    "express": "^4.18.2",
     "node-cron": "^3.0.3",
-    "twilio": "^4.23.0",
-    "dotenv": "^16.4.5"
+    "pg": "^8.21.0",
+    "twilio": "^4.23.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"

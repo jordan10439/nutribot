@@ -886,7 +886,10 @@ function clientDisplayName(client){
 }
 
 function clientKindLabel(client){
-  return client?.type==="couple"||((client?.phones||[]).length>1)?"Pareja":"Individual";
+  const type=String(client?.type||client?.tipo||"").toLowerCase();
+  if(type==="couple"||type==="pareja")return"Pareja";
+  if(type==="individual")return"Individual";
+  return ((client?.phones||[]).length>1)?"Pareja":"Individual";
 }
 
 function patientChoiceLabel(client,index=null){

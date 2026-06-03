@@ -1048,12 +1048,20 @@ app.get("/api/debug/deploy", auth, (_, res) => res.json({
 app.get("/privacy", (_, res) => res.sendFile(path.join(__dirname, "public/privacy.html")));
 app.get("*", (_, res) => res.sendFile(path.join(__dirname, "public/index.html")));
 
-app.listen(PORT, () => {
-  console.log(`\n🌱 NutriGO Panel v3 — puerto ${PORT}`);
-  recargarTodos();
-  revisarTipsProgramados();
-  revisarBienvenidasProgramadas();
-  consultationReminders.startScheduler();
-  setInterval(revisarTipsProgramados, 60 * 1000);
-  setInterval(revisarBienvenidasProgramadas, 60 * 1000);
+async function startServer() {
+  await db.initPatientsFromPostgres();
+  app.listen(PORT, () => {
+    console.log(`\n🌱 NutriGO Panel v3 — puerto ${PORT}`);
+    recargarTodos();
+    revisarTipsProgramados();
+    revisarBienvenidasProgramadas();
+    consultationReminders.startScheduler();
+    setInterval(revisarTipsProgramados, 60 * 1000);
+    setInterval(revisarBienvenidasProgramadas, 60 * 1000);
+  });
+}
+
+startServer().catch(error => {
+  console.error("Error iniciando NutriGO:", error.message);
+  process.exit(1);
 });
