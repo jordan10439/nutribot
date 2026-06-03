@@ -266,18 +266,69 @@ function list(filters = {}) {
 }
 
 function ensureForConsultation(client, consultation) {
+  console.log("[consultation-reminders] ensureForConsultation llamado", JSON.stringify({
+    clientId: client?.id || "",
+    phonesCount: Array.isArray(client?.phones) ? client.phones.length : 0,
+    consultationId: consultation?.id || "",
+  }));
+  console.log("[consultation-reminders] consulta recibida", JSON.stringify({
+    consultationId: consultation?.id || "",
+    number: consultation?.number || "",
+    consultationDate: consultation?.consultationDate || "",
+    planDeliveredDate: consultation?.planDeliveredDate || "",
+    scheduleReminder: consultation?.scheduleReminder,
+    reminderTemplateType: consultation?.reminderTemplateType || "",
+  }));
   if (consultation?.scheduleReminder === false) {
+    console.log("[consultation-reminders] no se generará recordatorio: scheduleReminder=false", JSON.stringify({
+      clientId: client?.id || "",
+      consultationId: consultation?.id || "",
+    }));
     cancelForConsultation(client.id, consultation.id);
     return { reminders: [], warnings: [] };
   }
-  if (!consultation?.planDeliveredDate) return { reminders: [], warnings: [] };
+  console.log("[consultation-reminders] fecha pauta detectada", JSON.stringify({
+    clientId: client?.id || "",
+    consultationId: consultation?.id || "",
+    planDeliveredDate: consultation?.planDeliveredDate || "",
+  }));
+  if (!consultation?.planDeliveredDate) {
+    console.log("[consultation-reminders] no se generará recordatorio: falta planDeliveredDate", JSON.stringify({
+      clientId: client?.id || "",
+      consultationId: consultation?.id || "",
+    }));
+    return { reminders: [], warnings: [] };
+  }
   const schedule = calculateSchedule(consultation.planDeliveredDate);
-  if (!schedule) return { reminders: [], warnings: ["Fecha de entrega de pauta inválida."] };
+  console.log("[consultation-reminders] schedule calculado", JSON.stringify({
+    clientId: client?.id || "",
+    consultationId: consultation?.id || "",
+    schedule,
+  }));
+  if (!schedule) {
+    console.log("[consultation-reminders] no se generará recordatorio: fecha de pauta inválida", JSON.stringify({
+      clientId: client?.id || "",
+      consultationId: consultation?.id || "",
+      planDeliveredDate: consultation?.planDeliveredDate || "",
+    }));
+    return { reminders: [], warnings: ["Fecha de entrega de pauta inválida."] };
+  }
   if (isPastLocal(schedule.scheduledAt)) {
+    console.log("[consultation-reminders] no se generará recordatorio: fecha calculada ya pasó", JSON.stringify({
+      clientId: client?.id || "",
+      consultationId: consultation?.id || "",
+      scheduledAt: schedule.scheduledAt,
+    }));
     return { reminders: [], warnings: ["La fecha de recordatorio ya pasó. Selecciona una nueva fecha."] };
   }
   const phones = [...new Set((client.phones || []).filter(Boolean))];
-  if (!phones.length) return { reminders: [], warnings: ["El paciente no tiene teléfono registrado."] };
+  if (!phones.length) {
+    console.log("[consultation-reminders] no se generará recordatorio: paciente sin teléfono", JSON.stringify({
+      clientId: client?.id || "",
+      consultationId: consultation?.id || "",
+    }));
+    return { reminders: [], warnings: ["El paciente no tiene teléfono registrado."] };
+  }
 
   const items = load();
   const now = new Date().toISOString();
@@ -327,6 +378,12 @@ function ensureForConsultation(client, consultation) {
     });
   }
 
+  console.log("[consultation-reminders] recordatorios generados", JSON.stringify({
+    clientId: client.id,
+    consultationId: consultation.id,
+    count: reminders.length,
+    phones: reminders.map(item => item.phone),
+  }));
   save(items);
   return { reminders, warnings };
 }

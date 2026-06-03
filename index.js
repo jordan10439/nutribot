@@ -458,6 +458,13 @@ app.post("/api/patient-info/:clientId/consultations", auth, (req, res) => {
   const client = db.getById(req.params.clientId);
   if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
   const consultation = patientInfo.addConsultation(req.params.clientId, req.body || {});
+  console.log("[consultation-reminders] endpoint crear consulta llama ensureForConsultation", JSON.stringify({
+    clientId: req.params.clientId,
+    consultationId: consultation.id,
+    planDeliveredDate: consultation.planDeliveredDate || "",
+    scheduleReminder: consultation.scheduleReminder,
+    reminderTemplateType: consultation.reminderTemplateType || "",
+  }));
   const reminderResult = consultationReminders.ensureForConsultation(client, consultation);
   res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId), reminders: reminderResult.reminders, reminderWarnings: reminderResult.warnings });
 });
@@ -467,6 +474,13 @@ app.put("/api/patient-info/:clientId/consultations/:consultationId", auth, (req,
   if (!client) return res.status(404).json({ error: "Paciente no encontrado" });
   const consultation = patientInfo.updateConsultation(req.params.clientId, req.params.consultationId, req.body || {});
   if (!consultation) return res.status(404).json({ error: "Consulta no encontrada" });
+  console.log("[consultation-reminders] endpoint editar consulta llama ensureForConsultation", JSON.stringify({
+    clientId: req.params.clientId,
+    consultationId: consultation.id,
+    planDeliveredDate: consultation.planDeliveredDate || "",
+    scheduleReminder: consultation.scheduleReminder,
+    reminderTemplateType: consultation.reminderTemplateType || "",
+  }));
   const reminderResult = consultationReminders.ensureForConsultation(client, consultation);
   res.json({ ok: true, consultation, info: patientInfo.getInfo(req.params.clientId), reminders: reminderResult.reminders, reminderWarnings: reminderResult.warnings });
 });
