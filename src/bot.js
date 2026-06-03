@@ -95,6 +95,29 @@ function findClientByPhone(phone) {
   const normalizedPhone = pendingContent.normalizePhone(phone);
   return db.getAll().find(c => (c.phones || []).some(p => pendingContent.normalizePhone(p) === normalizedPhone));
 }
+function resolveClientForIncoming(phone, currentState, incomingText = "") {
+  const normalizedPhone = pendingContent.normalizePhone(phone);
+  if (isUtilityTemplateButtonInteraction(incomingText)) {
+    const pending = pendingContent.findWaitingByPhone(normalizedPhone)[0];
+    if (pending?.clientId) {
+      const pendingClient = db.getById(pending.clientId);
+      if (pendingClient) {
+        console.log("Cliente resuelto por pendingContent", JSON.stringify({ phone: normalizedPhone, clientId: pendingClient.id, type: pendingClient.type || pendingClient.tipo || "" }));
+        return pendingClient;
+      }
+    }
+  }
+  if (currentState?.clientId) {
+    const stateClient = db.getById(currentState.clientId);
+    if (stateClient) {
+      console.log("Cliente resuelto por estado de meta", JSON.stringify({ phone: normalizedPhone, clientId: stateClient.id, goalId: currentState.meta?.id || "", type: stateClient.type || stateClient.tipo || "" }));
+      return stateClient;
+    }
+  }
+  const phoneClient = findClientByPhone(normalizedPhone);
+  if (phoneClient) console.log("Cliente resuelto por teléfono como fallback", JSON.stringify({ phone: normalizedPhone, clientId: phoneClient.id, type: phoneClient.type || phoneClient.tipo || "" }));
+  return phoneClient;
+}
 function nombreDe(client, phone) {
   const normalizedPhone = pendingContent.normalizePhone(phone);
   const index = (client.phones || []).findIndex(p => pendingContent.normalizePhone(p) === normalizedPhone);
@@ -102,7 +125,8 @@ function nombreDe(client, phone) {
 }
 function isCoupleClient(client) {
   const type = String(client?.type || client?.tipo || "").toLowerCase();
-  return type === "couple" || type === "pareja";
+  const uniquePhones = new Set((client?.phones || []).map(pendingContent.normalizePhone).filter(Boolean));
+  return (type === "couple" || type === "pareja") && uniquePhones.size > 1;
 }
 function esIndividual(client) { return !isCoupleClient(client); }
 function estrellas(n) { return "⭐".repeat(n) + "☆".repeat(5 - n); }
@@ -697,7 +721,6 @@ async function getIncomingText(m) {
 async function procesarMensaje(m) {
   const phone = pendingContent.normalizePhone(m.from);
   console.log("Webhook recibido desde teléfono", JSON.stringify({ rawPhone: m.from, normalizedPhone: phone, type: m.type }));
-  const client = findClientByPhone(phone);
   const incoming = await getIncomingText(m);
   const txt = incoming.norm;
   const tipoMsg = incoming.type;
@@ -706,6 +729,7 @@ async function procesarMensaje(m) {
 
   // Registrar mensaje entrante
   const s = state.get(phone);
+  const client = resolveClientForIncoming(phone, s, incoming.raw);
   if (client) {
     const nombre = nombreDe(client, phone);
     const entry = {

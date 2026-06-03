@@ -59,7 +59,8 @@ function normalizePhone(phone) {
 
 function isCoupleClient(client) {
   const type = String(client?.type || client?.tipo || "").toLowerCase();
-  return type === "couple" || type === "pareja";
+  const uniquePhones = new Set((client?.phones || []).map(normalizePhone).filter(Boolean));
+  return (type === "couple" || type === "pareja") && uniquePhones.size > 1;
 }
 
 function datePartsInTimezone(date, timezone) {
