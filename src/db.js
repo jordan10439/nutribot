@@ -244,7 +244,7 @@ async function upsertGoalToPostgres(clientId, goal, index) {
   const title = String(goal?.titulo || goal?.title || goal?.nombre || "").trim();
   const description = String(goal?.descripcion || goal?.description || goal?.detalle || "").trim();
   const status = String(goal?.status || goal?.estado || goal?.state || "").trim() || "pendiente";
-  console.log("Intentando sincronizar meta en PostgreSQL", JSON.stringify({
+  console.log("[goals] intentando insertar goal_id", JSON.stringify({
     clientId,
     goalId,
     title,
@@ -284,27 +284,33 @@ async function upsertGoalToPostgres(clientId, goal, index) {
     parseGoalTimestamp(goal?.completedAt || goal?.completadaAt),
     JSON.stringify(goal || {}),
   ]);
-  console.log("✅ Meta insertada/actualizada en PostgreSQL", JSON.stringify({ clientId, goalId, title }));
+  console.log("[goals] meta sincronizada correctamente", JSON.stringify({ clientId, goalId, title }));
   return goalId;
 }
 
 async function syncGoalsToPostgres(client) {
   if (!client?.id) return;
   if (!HAS_DATABASE_URL) {
-    console.warn("⚠️ DATABASE_URL no está configurada. No se sincronizarán metas con PostgreSQL.", JSON.stringify({ clientId: client.id }));
+    console.warn("[goals] DATABASE_URL no está configurada. No se sincronizarán metas con PostgreSQL.", JSON.stringify({ clientId: client.id }));
     return;
   }
   const goals = Array.isArray(client.goals) ? client.goals : [];
-  console.log("Sincronización espejo de metas solicitada", JSON.stringify({ clientId: client.id, goalsCount: goals.length }));
+  console.log("[goals] metas detectadas", JSON.stringify({ clientId: client.id, count: goals.length }));
   if (!goals.length) return;
-  try {
-    for (let index = 0; index < goals.length; index += 1) {
+  let synced = 0;
+  for (let index = 0; index < goals.length; index += 1) {
+    try {
       await upsertGoalToPostgres(client.id, goals[index], index);
+      synced += 1;
+    } catch (error) {
+      console.warn("[goals] error sincronizando meta", JSON.stringify({
+        clientId: client.id,
+        goalId: stableGoalId(client.id, goals[index], index),
+        error: error.message,
+      }));
     }
-    console.log("✅ Metas sincronizadas en espejo con PostgreSQL", JSON.stringify({ clientId: client.id, count: goals.length }));
-  } catch (error) {
-    console.warn("⚠️ Error sincronizando metas en espejo con PostgreSQL", JSON.stringify({ clientId: client.id, error: error.message }));
   }
+  console.log("[goals] sincronización espejo terminada", JSON.stringify({ clientId: client.id, detected: goals.length, synced }));
 }
 
 async function syncClientMirrorToPostgres(client) {
@@ -352,12 +358,12 @@ function upsert(client) {
   else clientsCache.push(client);
   clientsCache = sortClientsNewestFirst(clientsCache);
   saveClientsBackup(clientsCache);
-  console.log("db.upsert guardó cliente en cache/JSON", JSON.stringify({
+  console.log("[goals] upsert client llamado", JSON.stringify({
     clientId: client.id,
     goalsCount: Array.isArray(client.goals) ? client.goals.length : 0,
   }));
   syncClientMirrorToPostgres(client).catch(error => {
-    console.warn("⚠️ Error en sincronización espejo de cliente/metas con PostgreSQL", JSON.stringify({ clientId: client.id, error: error.message }));
+    console.warn("[goals] error en sincronización espejo de cliente/metas con PostgreSQL", JSON.stringify({ clientId: client.id, error: error.message }));
   });
 }
 

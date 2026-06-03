@@ -27,8 +27,13 @@ function load() {
 function save(data) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+  console.log("[tips] save llamado", JSON.stringify({
+    folders: Array.isArray(data?.folders) ? data.folders.length : 0,
+    tips: Array.isArray(data?.tips) ? data.tips.length : 0,
+    sends: Array.isArray(data?.sends) ? data.sends.length : 0,
+  }));
   syncTipsMirrorToPostgres(data).catch(error => {
-    console.warn("[tips] ⚠️ Error en sincronización espejo con PostgreSQL:", error.message);
+    console.warn("[tips] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
   });
 }
 
@@ -64,6 +69,7 @@ async function syncTipFolderToPostgres(folder) {
     parseTimestamp(folder.updatedAt) || parseTimestamp(folder.createdAt) || new Date().toISOString(),
     JSON.stringify(folder),
   ]);
+  console.log("[tips] tip_folders sincronizado", JSON.stringify({ folderId: folder.id }));
   return true;
 }
 
@@ -111,6 +117,7 @@ async function syncTipLibraryToPostgres(tip) {
     parseTimestamp(tip.updatedAt) || parseTimestamp(tip.createdAt) || new Date().toISOString(),
     JSON.stringify(tip),
   ]);
+  console.log("[tips] tip_library sincronizado", JSON.stringify({ tipId: tip.id, title: tip.title || "" }));
   return true;
 }
 
@@ -195,14 +202,22 @@ async function syncTipSendToPostgres(send) {
     parseTimestamp(send.updatedAt) || parseTimestamp(send.createdAt) || new Date().toISOString(),
     JSON.stringify(send),
   ]);
+  console.log("[tips] tip_sends sincronizado", JSON.stringify({ sendId: send.id, tipId: send.tipId || "", status: send.status || "" }));
   return true;
 }
 
 async function syncTipsMirrorToPostgres(data) {
-  if (!HAS_DATABASE_URL) return;
+  if (!HAS_DATABASE_URL) {
+    console.warn("[tips] DATABASE_URL no está configurada. No se sincronizará espejo PostgreSQL.");
+    return;
+  }
   const folders = Array.isArray(data?.folders) ? data.folders : [];
   const tips = Array.isArray(data?.tips) ? data.tips : [];
   const sends = Array.isArray(data?.sends) ? data.sends : [];
+  console.log("[tips] espejo solicitado");
+  console.log("[tips] folders detectados:", folders.length);
+  console.log("[tips] tips detectados:", tips.length);
+  console.log("[tips] sends detectados:", sends.length);
   try {
     let foldersCount = 0;
     let tipsCount = 0;
@@ -216,13 +231,13 @@ async function syncTipsMirrorToPostgres(data) {
     for (const send of sends) {
       if (await syncTipSendToPostgres(send)) sendsCount += 1;
     }
-    console.log("[tips] ✅ Espejo PostgreSQL sincronizado", JSON.stringify({
+    console.log("[tips] espejo PostgreSQL sincronizado", JSON.stringify({
       folders: foldersCount,
       tips: tipsCount,
       sends: sendsCount,
     }));
   } catch (error) {
-    console.warn("[tips] ⚠️ Falló espejo PostgreSQL", JSON.stringify({ error: error.message }));
+    console.warn("[tips] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
   }
 }
 
