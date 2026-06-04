@@ -1,7 +1,11 @@
 const fs = require("fs");
 const path = require("path");
+const db = require("./db");
 
 const FILE = path.join(__dirname, "../data/welcomeSchedules.json");
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const HAS_DATABASE_URL = Boolean(DATABASE_URL);
+const pool = db.pool || db;
 
 function load() {
   try {
@@ -17,6 +21,80 @@ function load() {
 function save(items) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(items, null, 2));
+  console.log("[welcome-schedules] save llamado", JSON.stringify({ count: Array.isArray(items) ? items.length : 0 }));
+  syncWelcomeSchedulesMirrorToPostgres(items).catch(error => {
+    console.warn("[welcome-schedules] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  });
+}
+
+function timestampValue(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+async function syncWelcomeScheduleToPostgres(item) {
+  if (!item?.id || !item?.clientId) return false;
+  await pool.query(`
+    INSERT INTO welcome_schedules (
+      schedule_id,
+      client_id,
+      template_type,
+      scheduled_at,
+      status,
+      error,
+      sent_at,
+      cancelled_at,
+      created_at,
+      updated_at,
+      data
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+    ON CONFLICT (schedule_id) DO UPDATE SET
+      client_id = EXCLUDED.client_id,
+      template_type = EXCLUDED.template_type,
+      scheduled_at = EXCLUDED.scheduled_at,
+      status = EXCLUDED.status,
+      error = EXCLUDED.error,
+      sent_at = EXCLUDED.sent_at,
+      cancelled_at = EXCLUDED.cancelled_at,
+      created_at = COALESCE(welcome_schedules.created_at, EXCLUDED.created_at),
+      updated_at = EXCLUDED.updated_at,
+      data = EXCLUDED.data
+  `, [
+    item.id,
+    item.clientId,
+    item.templateType || null,
+    timestampValue(item.scheduledAt),
+    item.status || null,
+    item.error || null,
+    timestampValue(item.sentAt),
+    timestampValue(item.cancelledAt),
+    timestampValue(item.createdAt),
+    timestampValue(item.updatedAt) || new Date().toISOString(),
+    JSON.stringify(item),
+  ]);
+  console.log("[welcome-schedules] bienvenida sincronizada", JSON.stringify({ scheduleId: item.id, clientId: item.clientId, status: item.status || "" }));
+  return true;
+}
+
+async function syncWelcomeSchedulesMirrorToPostgres(items) {
+  if (!HAS_DATABASE_URL) {
+    console.warn("[welcome-schedules] DATABASE_URL no está configurada. No se sincronizará espejo PostgreSQL.");
+    return;
+  }
+  const schedules = Array.isArray(items) ? items : [];
+  console.log("[welcome-schedules] espejo solicitado");
+  console.log("[welcome-schedules] bienvenidas detectadas", schedules.length);
+  try {
+    let synced = 0;
+    for (const item of schedules) {
+      if (await syncWelcomeScheduleToPostgres(item)) synced += 1;
+    }
+    console.log("[welcome-schedules] espejo PostgreSQL sincronizado", JSON.stringify({ detected: schedules.length, synced }));
+  } catch (error) {
+    console.warn("[welcome-schedules] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  }
 }
 
 function uid() {

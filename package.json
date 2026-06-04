@@ -16,7 +16,9 @@
     "db:import:consultation-reminders": "node scripts/importConsultationRemindersFromJson.js",
     "db:migrate:pending-content": "node scripts/migratePendingContentSchema.js",
     "db:import:pending-content": "node scripts/importPendingContentFromJson.js",
-    "db:check:pending-content": "node scripts/checkPendingContentSchema.js"
+    "db:check:pending-content": "node scripts/checkPendingContentSchema.js",
+    "db:migrate:welcome-schedules": "node scripts/migrateWelcomeSchedulesSchema.js",
+    "db:import:welcome-schedules": "node scripts/importWelcomeSchedulesFromJson.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
