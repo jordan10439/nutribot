@@ -3,7 +3,11 @@
 
 const fs   = require("fs");
 const path = require("path");
+const db = require("./db");
 const FILE = path.join(__dirname, "../data/history.json");
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const HAS_DATABASE_URL = Boolean(DATABASE_URL);
+const pool = db.pool || db;
 
 function load() {
   try {
@@ -15,6 +19,152 @@ function load() {
 function save(data) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+  console.log("[history] save llamado", JSON.stringify({ clients: data && typeof data === "object" ? Object.keys(data).length : 0 }));
+  syncHistoryMirrorToPostgres(data).catch(error => {
+    console.warn("[history] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  });
+}
+
+function timestampValue(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function extractHistoryEventFields(clientId, event) {
+  const occurredAt = timestampValue(event.fecha || event.createdAt || event.updatedAt);
+  return {
+    eventId: event.id,
+    clientId,
+    phone: event.phone || null,
+    nombre: event.nombre || null,
+    eventType: event.tipo || null,
+    direction: event.direccion || null,
+    goalId: event.goalId || event.metaId || event.payload?.goalId || null,
+    sendId: event.sendId || event.payload?.sendId || null,
+    pendingContentId: event.pendingContentId || event.payload?.pendingContentId || null,
+    metaMessageId: event.metaMessageId || event.messageId || null,
+    interactionMessageId: event.interactionMessageId || null,
+    title: event.meta || event.title || event.tipTitle || null,
+    emoji: event.metaEmoji || event.emoji || null,
+    comment: event.comentario || event.comment || event.error || null,
+    deliveryStatus: event.deliveryStatus || null,
+    deliveryStage: event.deliveryStage || null,
+    requiresReview: !!(event.requiresReview || event.requiereRevision),
+    media: event.media || null,
+    occurredAt,
+    createdAt: timestampValue(event.createdAt) || occurredAt,
+    updatedAt: timestampValue(event.updatedAt) || occurredAt || new Date().toISOString(),
+    data: event,
+  };
+}
+
+async function syncHistoryEventToPostgres(clientId, event) {
+  if (!event?.id || !clientId) return false;
+  const fields = extractHistoryEventFields(clientId, event);
+  await pool.query(`
+    INSERT INTO history_events (
+      event_id,
+      client_id,
+      phone,
+      nombre,
+      event_type,
+      direction,
+      goal_id,
+      send_id,
+      pending_content_id,
+      meta_message_id,
+      interaction_message_id,
+      title,
+      emoji,
+      comment,
+      delivery_status,
+      delivery_stage,
+      requires_review,
+      media,
+      occurred_at,
+      created_at,
+      updated_at,
+      data
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8,
+      $9, $10, $11, $12, $13, $14, $15, $16,
+      $17, $18::jsonb, $19, $20, $21, $22::jsonb
+    )
+    ON CONFLICT (event_id) DO UPDATE SET
+      client_id = EXCLUDED.client_id,
+      phone = EXCLUDED.phone,
+      nombre = EXCLUDED.nombre,
+      event_type = EXCLUDED.event_type,
+      direction = EXCLUDED.direction,
+      goal_id = EXCLUDED.goal_id,
+      send_id = EXCLUDED.send_id,
+      pending_content_id = EXCLUDED.pending_content_id,
+      meta_message_id = EXCLUDED.meta_message_id,
+      interaction_message_id = EXCLUDED.interaction_message_id,
+      title = EXCLUDED.title,
+      emoji = EXCLUDED.emoji,
+      comment = EXCLUDED.comment,
+      delivery_status = EXCLUDED.delivery_status,
+      delivery_stage = EXCLUDED.delivery_stage,
+      requires_review = EXCLUDED.requires_review,
+      media = EXCLUDED.media,
+      occurred_at = EXCLUDED.occurred_at,
+      created_at = COALESCE(history_events.created_at, EXCLUDED.created_at),
+      updated_at = EXCLUDED.updated_at,
+      data = EXCLUDED.data
+  `, [
+    fields.eventId,
+    fields.clientId,
+    fields.phone,
+    fields.nombre,
+    fields.eventType,
+    fields.direction,
+    fields.goalId,
+    fields.sendId,
+    fields.pendingContentId,
+    fields.metaMessageId,
+    fields.interactionMessageId,
+    fields.title,
+    fields.emoji,
+    fields.comment,
+    fields.deliveryStatus,
+    fields.deliveryStage,
+    fields.requiresReview,
+    JSON.stringify(fields.media),
+    fields.occurredAt,
+    fields.createdAt,
+    fields.updatedAt,
+    JSON.stringify(fields.data),
+  ]);
+  console.log("[history] evento sincronizado", JSON.stringify({ clientId, eventId: event.id, eventType: event.tipo || "" }));
+  return true;
+}
+
+async function syncHistoryMirrorToPostgres(data) {
+  if (!HAS_DATABASE_URL) {
+    console.warn("[history] DATABASE_URL no está configurada. No se sincronizará espejo PostgreSQL.");
+    return;
+  }
+  const historyByClient = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const entries = Object.entries(historyByClient);
+  const eventsCount = entries.reduce((total, [, events]) => total + (Array.isArray(events) ? events.length : 0), 0);
+  console.log("[history] espejo solicitado");
+  console.log("[history] clientes detectados", entries.length);
+  console.log("[history] eventos detectados", eventsCount);
+  try {
+    let synced = 0;
+    for (const [clientId, events] of entries) {
+      if (!clientId || !Array.isArray(events)) continue;
+      for (const event of events) {
+        if (await syncHistoryEventToPostgres(clientId, event)) synced += 1;
+      }
+    }
+    console.log("[history] espejo PostgreSQL sincronizado", JSON.stringify({ clients: entries.length, events: synced }));
+  } catch (error) {
+    console.warn("[history] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  }
 }
 
 /**
