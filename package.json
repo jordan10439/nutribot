@@ -22,7 +22,9 @@
     "db:migrate:patient-info": "node scripts/migratePatientInfoSchema.js",
     "db:import:patient-info": "node scripts/importPatientInfoFromJson.js",
     "db:migrate:history": "node scripts/migrateHistorySchema.js",
-    "db:import:history": "node scripts/importHistoryFromJson.js"
+    "db:import:history": "node scripts/importHistoryFromJson.js",
+    "db:migrate:conversations": "node scripts/migrateConversationsSchema.js",
+    "db:import:conversations": "node scripts/importConversationsFromJson.js"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
