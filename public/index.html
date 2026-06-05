@@ -2805,8 +2805,11 @@ async function saveWelcomeSchedule(){
 }
 
 async function cancelWelcomeSchedule(id){
-  if(!confirm("¿Cancelar esta bienvenida programada?"))return;
+  console.log("[welcome-schedules] cancelar click",id);
+  const ok=await confirmDeleteModal("¿Seguro que quieres cancelar esta bienvenida programada?","Cancelar bienvenida programada");
+  if(!ok)return;
   const res=await api("POST",`/welcome-schedules/${id}/cancel`);
+  console.log("[welcome-schedules] respuesta cancelar",res);
   if(res.error){showToast(`⚠️ ${res.error}`);return}
   showToast("Bienvenida programada cancelada");
   loadAll();

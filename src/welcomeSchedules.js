@@ -138,8 +138,23 @@ function update(id, patch) {
 }
 
 function cancel(id) {
-  const item = update(id, { status: "cancelled", cancelledAt: new Date().toISOString() });
-  if (!item) throw new Error("Bienvenida programada no encontrada");
+  console.log("[welcome-schedules] cancel solicitado", JSON.stringify({ scheduleId: id }));
+  const items = load();
+  const index = items.findIndex(item => item.id === id);
+  if (index < 0) {
+    console.warn("[welcome-schedules] error cancelando", JSON.stringify({ scheduleId: id, error: "Bienvenida programada no encontrada" }));
+    throw new Error("Bienvenida programada no encontrada");
+  }
+  console.log("[welcome-schedules] schedule encontrado", JSON.stringify({ scheduleId: id, clientId: items[index].clientId, status: items[index].status || "" }));
+  items[index] = {
+    ...items[index],
+    status: "cancelled",
+    cancelledAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  save(items);
+  const item = items[index];
+  console.log("[welcome-schedules] schedule cancelado", JSON.stringify({ scheduleId: item.id, clientId: item.clientId, status: item.status }));
   return item;
 }
 

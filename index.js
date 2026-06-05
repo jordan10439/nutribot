@@ -400,11 +400,14 @@ app.put("/api/welcome-schedules/:id", auth, (req, res) => {
 });
 
 app.post("/api/welcome-schedules/:id/cancel", auth, (req, res) => {
+  console.log("[welcome-schedules] cancel solicitado", JSON.stringify({ scheduleId: req.params.id }));
   try {
     const item = welcomeSchedules.cancel(req.params.id);
+    console.log("[welcome-schedules] schedule cancelado", JSON.stringify({ scheduleId: item.id, clientId: item.clientId, status: item.status }));
     const client = db.getById(item.clientId);
     if (client) {
-      setWelcomeState(client, { status: "cancelled", scheduledId: item.id, error: "" });
+      setWelcomeState(client, { status: "cancelled", templateType: item.templateType, scheduledAt: "", scheduledId: "", error: "" });
+      console.log("[welcome-schedules] client.welcome actualizado", JSON.stringify({ clientId: client.id, status: "cancelled", scheduleId: item.id }));
       history.registrar(client.id, normalizePhone(client.phones?.[0]), client.nombres?.[0] || "Paciente", {
         tipo: "bienvenida_cancelada",
         meta: "Bienvenida cancelada",
@@ -415,6 +418,7 @@ app.post("/api/welcome-schedules/:id/cancel", auth, (req, res) => {
     }
     res.json({ ok: true, schedule: item });
   } catch (e) {
+    console.warn("[welcome-schedules] error cancelando", JSON.stringify({ scheduleId: req.params.id, error: e.message }));
     res.status(400).json({ error: e.message });
   }
 });
