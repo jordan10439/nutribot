@@ -3,7 +3,11 @@
 
 const fs   = require("fs");
 const path = require("path");
+const db = require("./db");
 const FILE = path.join(__dirname, "../data/mensajes.json");
+const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const HAS_DATABASE_URL = Boolean(DATABASE_URL);
+const pool = db.pool || db;
 const LEGACY_META_COMPLETADA = "🎉 *¡META COMPLETADA!* 🎉\n\n{ia}\n\n➕ *+10 PUNTOS*\n{resumen}";
 
 const DEFAULTS = {
@@ -31,6 +35,73 @@ function load() {
 function save(data) {
   fs.mkdirSync(path.dirname(FILE), { recursive: true });
   fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+  console.log("[messages] save llamado", JSON.stringify({ messages: data && typeof data === "object" ? Object.keys(data).length : 0 }));
+  syncMessagesMirrorToPostgres(data).catch(error => {
+    console.warn("[messages] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  });
+}
+
+function getMessageValueType(value) {
+  if (Array.isArray(value)) return "array";
+  if (value === null) return "null";
+  return typeof value;
+}
+
+async function syncMessageToPostgres(key, value) {
+  if (!key) return false;
+  const valueType = getMessageValueType(value);
+  const label = LABELS?.[key] || "";
+  const data = { key, value, label, valueType };
+  await pool.query(`
+    INSERT INTO bot_messages (
+      message_key,
+      value,
+      value_type,
+      label,
+      is_default,
+      created_at,
+      updated_at,
+      data
+    )
+    VALUES ($1, $2::jsonb, $3, $4, false, $5, $5, $6::jsonb)
+    ON CONFLICT (message_key) DO UPDATE SET
+      value = EXCLUDED.value,
+      value_type = EXCLUDED.value_type,
+      label = EXCLUDED.label,
+      is_default = EXCLUDED.is_default,
+      created_at = COALESCE(bot_messages.created_at, EXCLUDED.created_at),
+      updated_at = EXCLUDED.updated_at,
+      data = EXCLUDED.data
+  `, [
+    key,
+    JSON.stringify(value),
+    valueType,
+    label,
+    new Date().toISOString(),
+    JSON.stringify(data),
+  ]);
+  console.log("[messages] mensaje sincronizado", JSON.stringify({ key, valueType }));
+  return true;
+}
+
+async function syncMessagesMirrorToPostgres(data) {
+  if (!HAS_DATABASE_URL) {
+    console.warn("[messages] DATABASE_URL no está configurada. No se sincronizará espejo PostgreSQL.");
+    return;
+  }
+  const messages = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const entries = Object.entries(messages);
+  console.log("[messages] espejo solicitado");
+  console.log("[messages] mensajes detectados", entries.length);
+  try {
+    let synced = 0;
+    for (const [key, value] of entries) {
+      if (await syncMessageToPostgres(key, value)) synced += 1;
+    }
+    console.log("[messages] espejo PostgreSQL sincronizado", JSON.stringify({ messages: synced }));
+  } catch (error) {
+    console.warn("[messages] error espejo PostgreSQL", JSON.stringify({ error: error.message }));
+  }
 }
 
 function get(key) {
