@@ -1,3 +1,13 @@
 node_modules/
 .env
 data/db.json
+
+data/conversaciones.json
+data/history.json
+data/mensajes.json
+data/tips.json
+
+data/conversaciones.json
+data/history.json
+data/mensajes.json
+data/tips.json
